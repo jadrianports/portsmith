@@ -1,0 +1,2 @@
+# Keeps the tests/unit/ dir present so the Vitest `unit` project glob resolves.
+# Real unit tests (FND-04 / CMS-08 Zod schema tests) land in later plans.

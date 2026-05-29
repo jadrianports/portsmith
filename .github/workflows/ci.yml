@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Lint, build, unit + RLS integration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # GitHub-hosted ubuntu runners ship Docker, so the local Supabase stack
+      # boots here. Local dev needs Docker Desktop (see 01-VALIDATION.md).
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: latest
+
+      - name: Start local Supabase stack
+        run: supabase start
+
+      # Applies migrations + seed.sql once they exist (Plans 05/06/etc.).
+      - name: Reset database (apply migrations + seed)
+        run: supabase db reset
+
+      # Export the local stack's URL + keys so the Vitest integration project and
+      # tests/integration/_setup.ts can reach it (same env vars they read locally).
+      - name: Export local Supabase env
+        run: supabase status -o env >> "$GITHUB_ENV"
+
+      - name: Run tests (unit + RLS integration)
+        run: npx vitest run
+
+      # TODO(Plan 04 / FND-05): replace this no-op with the real service-role
+      # bundle scan — `next build` then assert SUPABASE_SERVICE_ROLE_KEY's value
+      # does NOT appear anywhere under `.next/static` (proves the server-only key
+      # never reaches the client bundle). Kept as a no-op now so the workflow
+      # stays valid before the Supabase clients exist.
+      - name: Assert service-role key absent from client bundle
+        run: 'echo "TODO Plan 04 FND-05 bundle scan wired here after next build"'
