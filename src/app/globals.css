@@ -1,0 +1,31 @@
+/*
+ * Tailwind v4 CSS-first entry (see repo-root CLAUDE.md "Tailwind v4 — CSS-first setup").
+ * - Single `@import "tailwindcss";` — NO `@tailwind base/components/utilities` directives (removed in v4).
+ * - Design tokens live in the `@theme` block below, NOT in a `tailwind.config.js`.
+ * - No autoprefixer / postcss-import (handled by the Oxide engine).
+ *
+ * Phase 1 is non-UI; this carries only baseline tokens. Template/dashboard themes
+ * (color presets, font presets driven by portfolio settings) land in P3/P4.
+ */
+@import "tailwindcss";
+
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #0a0a0a;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #0a0a0a;
+    --color-foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+}
