@@ -41,6 +41,19 @@ RETURNS TRIGGER AS $$
 DECLARE
   is_admin BOOLEAN;
 BEGIN
+  -- SERVICE-ROLE / moderation-flow short-circuit. The service-role key bypasses
+  -- RLS but NOT triggers: this BEFORE UPDATE fires for the service_role too, and
+  -- the service role has auth.uid() = NULL, so the admin lookup below finds no
+  -- row and the trigger would BLOCK legitimate server-side moderation writes
+  -- (locking an abusive account, soft-deleting via admin tooling). The function's
+  -- own comment already scopes the bypass to "admins (and the moderation flow)";
+  -- the moderation flow IS the trusted server-side service_role. Honour it.
+  -- (Found + fixed in Plan 01-09: admin publish worked but admin lock/soft-delete
+  --  was rejected by this trigger because the service role isn't a profiles row.)
+  IF auth.role() = 'service_role' THEN
+    RETURN NEW;
+  END IF;
+
   SELECT (role = 'admin') INTO is_admin FROM profiles WHERE id = auth.uid();
   IF is_admin THEN
     RETURN NEW;  -- admins (and the moderation flow) may change these
@@ -89,6 +102,91 @@ RETURNS BOOLEAN AS $$
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 -- =============================================================================
+-- 2a. profile_is_public(p_user_id UUID)  (the profiles public-visibility helper)
+--
+--    The sibling of portfolio_is_public for the profiles row itself. SECURITY
+--    DEFINER STABLE so the FND-02 `public_profiles` view (security_invoker = true)
+--    can filter on the PRIVATE columns published/deleted_at/locked WITHOUT the
+--    anon invoker needing column privileges on them.
+--
+--    WHY THIS EXISTS: with security_invoker = true, the view's WHERE clause is
+--    evaluated as the INVOKING (anon) role. anon is column-GRANTed only the seven
+--    PUBLIC profile columns (005_public_views.sql) — it has NO privilege on
+--    deleted_at / locked. An inline `WHERE published AND deleted_at IS NULL AND
+--    locked = false` therefore raised "permission denied for table profiles" for
+--    every anon read of the view, breaking the entire FND-02 public surface.
+--    Pushing the predicate into this DEFINER helper (which reads those columns as
+--    the function owner) lets the view filter correctly while anon still never
+--    gains read access to the private columns. Mirrors portfolio_is_public, which
+--    the other public_* views already use for exactly this reason.
+--    (Found + fixed in Plan 01-09 when the suite first ran against the live stack.)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION profile_is_public(p_user_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = p_user_id
+      AND published = true
+      AND deleted_at IS NULL
+      AND locked = false
+  );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+-- =============================================================================
+-- 2c. blog_post_is_public(p_blog_post_id UUID)  (blog public-visibility helper)
+--
+--    Same security_invoker column-privilege fix as profile_is_public, for the
+--    public_blog_posts view: anon is column-GRANTed only the public blog columns
+--    (005_public_views.sql) and has NO privilege on the draft-only `published`
+--    flag, so an inline `WHERE published = true AND portfolio_is_public(...)`
+--    raised "permission denied for table blog_posts" for every anon read. This
+--    DEFINER helper reads `published` as its owner. Blog is a Phase-2 feature but
+--    the public read surface is authored now (005 / 01-RESEARCH Open Question 2),
+--    so the surface must be ANON-READABLE now too, not silently broken.
+--    (Found + fixed in Plan 01-09 when the suite first ran against the live stack.)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION blog_post_is_public(p_blog_post_id UUID)
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM blog_posts
+    WHERE id = p_blog_post_id
+      AND published = true
+      AND portfolio_is_public(portfolio_id)
+  );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+-- =============================================================================
+-- 2b. is_admin()  (the RLS admin-check helper — recursion-safe)
+--
+--    PostgreSQL RLS RECURSION FIX: an admin policy that inlines
+--    `EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')`
+--    INSIDE a policy ON profiles (or on any table whose admin policy reads
+--    profiles) makes Postgres re-evaluate the profiles policies while it is
+--    still evaluating them — "infinite recursion detected in policy for
+--    relation profiles". Because EVERY anon/authenticated read of profiles (and,
+--    transitively, of templates/announcements/reports whose admin policies read
+--    profiles) hits that loop, the whole public surface is unreadable.
+--
+--    The canonical Supabase remedy is to move the role lookup into a
+--    SECURITY DEFINER function: it runs as the function OWNER (postgres), which
+--    is NOT subject to RLS, so reading profiles.role here does NOT re-trigger the
+--    profiles policies — breaking the cycle. STABLE so the planner can cache it
+--    within a statement. Returns false for an unauthenticated (anon) caller.
+--
+--    Used by every "<table> admin <action>" policy in 004_rls_policies.sql in
+--    place of the recursive inline EXISTS. (FND-01 controls must be READABLE to
+--    be enforced; a recursion error is a deny-everything failure, not isolation.)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM profiles
+    WHERE id = auth.uid()
+      AND role = 'admin'
+  );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+-- =============================================================================
 -- 3. handle_new_user()  (+ on_auth_user_created AFTER INSERT trigger on auth.users)
 --
 --    VERBATIM from docs/03-auth-flows.md. The MVP STRICT version: the signup form
@@ -98,10 +196,22 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 --    createTestUser, which calls auth.admin.createUser with
 --    user_metadata:{username, display_name} expecting THIS trigger to fire.
 -- =============================================================================
+-- SEARCH_PATH + SCHEMA-QUALIFICATION (required): this trigger fires on
+-- auth.users INSERT and therefore runs in GoTrue's `supabase_auth_admin`
+-- execution context, whose search_path does NOT include `public`. A BARE
+-- `INSERT INTO profiles ...` resolves against that search_path and fails with
+-- "relation profiles does not exist", which GoTrue surfaces as the opaque
+-- "Database error creating new user" — blocking ALL signups (and every
+-- integration test that creates a user). The fix is the canonical Supabase
+-- pattern: pin a deterministic `SET search_path` AND schema-qualify the table
+-- (`public.profiles`). Belt-and-suspenders so neither alone is load-bearing.
+-- (Found + fixed in Plan 01-09 when createUser first ran against the live stack.)
 CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
-  INSERT INTO profiles (id, username, display_name, email)
+  INSERT INTO public.profiles (id, username, display_name, email)
   VALUES (
     NEW.id,
     NEW.raw_user_meta_data->>'username',
@@ -288,17 +398,31 @@ CREATE TRIGGER set_updated_at_portfolio_settings
 --    section's history to the 10 most-recent rows (deletes the older ones). The
 --    revert UI is Phase 2 — the data is captured now because it is free to keep.
 -- =============================================================================
+-- SECURITY DEFINER (required): section_history has RLS enabled with an "own
+-- SELECT" policy and NO INSERT/DELETE policy — it is meant to be written ONLY by
+-- this trigger (see the section_history policy comment in 004_rls_policies.sql:
+-- "populated only by the save_section_history trigger (SECURITY DEFINER
+-- context)"). As a plain (INVOKER) function this INSERT ran as the authenticated
+-- OWNER role, which has no INSERT policy, so EVERY owner content edit failed with
+-- "new row violates row-level security policy for table section_history" — i.e.
+-- the trigger blocked the very UPDATE it hangs off. Declaring it SECURITY DEFINER
+-- (its documented intent) lets the history INSERT/DELETE bypass RLS while the
+-- owner's UPDATE on sections is still gated by the sections RLS policy.
+-- search_path pinned for the usual definer-safety reason.
+-- (Found + fixed in Plan 01-09 when an owner first edited a section live.)
 CREATE OR REPLACE FUNCTION save_section_history()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
-  INSERT INTO section_history (section_id, content)
+  INSERT INTO public.section_history (section_id, content)
     VALUES (OLD.id, OLD.content);
 
   -- Prune this section's history to the 10 most-recent rows.
-  DELETE FROM section_history
+  DELETE FROM public.section_history
     WHERE section_id = OLD.id
       AND id NOT IN (
-        SELECT id FROM section_history
+        SELECT id FROM public.section_history
           WHERE section_id = OLD.id
           ORDER BY created_at DESC
           LIMIT 10
@@ -306,7 +430,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE TRIGGER capture_section_history
   BEFORE UPDATE OF content ON sections

@@ -66,13 +66,20 @@ REVOKE SELECT ON public.profiles FROM anon;
 GRANT  SELECT (id, username, display_name, headline, avatar_url, resume_url, published)
        ON public.profiles TO anon;
 
+-- VISIBILITY VIA DEFINER HELPER (not an inline WHERE on private columns):
+-- profile_is_public(id) (002_functions_triggers.sql) is SECURITY DEFINER, so it
+-- reads published/deleted_at/locked as its owner. With security_invoker = true the
+-- view's WHERE is evaluated as the anon invoker, which is column-GRANTed ONLY the
+-- seven public columns below — it has NO privilege on deleted_at/locked, so an
+-- inline `WHERE published AND deleted_at IS NULL AND locked = false` raised
+-- "permission denied for table profiles" for every anon read. The helper keeps the
+-- exact same predicate while letting the view filter without exposing the private
+-- columns — mirroring portfolio_is_public, already used by the other public_* views.
 CREATE VIEW public.public_profiles
   WITH (security_invoker = true) AS
   SELECT id, username, display_name, headline, avatar_url, resume_url, published
   FROM public.profiles
-  WHERE published = true
-    AND deleted_at IS NULL
-    AND locked = false;
+  WHERE profile_is_public(id);
 
 GRANT SELECT ON public.public_profiles TO anon;
 
@@ -160,13 +167,18 @@ GRANT  SELECT (
        )
        ON public.blog_posts TO anon;
 
+-- VISIBILITY VIA DEFINER HELPER: anon is column-GRANTed only the public blog
+-- columns below and has NO privilege on the draft-only `published` flag, so an
+-- inline `WHERE published = true AND ...` raised "permission denied for table
+-- blog_posts" under security_invoker = true. blog_post_is_public(id)
+-- (002_functions_triggers.sql) reads `published` as its owner — same fix as
+-- public_profiles' profile_is_public.
 CREATE VIEW public.public_blog_posts
   WITH (security_invoker = true) AS
   SELECT id, portfolio_id, title, slug, body, excerpt,
          cover_image_url, cover_image_alt, meta_title, meta_description,
          tags, published_at
   FROM public.blog_posts
-  WHERE published = true
-    AND portfolio_is_public(portfolio_id);
+  WHERE blog_post_is_public(id);
 
 GRANT SELECT ON public.public_blog_posts TO anon;

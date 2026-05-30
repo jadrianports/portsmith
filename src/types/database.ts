@@ -846,11 +846,17 @@ export type Database = {
       }
     }
     Functions: {
+      blog_post_is_public: {
+        Args: { p_blog_post_id: string }
+        Returns: boolean
+      }
       initialize_portfolio: { Args: never; Returns: string }
+      is_admin: { Args: never; Returns: boolean }
       portfolio_is_public: {
         Args: { p_portfolio_id: string }
         Returns: boolean
       }
+      profile_is_public: { Args: { p_user_id: string }; Returns: boolean }
       request_account_deletion: { Args: never; Returns: undefined }
     }
     Enums: {

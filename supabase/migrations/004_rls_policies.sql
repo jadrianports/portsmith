@@ -80,23 +80,20 @@ CREATE POLICY "profiles own update"
   USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id);
 
+-- NOTE: the admin check is is_admin() (002_functions_triggers.sql), NOT an inline
+-- `EXISTS (... FROM profiles ...)`. An inline profiles-subquery inside a policy ON
+-- profiles recurses ("infinite recursion detected in policy for relation profiles"),
+-- which makes ALL anon/authenticated profiles reads (and transitively templates/
+-- announcements/reports) fail. is_admin() is SECURITY DEFINER so it reads role
+-- without re-triggering these policies. (See FND-01 recursion fix, Plan 01-09.)
 CREATE POLICY "profiles admin select"
   ON profiles FOR SELECT
-  USING (EXISTS (
-    SELECT 1 FROM profiles p
-    WHERE p.id = auth.uid() AND p.role = 'admin'
-  ));
+  USING (is_admin());
 
 CREATE POLICY "profiles admin update"
   ON profiles FOR UPDATE
-  USING (EXISTS (
-    SELECT 1 FROM profiles p
-    WHERE p.id = auth.uid() AND p.role = 'admin'
-  ))
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM profiles p
-    WHERE p.id = auth.uid() AND p.role = 'admin'
-  ));
+  USING (is_admin())
+  WITH CHECK (is_admin());
 
 -- =============================================================================
 -- portfolios
@@ -241,14 +238,8 @@ CREATE POLICY "templates public select"
 
 CREATE POLICY "templates admin all"
   ON templates FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM profiles p
-    WHERE p.id = auth.uid() AND p.role = 'admin'
-  ))
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM profiles p
-    WHERE p.id = auth.uid() AND p.role = 'admin'
-  ));
+  USING (is_admin())
+  WITH CHECK (is_admin());
 
 -- =============================================================================
 -- announcements
@@ -261,14 +252,8 @@ CREATE POLICY "announcements authenticated select"
 
 CREATE POLICY "announcements admin all"
   ON announcements FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM profiles p
-    WHERE p.id = auth.uid() AND p.role = 'admin'
-  ))
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM profiles p
-    WHERE p.id = auth.uid() AND p.role = 'admin'
-  ));
+  USING (is_admin())
+  WITH CHECK (is_admin());
 
 -- =============================================================================
 -- reports
@@ -277,14 +262,8 @@ CREATE POLICY "announcements admin all"
 -- =============================================================================
 CREATE POLICY "reports admin all"
   ON reports FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM profiles p
-    WHERE p.id = auth.uid() AND p.role = 'admin'
-  ))
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM profiles p
-    WHERE p.id = auth.uid() AND p.role = 'admin'
-  ));
+  USING (is_admin())
+  WITH CHECK (is_admin());
 
 -- =============================================================================
 -- section_history
