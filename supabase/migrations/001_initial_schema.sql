@@ -52,7 +52,13 @@ CREATE TABLE templates (
 -- =============================================================================
 CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  username TEXT UNIQUE NOT NULL CHECK (
+  -- CR-02: username is UNIQUE only among LIVE rows (see uq_profiles_username_live
+  -- below). A soft delete (request_account_deletion sets deleted_at) leaves the
+  -- row — and its username — in place; a table-wide UNIQUE would permanently
+  -- squat that handle and block reuse / re-signup. A partial unique index keyed
+  -- on `WHERE deleted_at IS NULL` lets a freed handle be reclaimed without a
+  -- tombstone. NOT NULL + the format CHECK are retained inline.
+  username TEXT NOT NULL CHECK (
     length(username) >= 3
     AND length(username) <= 30
     AND username ~ '^[a-z][a-z0-9-]*$'
@@ -72,7 +78,13 @@ CREATE TABLE profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_profiles_username ON profiles(username);
+-- CR-02: username uniqueness scoped to LIVE rows only. This partial unique index
+-- both enforces "one live profile per handle" AND serves username lookups (every
+-- username lookup the app does filters `deleted_at IS NULL`, so the partial index
+-- is the right covering index). A soft-deleted row no longer participates in
+-- uniqueness, so its handle is immediately reclaimable.
+CREATE UNIQUE INDEX uq_profiles_username_live
+  ON profiles(username) WHERE deleted_at IS NULL;
 CREATE INDEX idx_profiles_deleted ON profiles(deleted_at) WHERE deleted_at IS NOT NULL;
 
 -- =============================================================================
