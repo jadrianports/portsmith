@@ -43,10 +43,32 @@ jobs:
       - name: Run tests (unit + RLS integration)
         run: npx vitest run
 
-      # TODO(Plan 04 / FND-05): replace this no-op with the real service-role
-      # bundle scan — `next build` then assert SUPABASE_SERVICE_ROLE_KEY's value
-      # does NOT appear anywhere under `.next/static` (proves the server-only key
-      # never reaches the client bundle). Kept as a no-op now so the workflow
-      # stays valid before the Supabase clients exist.
+      # FND-05 bundle-scan proof. Build the app, then assert the service-role
+      # key VALUE never appears anywhere under .next/static (the client bundle).
+      # The `import 'server-only'` guard in src/lib/supabase/service-role.ts is
+      # the compile-time wall; this grep is the regression backstop.
+      #
+      # `next build` needs the PUBLIC env to succeed and produce .next/static.
+      # The "Export local Supabase env" step above wrote the local stack's
+      # SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY into
+      # $GITHUB_ENV (the same names tests/integration/_setup.ts reads). Map the
+      # public values onto the NEXT_PUBLIC_* names Next reads at build time, and
+      # pass the service-role key in so it has a real chance to leak — which is
+      # exactly what the next step proves it does NOT do.
+      - name: Build app (produces .next/static for the bundle scan)
+        run: npx next build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
+
       - name: Assert service-role key absent from client bundle
-        run: 'echo "TODO Plan 04 FND-05 bundle scan wired here after next build"'
+        run: |
+          if grep -rqF "$SUPABASE_SERVICE_ROLE_KEY" .next/static; then
+            echo "::error::service-role key found in client bundle (.next/static) — FND-05 violation"
+            exit 1
+          fi
+          echo "FND-05 OK: service-role key absent from .next/static"
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
