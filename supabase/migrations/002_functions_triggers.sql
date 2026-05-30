@@ -61,6 +61,50 @@ BEGIN
     RETURN NEW;  -- admins (and the moderation flow) may change these
   END IF;
 
+  -- DEF-01: SANCTIONED SELF-DELETION short-circuit.
+  -- request_account_deletion() is the SECURITY DEFINER RPC by which a normal
+  -- (non-admin) user soft-deletes their OWN account. It must set deleted_at — a
+  -- protected column — but SECURITY DEFINER does NOT make auth.role()/auth.uid()
+  -- here read as the owner, so neither short-circuit above applies and the write
+  -- would be rejected. The RPC sets a TRANSACTION-LOCAL GUC marker immediately
+  -- before its UPDATE; honour it ONLY for the precise own-row soft-delete.
+  --
+  -- This carve-out is deliberately the NARROWEST possible. ALL of the following
+  -- must hold, or we fall through to the generic rejection below:
+  --   (a) the txn-local sanction marker is set (set by request_account_deletion;
+  --       the second arg `true` = missing_ok, so current_setting returns NULL —
+  --       not an error — when the GUC was never set);
+  --   (b) the row belongs to the caller (OLD.id = auth.uid()) — OWN ROW ONLY;
+  --   (c) this is specifically the soft-delete transition deleted_at NULL→ts
+  --       (never an un-delete or a backdate of an already-deleted row); and
+  --   (d) EVERY OTHER protected column is byte-for-byte unchanged.
+  --
+  -- SECURITY REASONING: even granting the (impossible) premise that an attacker
+  -- could set this GUC — they cannot: PostgREST does not let clients set
+  -- arbitrary GUCs, and there is no direct-SQL surface for the anon/authenticated
+  -- roles — the short-circuit permits ONLY the deleted_at(NULL→ts) change (plus
+  -- the non-protected `published`/`updated_at` columns, which this trigger does
+  -- not guard) on the caller's OWN row. It can NEVER let through a change to
+  -- role / username / storage_used_bytes / email / created_at / locked /
+  -- locked_reason, because clause (d) requires each to be IS NOT DISTINCT FROM
+  -- its OLD value. The blast radius is exactly "soft-delete your own account" —
+  -- which IS the intended capability — so this cannot enable privilege
+  -- escalation. FND-03 is preserved.
+  IF current_setting('portsmith.sanctioned_self_deletion', true) = 'on'
+   AND OLD.id = auth.uid()
+   AND OLD.deleted_at IS NULL
+   AND NEW.deleted_at IS NOT NULL
+   AND NEW.username           IS NOT DISTINCT FROM OLD.username
+   AND NEW.role               IS NOT DISTINCT FROM OLD.role
+   AND NEW.locked             IS NOT DISTINCT FROM OLD.locked
+   AND NEW.locked_reason      IS NOT DISTINCT FROM OLD.locked_reason
+   AND NEW.storage_used_bytes IS NOT DISTINCT FROM OLD.storage_used_bytes
+   AND NEW.email              IS NOT DISTINCT FROM OLD.email
+   AND NEW.created_at         IS NOT DISTINCT FROM OLD.created_at
+  THEN
+    RETURN NEW;  -- sanctioned own-row soft-delete only; falls through otherwise
+  END IF;
+
   IF NEW.username        IS DISTINCT FROM OLD.username
    OR NEW.role           IS DISTINCT FROM OLD.role
    OR NEW.locked         IS DISTINCT FROM OLD.locked
@@ -398,9 +442,24 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 --    Behaviour per docs/03-auth-flows.md "Account deletion" + docs/04-api-contracts.md:
 --    sets deleted_at = now() and published = false for the calling user. This RPC
 --    exists BECAUSE deleted_at is a protected column — a direct UPDATE cannot
---    touch it. Begins with an `IF auth.uid() IS NULL` guard (T-06-05). Running as
---    SECURITY DEFINER, it is NOT subject to the protected-columns trigger's
---    non-admin block on the function owner's behalf, so it can set deleted_at.
+--    touch it. Begins with an `IF auth.uid() IS NULL` guard (T-06-05).
+--
+-- DEF-01 (SANCTIONED SELF-DELETION): SECURITY DEFINER changes only the OWNER the
+-- function body runs as — it does NOT change the request-scoped GUCs that
+-- auth.uid() / auth.role() read. So the BEFORE-UPDATE protected-columns trigger
+-- still fires on the UPDATE below with auth.role() = 'authenticated' and
+-- auth.uid() = the non-admin caller — neither the service_role nor the admin
+-- short-circuit applies, and the deleted_at change (a protected column) is
+-- rejected. The RPC could therefore never soft-delete a normal user's own row.
+--
+-- THE FIX: set a TRANSACTION-LOCAL GUC immediately before the UPDATE. The third
+-- arg `true` to set_config scopes it to the CURRENT TRANSACTION only — it is
+-- rolled back at COMMIT/ROLLBACK and never leaks across pooled connections
+-- (unlike a session-level GUC). The protected-columns trigger honours this
+-- marker ONLY for the exact own-row NULL→timestamp soft-delete transition (see
+-- enforce_protected_profile_columns for the full short-circuit and its security
+-- reasoning). The auth.uid() guard is retained — this RPC only ever soft-deletes
+-- the caller's own row.
 -- =============================================================================
 CREATE OR REPLACE FUNCTION request_account_deletion()
 RETURNS VOID
@@ -412,6 +471,10 @@ BEGIN
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Not authenticated';
   END IF;
+
+  -- DEF-01: txn-local sanction marker the protected-columns trigger checks for
+  -- the own-row soft-delete transition. `true` = local to this transaction.
+  PERFORM set_config('portsmith.sanctioned_self_deletion', 'on', true);
 
   UPDATE public.profiles
     SET deleted_at = now(),
