@@ -67,26 +67,24 @@ CREATE POLICY "Users delete own files"
   ON storage.objects FOR DELETE
   USING ((storage.foldername(name))[1] = auth.uid()::text);
 
--- Template thumbnails: admin-write only. Same admin role check pattern used
--- elsewhere (EXISTS over profiles WHERE id = auth.uid() AND role = 'admin').
+-- Template thumbnails: admin-write only. WR-02: use the centralized is_admin()
+-- SECURITY DEFINER helper (002_functions_triggers.sql) instead of an inline
+-- `EXISTS (... FROM profiles ...)`. is_admin() reads role as its owner (RLS-immune
+-- and recursion-safe), so these two policies inherit the same DEFINER-based lookup
+-- every other admin policy in 004 uses — no latent divergence if the profiles
+-- grant model tightens for `authenticated` later.
 CREATE POLICY "Admins upload template thumbnails"
   ON storage.objects FOR INSERT
   WITH CHECK (
     bucket_id = 'templates'
-    AND EXISTS (
-      SELECT 1 FROM profiles
-        WHERE id = auth.uid() AND role = 'admin'
-    )
+    AND is_admin()
   );
 
 CREATE POLICY "Admins delete template thumbnails"
   ON storage.objects FOR DELETE
   USING (
     bucket_id = 'templates'
-    AND EXISTS (
-      SELECT 1 FROM profiles
-        WHERE id = auth.uid() AND role = 'admin'
-    )
+    AND is_admin()
   );
 
 -- =============================================================================
@@ -100,21 +98,38 @@ CREATE POLICY "Admins delete template thumbnails"
 --    under the caller's role, but the profiles UPDATE needs definer rights and
 --    must bypass the protected-columns trigger as the function owner).
 -- =============================================================================
+-- WR-03: scope the usage accounting to the USER-WRITABLE buckets only. The
+-- `templates` bucket is admin-managed and its objects are NOT required to live
+-- under a `{user_id}/...` path (the admin INSERT policy checks only bucket_id),
+-- so a template thumbnail named `logo.png` would make the `::uuid` cast below
+-- raise `invalid input syntax for type uuid` and — because this is an AFTER
+-- trigger with no exception handler — ABORT the entire (sanctioned) admin
+-- upload. Returning early for non-user buckets means template/admin writes never
+-- touch the per-user quota and never hit the cast. (search_path pinned for the
+-- usual definer-safety reason; profiles schema-qualified — CR-01/WR-05.)
 CREATE OR REPLACE FUNCTION sync_storage_usage()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
   owner_id UUID;
   obj_size BIGINT;
 BEGIN
   IF (TG_OP = 'INSERT') THEN
+    IF NEW.bucket_id NOT IN ('avatars','media','resumes') THEN
+      RETURN NULL;
+    END IF;
     owner_id := ((storage.foldername(NEW.name))[1])::uuid;
     obj_size := COALESCE((NEW.metadata->>'size')::bigint, 0);
-    UPDATE profiles SET storage_used_bytes = storage_used_bytes + obj_size
+    UPDATE public.profiles SET storage_used_bytes = storage_used_bytes + obj_size
       WHERE id = owner_id;
   ELSIF (TG_OP = 'DELETE') THEN
+    IF OLD.bucket_id NOT IN ('avatars','media','resumes') THEN
+      RETURN NULL;
+    END IF;
     owner_id := ((storage.foldername(OLD.name))[1])::uuid;
     obj_size := COALESCE((OLD.metadata->>'size')::bigint, 0);
-    UPDATE profiles SET storage_used_bytes = GREATEST(0, storage_used_bytes - obj_size)
+    UPDATE public.profiles SET storage_used_bytes = GREATEST(0, storage_used_bytes - obj_size)
       WHERE id = owner_id;
   END IF;
   RETURN NULL;

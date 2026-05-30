@@ -182,3 +182,32 @@ CREATE VIEW public.public_blog_posts
   WHERE blog_post_is_public(id);
 
 GRANT SELECT ON public.public_blog_posts TO anon;
+
+-- =============================================================================
+-- WR-08 — PII tables (messages / page_views) get a table-level SELECT REVOKE
+-- backstop for ANON, instead of relying on RLS alone.
+--
+-- `messages` holds visitor PII (sender_email / sender_name / body) and
+-- `page_views` holds referrer / country. Neither has a public view and anon must
+-- never read them. The public tables above get THREE layers (REVOKE + column
+-- GRANT + view); these PII tables had only ONE (RLS). A single RLS regression —
+-- or a future stray "public read" policy — would directly expose PII to anon.
+-- REVOKE-ing anon's table SELECT is the defense-in-depth second wall: with no
+-- anon grant, a base-table read by anon returns a permission denial regardless
+-- of RLS.
+--
+-- WHY anon ONLY (NOT authenticated): unlike the public surface, these tables
+-- have LEGITIMATE authenticated-owner DIRECT reads — the `messages own select`
+-- and `page_views own select` RLS policies (004) are exactly that: the portfolio
+-- owner reading their OWN inbox / analytics as the `authenticated` role through
+-- PostgREST. RLS only RESTRICTS rows; it does not GRANT table access, so the
+-- authenticated role still needs the base SELECT privilege for those owner
+-- policies to return anything. Revoking SELECT from `authenticated` would make
+-- both owner policies dead (the owner would get "permission denied for table
+-- messages" reading their own inbox — verified against the live stack). So we
+-- REVOKE from anon only and let RLS remain the owner boundary for authenticated.
+-- No column GRANT is added back — there is no public column subset here; ALL
+-- access is owner-scoped via RLS.
+-- =============================================================================
+REVOKE SELECT ON public.messages   FROM anon;
+REVOKE SELECT ON public.page_views FROM anon;
