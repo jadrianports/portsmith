@@ -85,14 +85,21 @@ export const testimonialItemSchema = z
  * ExperienceItem — docs/01. Dates are `YYYY-MM` strings; `end_date` may be empty
  * or the literal `"present"`.
  */
+// WR-06: the month component is constrained to 01–12 (`0[1-9]|1[0-2]`) so
+// nonsense months like `2020-13` / `2020-00` are rejected — a date field
+// rendered on a public portfolio must not accept impossible months.
 export const experienceItemSchema = z.object({
   id: z.string().min(1),
   company: z.string().min(1),
   role: z.string().min(1),
-  start_date: z.string().regex(/^\d{4}-\d{2}$/, { error: 'start_date must be YYYY-MM' }),
+  start_date: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/, { error: 'start_date must be YYYY-MM' }),
   end_date: z
     .string()
-    .regex(/^(\d{4}-\d{2}|present)?$/, { error: "end_date must be YYYY-MM, 'present', or empty" })
+    .regex(/^(\d{4}-(0[1-9]|1[0-2])|present)?$/, {
+      error: "end_date must be YYYY-MM, 'present', or empty",
+    })
     .optional(),
   description: z.string().max(1000),
 });
