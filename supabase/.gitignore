@@ -1,0 +1,10 @@
+# Supabase CLI runtime artifacts — created by `supabase start` / `db reset`.
+# These are local-only state and must never be committed. Matches the standard
+# `supabase init` .gitignore template.
+.branches
+.temp
+.snippets
+snippets
+
+# Local-only secrets the CLI may write here.
+.env
