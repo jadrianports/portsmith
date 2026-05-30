@@ -22,18 +22,22 @@ import {
   anonClient,
   cleanupTestUsers,
   createTestUser,
+  sweepLeftoverTestUsers,
   type TestUser,
 } from './_setup';
 
 const anon = anonClient();
 const admin = adminClient();
-const RUN = Date.now().toString(36);
+// WR-09: collision-proof per-run token (see _setup.ts sweepLeftoverTestUsers).
+const RUN = crypto.randomUUID().slice(0, 8);
 
 let userA: TestUser;
 let portfolioA: string;
 const SENTINEL = `anon-insert-sentinel-${RUN}`;
 
 beforeAll(async () => {
+  // WR-09: purge leftover *@example.test users from an aborted prior run.
+  await sweepLeftoverTestUsers();
   const name = `adr004${RUN}`.slice(0, 30);
   userA = await createTestUser({
     email: `${name}@example.test`,

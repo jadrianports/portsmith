@@ -24,6 +24,7 @@ import {
   anonClient,
   cleanupTestUsers,
   createTestUser,
+  sweepLeftoverTestUsers,
   type TestUser,
 } from './_setup';
 
@@ -31,8 +32,9 @@ const anon = anonClient();
 const admin = adminClient();
 
 // Unique-per-run identifiers so repeated local runs never collide on the
-// username UNIQUE / one-portfolio-per-user constraints.
-const RUN = Date.now().toString(36);
+// username (live-row UNIQUE) / one-portfolio-per-user constraints.
+// WR-09: collision-proof per-run token (see _setup.ts sweepLeftoverTestUsers).
+const RUN = crypto.randomUUID().slice(0, 8);
 const A_USERNAME = `fnd02a${RUN}`.slice(0, 30);
 
 let userA: TestUser;
@@ -63,6 +65,8 @@ async function bootstrapPortfolioAs(user: TestUser): Promise<string> {
 }
 
 beforeAll(async () => {
+  // WR-09: purge leftover *@example.test users from an aborted prior run.
+  await sweepLeftoverTestUsers();
   userA = await createTestUser({
     email: `${A_USERNAME}@example.test`,
     password: 'Test-Password-123!',

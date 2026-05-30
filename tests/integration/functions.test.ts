@@ -19,11 +19,14 @@ import {
   adminClient,
   cleanupTestUsers,
   createTestUser,
+  sweepLeftoverTestUsers,
   type TestUser,
 } from './_setup';
 
 const admin = adminClient();
-const RUN = Date.now().toString(36);
+// WR-09: collision-proof per-run token (was Date.now().toString(36), which is
+// only millisecond-unique and brittle under the 30-char username slice).
+const RUN = crypto.randomUUID().slice(0, 8);
 
 // Documented default sections + visible/hidden flags (002_functions_triggers.sql
 // initialize_portfolio): hero/about/projects/contact visible;
@@ -56,6 +59,9 @@ async function signIn(user: TestUser): Promise<SupabaseClient> {
 }
 
 beforeAll(async () => {
+  // WR-09: purge any leftover *@example.test users from an aborted prior run so
+  // an orphaned username can't wedge createTestUser.
+  await sweepLeftoverTestUsers();
   const name = `fns${RUN}`.slice(0, 30);
   userA = await createTestUser({
     email: `${name}@example.test`,

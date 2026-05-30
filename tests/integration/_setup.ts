@@ -143,3 +143,47 @@ export async function cleanupTestUsers(...ids: string[]): Promise<void> {
     }
   }
 }
+
+/**
+ * WR-09 — leftover-test-user sweep. The integration suite derives test users'
+ * emails/usernames from a per-run token; if a previous run ABORTED mid-test
+ * (crash, ctrl-C), its `*@example.test` users survive and — because username is
+ * now UNIQUE among live rows (CR-02) — an orphan with a colliding handle would
+ * wedge the next run's `createTestUser` with the opaque GoTrue "Database error".
+ * The per-run token (`crypto.randomUUID().slice(0,8)`) makes a true collision
+ * astronomically unlikely, but this sweep is the deterministic backstop: call it
+ * in a global/file `beforeAll` to purge ALL leftover `*@example.test` users
+ * before a run begins. LOCAL STACK ONLY — `*@example.test` is a reserved test
+ * domain that production data never uses; this never runs against prod (the
+ * suite reads local-stack creds only).
+ *
+ * Paginated listUsers (admin API caps perPage); best-effort deletes so a
+ * transient error never masks the real test failure.
+ */
+export async function sweepLeftoverTestUsers(): Promise<void> {
+  const admin = adminClient();
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({
+      page,
+      perPage: 1000,
+    });
+    if (error) return; // best-effort: don't fail setup on a sweep hiccup
+    const users = data?.users ?? [];
+    if (users.length === 0) break;
+    const leftovers = users.filter((u) =>
+      (u.email ?? '').toLowerCase().endsWith('@example.test'),
+    );
+    for (const u of leftovers) {
+      const { error: delErr } = await admin.auth.admin.deleteUser(u.id);
+      if (delErr && !/not found/i.test(delErr.message)) {
+        // best-effort: log-and-continue, never throw from the sweep
+        // (a stuck delete shouldn't block the whole suite).
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[integration] sweepLeftoverTestUsers: could not delete ${u.id}: ${delErr.message}`,
+        );
+      }
+    }
+    if (users.length < 1000) break; // last page
+  }
+}

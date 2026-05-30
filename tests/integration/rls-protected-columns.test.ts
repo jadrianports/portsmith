@@ -21,11 +21,13 @@ import {
   adminClient,
   cleanupTestUsers,
   createTestUser,
+  sweepLeftoverTestUsers,
   type TestUser,
 } from './_setup';
 
 const admin = adminClient();
-const RUN = Date.now().toString(36);
+// WR-09: collision-proof per-run token (see _setup.ts sweepLeftoverTestUsers).
+const RUN = crypto.randomUUID().slice(0, 8);
 
 let userA: TestUser;
 let ownerA: SupabaseClient;
@@ -47,6 +49,8 @@ const PROTECTED_UPDATES: Array<[string, Record<string, unknown>]> = [
 ];
 
 beforeAll(async () => {
+  // WR-09: purge leftover *@example.test users from an aborted prior run.
+  await sweepLeftoverTestUsers();
   const name = `fnd03${RUN}`.slice(0, 30);
   userA = await createTestUser({
     email: `${name}@example.test`,
