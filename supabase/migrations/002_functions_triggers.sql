@@ -37,7 +37,9 @@
 --    flow), and raises a SINGLE GENERIC message (no column enumeration — T-06-06).
 -- =============================================================================
 CREATE OR REPLACE FUNCTION enforce_protected_profile_columns()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
   is_admin BOOLEAN;
 BEGIN
@@ -54,7 +56,7 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT (role = 'admin') INTO is_admin FROM profiles WHERE id = auth.uid();
+  SELECT (role = 'admin') INTO is_admin FROM public.profiles WHERE id = auth.uid();
   IF is_admin THEN
     RETURN NEW;  -- admins (and the moderation flow) may change these
   END IF;
@@ -90,14 +92,16 @@ CREATE TRIGGER protect_profile_columns
 --    portfolio must NOT be publicly readable).
 -- =============================================================================
 CREATE OR REPLACE FUNCTION portfolio_is_public(p_portfolio_id UUID)
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN
+SET search_path = public, pg_temp
+AS $$
   SELECT EXISTS (
-    SELECT 1 FROM portfolios
-    JOIN profiles ON profiles.id = portfolios.user_id
-    WHERE portfolios.id = p_portfolio_id
-      AND profiles.published = true
-      AND profiles.deleted_at IS NULL
-      AND profiles.locked = false
+    SELECT 1 FROM public.portfolios
+    JOIN public.profiles ON public.profiles.id = public.portfolios.user_id
+    WHERE public.portfolios.id = p_portfolio_id
+      AND public.profiles.published = true
+      AND public.profiles.deleted_at IS NULL
+      AND public.profiles.locked = false
   );
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
@@ -122,9 +126,11 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 --    (Found + fixed in Plan 01-09 when the suite first ran against the live stack.)
 -- =============================================================================
 CREATE OR REPLACE FUNCTION profile_is_public(p_user_id UUID)
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN
+SET search_path = public, pg_temp
+AS $$
   SELECT EXISTS (
-    SELECT 1 FROM profiles
+    SELECT 1 FROM public.profiles
     WHERE id = p_user_id
       AND published = true
       AND deleted_at IS NULL
@@ -146,12 +152,14 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 --    (Found + fixed in Plan 01-09 when the suite first ran against the live stack.)
 -- =============================================================================
 CREATE OR REPLACE FUNCTION blog_post_is_public(p_blog_post_id UUID)
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN
+SET search_path = public, pg_temp
+AS $$
   SELECT EXISTS (
-    SELECT 1 FROM blog_posts
+    SELECT 1 FROM public.blog_posts
     WHERE id = p_blog_post_id
       AND published = true
-      AND portfolio_is_public(portfolio_id)
+      AND public.portfolio_is_public(portfolio_id)
   );
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
@@ -178,9 +186,11 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 --    be enforced; a recursion error is a deny-everything failure, not isolation.)
 -- =============================================================================
 CREATE OR REPLACE FUNCTION is_admin()
-RETURNS BOOLEAN AS $$
+RETURNS BOOLEAN
+SET search_path = public, pg_temp
+AS $$
   SELECT EXISTS (
-    SELECT 1 FROM profiles
+    SELECT 1 FROM public.profiles
     WHERE id = auth.uid()
       AND role = 'admin'
   );
@@ -206,19 +216,69 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 -- pattern: pin a deterministic `SET search_path` AND schema-qualify the table
 -- (`public.profiles`). Belt-and-suspenders so neither alone is load-bearing.
 -- (Found + fixed in Plan 01-09 when createUser first ran against the live stack.)
+-- CR-03 (DB-LEVEL SIGNUP GATE): `raw_user_meta_data` is CLIENT-SUPPLIED at
+-- signup and is NOT run through the Zod usernameSchema (that gate lives in app
+-- code only — a direct anon `auth.signUp` bypasses it entirely). The DB is the
+-- last line of defense, so this trigger now enforces the same invariants the Zod
+-- gate does before the row is written:
+--   1. username MUST be present (a NULL would otherwise hit NOT NULL as an opaque
+--      "Database error creating new user").
+--   2. username MUST NOT be a reserved name. This ARRAY MIRRORS, EXACTLY,
+--      RESERVED_USERNAMES in src/lib/validations/username.ts — keep the two in
+--      sync. The format CHECK (001) accepts `admin`, so without this guard a
+--      direct anon signup could claim a reserved route slug.
+--   3. display_name is CAPPED at 100 chars (mirrors the Zod cap) before insert,
+--      so an oversized client-supplied display_name cannot be stored.
+-- CR-02 (GUARDED INSERT): username uniqueness is now a PARTIAL unique index over
+-- live rows (uq_profiles_username_live, 001). A collision raises unique_violation
+-- INSIDE this AFTER-INSERT trigger on auth.users, which GoTrue would surface as
+-- the opaque "Database error creating new user". Catch it and re-raise a clear,
+-- actionable message so a taken handle is legible, not a generic DB error.
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  v_username     TEXT := NEW.raw_user_meta_data->>'username';
+  v_display_name TEXT := COALESCE(
+                           NEW.raw_user_meta_data->>'display_name',
+                           NEW.raw_user_meta_data->>'username'
+                         );
 BEGIN
+  -- (1) username required.
+  IF v_username IS NULL THEN
+    RAISE EXCEPTION 'username is required at signup';
+  END IF;
+
+  -- (2) reserved-name guard — mirrors RESERVED_USERNAMES in
+  --     src/lib/validations/username.ts (keep in sync).
+  IF lower(v_username) = ANY (ARRAY[
+    'admin','api','dashboard','login','signup','settings','www','app',
+    'portsmith','support','help','about','terms','privacy','root',
+    'null','undefined'
+  ]) THEN
+    RAISE EXCEPTION 'username is reserved';
+  END IF;
+
+  -- (3) cap display_name length (mirrors the Zod 100-char cap).
+  IF v_display_name IS NOT NULL AND length(v_display_name) > 100 THEN
+    v_display_name := left(v_display_name, 100);
+  END IF;
+
   INSERT INTO public.profiles (id, username, display_name, email)
   VALUES (
     NEW.id,
-    NEW.raw_user_meta_data->>'username',
-    COALESCE(NEW.raw_user_meta_data->>'display_name', NEW.raw_user_meta_data->>'username'),
+    v_username,
+    v_display_name,
     NEW.email
   );
+
   RETURN NEW;
+EXCEPTION
+  WHEN unique_violation THEN
+    -- CR-02: a live row already owns this handle. Re-raise legibly instead of
+    -- letting GoTrue report a generic "Database error creating new user".
+    RAISE EXCEPTION 'username is already taken';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -245,7 +305,9 @@ CREATE TRIGGER on_auth_user_created
 --    a bootstrap failure does not roll back the entire signup (docs/03).
 -- =============================================================================
 CREATE OR REPLACE FUNCTION initialize_portfolio()
-RETURNS UUID AS $$
+RETURNS UUID
+SET search_path = public, pg_temp
+AS $$
 DECLARE
   v_user_id      UUID := auth.uid();
   v_portfolio_id UUID;
@@ -256,30 +318,30 @@ BEGIN
   END IF;
 
   -- Idempotent: return the existing portfolio if the user already has one.
-  SELECT id INTO v_portfolio_id FROM portfolios WHERE user_id = v_user_id;
+  SELECT id INTO v_portfolio_id FROM public.portfolios WHERE user_id = v_user_id;
   IF v_portfolio_id IS NOT NULL THEN
     RETURN v_portfolio_id;
   END IF;
 
   -- Default template must exist (seeded by 001_initial_schema.sql).
   SELECT id INTO v_template_id
-    FROM templates
+    FROM public.templates
     WHERE slug = 'minimal' AND is_active = true;
   IF v_template_id IS NULL THEN
     RAISE EXCEPTION 'Default template (minimal) not found';
   END IF;
 
   -- Portfolio + settings.
-  INSERT INTO portfolios (user_id, template_id)
+  INSERT INTO public.portfolios (user_id, template_id)
     VALUES (v_user_id, v_template_id)
     RETURNING id INTO v_portfolio_id;
 
-  INSERT INTO portfolio_settings (portfolio_id)
+  INSERT INTO public.portfolio_settings (portfolio_id)
     VALUES (v_portfolio_id);
 
   -- The 7 default sections, with placeholder content + visible/hidden flags.
   -- sort_order follows the canonical single-scroll order.
-  INSERT INTO sections (portfolio_id, type, sort_order, visible, content) VALUES
+  INSERT INTO public.sections (portfolio_id, type, sort_order, visible, content) VALUES
     (v_portfolio_id, 'hero', 0, true, jsonb_build_object(
       'heading',    'Hi, I''m [Your Name]',
       'subheading', 'I build things for the web'
@@ -341,7 +403,9 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 --    non-admin block on the function owner's behalf, so it can set deleted_at.
 -- =============================================================================
 CREATE OR REPLACE FUNCTION request_account_deletion()
-RETURNS VOID AS $$
+RETURNS VOID
+SET search_path = public, pg_temp
+AS $$
 DECLARE
   v_user_id UUID := auth.uid();
 BEGIN
@@ -349,7 +413,7 @@ BEGIN
     RAISE EXCEPTION 'Not authenticated';
   END IF;
 
-  UPDATE profiles
+  UPDATE public.profiles
     SET deleted_at = now(),
         published  = false
     WHERE id = v_user_id;
@@ -363,7 +427,9 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 --    sections, blog_posts, portfolio_settings — sets NEW.updated_at = now().
 -- =============================================================================
 CREATE OR REPLACE FUNCTION update_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SET search_path = public, pg_temp
+AS $$
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
