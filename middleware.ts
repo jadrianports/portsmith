@@ -1,25 +1,21 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
+import { updateSession } from '@/lib/supabase/middleware';
 
 /**
- * PASSTHROUGH STUB — Plan 04 (Supabase clients) replaces this body.
+ * Root middleware. Delegates to `updateSession`, which refreshes the Supabase
+ * auth session on every request and writes the refreshed cookies to BOTH the
+ * request and the response (the only supported `@supabase/ssr` refresh model).
  *
- * Plan 04 swaps the no-op below for `await updateSession(request)` from
- * `src/lib/supabase/middleware.ts`, which refreshes the Supabase auth session on
- * every request and writes refreshed cookies to BOTH the request and the
- * response (the only supported `@supabase/ssr` refresh model). Per the SSR
- * contract, run NO code between client creation and the `getClaims()`/`getUser()`
- * auth call — it breaks the refresh/cookie-write timing
- * (repo-root CLAUDE.md "@supabase/ssr triad").
- *
- * Until then this is a pure passthrough so the app builds and runs.
+ * Per the SSR contract, `updateSession` runs NO code between client creation
+ * and the `getClaims()` auth call — that timing is load-bearing for the
+ * refresh/cookie-write (repo-root CLAUDE.md "@supabase/ssr triad").
  */
-export function middleware(_request: NextRequest) {
-  return NextResponse.next();
+export async function middleware(request: NextRequest) {
+  return await updateSession(request);
 }
 
 export const config = {
-  // Run on everything except Next internals and static assets. Plan 04 keeps
-  // this matcher when it wires session refresh.
+  // Run on everything except Next internals and static assets.
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
