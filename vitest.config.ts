@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+
 import { config as loadEnv } from 'dotenv';
 import { defineConfig } from 'vitest/config';
 
@@ -33,11 +35,26 @@ import { defineConfig } from 'vitest/config';
  */
 loadEnv({ path: '.env.local' });
 
+/**
+ * Mirror the tsconfig `@/*` -> `./src/*` path alias so tests can import via the
+ * same `@/lib/...` surface the app uses. Vitest does NOT read tsconfig `paths`
+ * automatically. With `test.projects`, each inline project is its OWN Vite config
+ * and does NOT inherit a root-level `resolve.alias` — so the alias is applied
+ * inside every project (see https://vitest.dev/guide/projects).
+ */
+const resolve = {
+  alias: {
+    '@': fileURLToPath(new URL('./src', import.meta.url)),
+  },
+};
+
 export default defineConfig({
+  resolve,
   test: {
     projects: [
       {
         // --- Unit: fast, no I/O (Zod schemas, pure helpers) ---
+        resolve,
         test: {
           name: 'unit',
           environment: 'node',
@@ -46,6 +63,7 @@ export default defineConfig({
       },
       {
         // --- Integration: RLS against local Supabase, strictly sequential ---
+        resolve,
         test: {
           name: 'integration',
           environment: 'node', // NOT jsdom (Pitfall 4)
