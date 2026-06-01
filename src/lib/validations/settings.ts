@@ -14,8 +14,17 @@
  */
 import { z } from 'zod';
 
-/** A URL that may also be the empty string, and may be omitted entirely. */
-const urlOrEmptyOptional = z.url().or(z.literal('')).optional();
+import { httpUrlOrEmptyOptional } from './sections';
+
+/**
+ * A scheme-restricted (http/https only) URL that may also be the empty string, and
+ * may be omitted entirely. Reuses the single CR-01 stored-XSS gate defined in
+ * `./sections` — plain `z.url()` accepts `javascript:`/`data:`/`vbscript:` in the
+ * installed Zod 4.4.3, and these settings URLs (social links → footer `href`,
+ * `og_image_url`/`favicon_url` → metadata) feed rendered sinks just like the
+ * section content fields do.
+ */
+const urlOrEmptyOptional = httpUrlOrEmptyOptional;
 
 /** SEO meta-field length caps (sane limits — search engines truncate well below). */
 const PAGE_TITLE_MAX = 200;

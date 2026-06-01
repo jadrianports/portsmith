@@ -35,6 +35,7 @@
  */
 import type { SectionProps } from './types';
 import type { HeroContent } from '@/lib/validations';
+import { safeHref } from '@/lib/safe-url';
 
 /**
  * The hero content as it flows through the section contract. It is `HeroContent`
@@ -61,11 +62,14 @@ export function Hero({ section }: SectionProps) {
   const tagline = present(content.subheading) ? content.subheading : null;
   // CTA copy is locked to "Work with me" (D-12); honor a seeded override.
   const ctaText = present(content.cta_text) ? content.cta_text : 'Work with me';
-  // Empty/absent cta_url ⇒ the in-page Contact anchor.
-  const ctaHref = present(content.cta_url) ? content.cta_url : '#contact';
+  // Empty/absent cta_url ⇒ the in-page Contact anchor. CR-01: the seeded URL passes
+  // through `safeHref` (it permits the `#contact` anchor); a dangerous/unparseable
+  // scheme falls back to the safe in-page anchor rather than rendering a live link.
+  const ctaHref = safeHref(content.cta_url) ?? '#contact';
   // The "Download résumé" button is gated on a present résumé URL (sourced from
-  // profile.resume_url through the seed) — render-only-if-present (D-14).
-  const resumeUrl = present(content.resume_url) ? content.resume_url : null;
+  // profile.resume_url through the seed) — render-only-if-present (D-14). CR-01:
+  // dropped entirely unless it is a safe http(s) href.
+  const resumeUrl = safeHref(content.resume_url) ?? null;
 
   return (
     <div

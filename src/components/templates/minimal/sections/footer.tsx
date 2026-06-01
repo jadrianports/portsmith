@@ -27,6 +27,7 @@
  */
 import type { FooterProps } from './types';
 import { siteUrl } from '@/lib/url';
+import { safeHref } from '@/lib/safe-url';
 
 /** A URL field is "present" when it is a non-empty trimmed string. */
 function present(v: string | null | undefined): v is string {
@@ -40,16 +41,21 @@ export function Footer({ data }: FooterProps) {
   const name = present(profile.display_name) ? profile.display_name : null;
   const handle = present(profile.username) ? profile.username : null;
 
-  // The social links that exist, in a stable order. NO platform link.
+  // The social links that exist, in a stable order. NO platform link. CR-01: each
+  // URL passes through `safeHref` (http(s) only) — a dangerous/unparseable scheme
+  // drops that social entirely rather than rendering a live `javascript:` link.
+  const socialSources: { label: string; raw: string | null | undefined }[] = [
+    { label: 'GitHub', raw: settings.github_url },
+    { label: 'LinkedIn', raw: settings.linkedin_url },
+    { label: 'X', raw: settings.twitter_url },
+    { label: 'Dribbble', raw: settings.dribbble_url },
+    { label: 'Website', raw: settings.website_url },
+  ];
   const socials: { label: string; href: string }[] = [];
-  if (present(settings.github_url)) socials.push({ label: 'GitHub', href: settings.github_url });
-  if (present(settings.linkedin_url))
-    socials.push({ label: 'LinkedIn', href: settings.linkedin_url });
-  if (present(settings.twitter_url)) socials.push({ label: 'X', href: settings.twitter_url });
-  if (present(settings.dribbble_url))
-    socials.push({ label: 'Dribbble', href: settings.dribbble_url });
-  if (present(settings.website_url))
-    socials.push({ label: 'Website', href: settings.website_url });
+  for (const { label, raw } of socialSources) {
+    const href = safeHref(raw);
+    if (href) socials.push({ label, href });
+  }
 
   // The canonical self-link to this portfolio (PUB-03 — env-driven, host-safe).
   const canonicalHref = handle ? siteUrl(`/${handle}`) : siteUrl('/');

@@ -39,6 +39,8 @@ import Image from 'next/image';
 import { ArrowUpRight } from 'lucide-react';
 import type { SectionProps } from './types';
 import type { ProjectsContent, ProjectItem } from '@/lib/validations';
+import { safeHref } from '@/lib/safe-url';
+import { isHttpImageSrc } from '@/lib/safe-image';
 
 /** A string field is "present" when it is a non-empty trimmed string. */
 function present(v: string | null | undefined): v is string {
@@ -75,14 +77,17 @@ function ProjectLink({ href, label }: { href: string; label: string }) {
 
 /** A single project card. Cards only — no expand overlay/deep-link (TMPL-06 → P6). */
 function ProjectCard({ item }: { item: ProjectItem }) {
-  const imageUrl = present(item.image) ? item.image : null;
+  // WR-05: the <Image> src must be an http(s) URL — `unoptimized` skips Next's host
+  // allowlist, so a `data:`/arbitrary-scheme src would otherwise be loaded directly.
+  const imageUrl = isHttpImageSrc(item.image) ? item.image : null;
   const imageAlt = present(item.image_alt) ? item.image_alt : null;
-  // Image renders ONLY when both the URL and its required alt are present (the Zod
-  // alt-text refine guarantees alt when image is set; re-guard defensively).
+  // Image renders ONLY when both a safe URL and its required alt are present (the
+  // Zod alt-text refine guarantees alt when image is set; re-guard defensively).
   const showImage = Boolean(imageUrl && imageAlt);
 
-  const liveUrl = present(item.live_url) ? item.live_url : null;
-  const repoUrl = present(item.repo_url) ? item.repo_url : null;
+  // CR-01: outbound links rendered ONLY when they are safe http(s) hrefs.
+  const liveUrl = safeHref(item.live_url) ?? null;
+  const repoUrl = safeHref(item.repo_url) ?? null;
 
   const techStack = Array.isArray(item.tech_stack)
     ? item.tech_stack.filter((t) => present(t))

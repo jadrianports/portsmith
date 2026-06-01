@@ -16,9 +16,22 @@
  *   - TOP-LEVEL string formats only: `z.email()` / `z.url()`. The chained
  *     `z.string().email()` / `.url()` forms are deprecated in v4 and FORBIDDEN by
  *     repo CLAUDE.md ("What NOT to use").
- *   - URL-or-empty pattern: `z.url().or(z.literal('')).optional()` (docs/04).
+ *   - URL-or-empty pattern: `z.url({ protocol: /^https?$/ }).or(z.literal('')).optional()`.
  *   - Error customization uses the unified `{ error: ... }` param (v3's
  *     `{ message: ... }` / `invalid_type_error` are gone).
+ *
+ * SCHEME ALLOWLIST — STORED-XSS GATE (CR-01, 03-REVIEW). Plain `z.url()` validates
+ * via the WHATWG `URL` constructor and, in the installed Zod 4.4.3, ACCEPTS
+ * dangerous schemes — `javascript:`, `data:`, `vbscript:` (verified empirically:
+ * `z.url().safeParse('javascript:alert(1)').success === true`). Those strings flow
+ * straight into rendered `href`/`src` attributes in the (frozen) template renderers
+ * and into the SAME gate the Phase-4 multi-tenant CMS will use, so an attacker-
+ * authored `javascript:` URL would become a clickable stored-XSS link on a public
+ * page. Zod 4's `z.url({ protocol })` constrains the scheme AT THE GATE: the regex
+ * is matched against the normalized lowercase `protocol` WITHOUT the trailing colon
+ * (`https`, not `https:`), so `/^https?$/` admits only `http`/`https` (case-folded —
+ * `HTTPS://…` passes) and rejects every dangerous scheme. This is defense-in-depth
+ * layer 1; the `safeHref` render guard (`@/lib/safe-url`) is layer 2.
  *
  * Alt-text refine (critical rule #4): wherever an image field can be present, a
  * non-empty image REQUIRES a non-empty trimmed `*_alt`. Applied to project items,
@@ -30,8 +43,18 @@ import { z } from 'zod';
 // Shared field helpers
 // ---------------------------------------------------------------------------
 
-/** A URL that may also be the empty string, and may be omitted entirely. */
-const urlOrEmptyOptional = z.url().or(z.literal('')).optional();
+/**
+ * A scheme-restricted (http/https only) URL that may also be the empty string, and
+ * may be omitted entirely. The `protocol` allowlist is the CR-01 stored-XSS gate —
+ * see the header note. Exported so the profile schema (WR-04) reuses the SAME gate.
+ */
+export const httpUrlOrEmptyOptional = z
+  .url({ protocol: /^https?$/, error: 'Must be an http(s) URL' })
+  .or(z.literal(''))
+  .optional();
+
+/** @deprecated alias kept for the internal call sites below; identical to {@link httpUrlOrEmptyOptional}. */
+const urlOrEmptyOptional = httpUrlOrEmptyOptional;
 
 /**
  * Alt-text refine predicate: passes when there is no image, or when the alt text
@@ -114,6 +137,13 @@ export const heroContentSchema = z.object({
   cta_text: z.string().optional(),
   cta_url: urlOrEmptyOptional,
   background_image: urlOrEmptyOptional,
+  // WR-01 (03-REVIEW): the "Download résumé" button reads `content.resume_url`, so
+  // the field MUST live on the schema or Zod `.parse()` strips it (unknown keys are
+  // dropped) and the button can never render (the D-14 dead-button bug). Additive,
+  // OPTIONAL, http(s)-validated — the SAME additive idiom the contact section uses
+  // for `email_public` (no Postgres migration; CMS-08). The seed surfaces
+  // `profile.resume_url` into the hero content so the field survives the gate.
+  resume_url: urlOrEmptyOptional,
 });
 
 export const aboutContentSchema = z

@@ -42,6 +42,7 @@
  */
 import type { SectionProps } from './types';
 import type { ContactContent } from '@/lib/validations';
+import { safeHref } from '@/lib/safe-url';
 
 /**
  * The contact content as it flows through the section contract: `ContactContent`
@@ -94,8 +95,14 @@ export function Contact({ section }: SectionProps) {
     ? content.subheading
     : "Have an idea in mind? Let's talk";
   // The public-email mailto is render-if-present (Option A — sourced from
-  // settings.email_public through the seed). Absent/empty ⇒ no mailto element.
+  // settings.email_public through the seed). Absent/empty ⇒ no mailto element. The
+  // email is validated by `z.email()` (well-behaved), but the `href` is still built
+  // through the shared guard with `allowMailto` (CR-01 belt-and-suspenders) and the
+  // address is `encodeURIComponent`-escaped before interpolation into the URL.
   const emailPublic = present(content.email_public) ? content.email_public : null;
+  const mailtoHref = emailPublic
+    ? safeHref(`mailto:${encodeURIComponent(emailPublic)}`, { allowMailto: true })
+    : undefined;
 
   return (
     <div
@@ -271,7 +278,7 @@ export function Contact({ section }: SectionProps) {
         {/* Public-email fallback (render-if-present) — the ONE working interaction.
             Sourced from settings.email_public through the seed (Option A). The error
             copy authored for P6 also points here; in P3 it is the direct path. */}
-        {emailPublic ? (
+        {emailPublic && mailtoHref ? (
           <p
             style={{
               fontFamily: 'var(--font-body)',
@@ -284,7 +291,7 @@ export function Contact({ section }: SectionProps) {
           >
             Prefer email? Reach me directly at{' '}
             <a
-              href={`mailto:${emailPublic}`}
+              href={mailtoHref}
               style={{ color: 'var(--accent-cyan)', textDecoration: 'underline' }}
             >
               {emailPublic}
