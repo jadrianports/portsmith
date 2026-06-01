@@ -293,6 +293,24 @@ describe('section content schemas', () => {
     expect(contactContentSchema.safeParse({ heading: 'x'.repeat(101) }).success).toBe(false);
   });
 
+  it('contact accepts an optional email_public (valid email, empty, or omitted); rejects a bad email (Option A, 03-08)', () => {
+    // Omitted ⇒ valid (the field is optional/additive — CMS-08 "new field, no migration").
+    expect(contactContentSchema.safeParse({ heading: 'Reach me' }).success).toBe(true);
+    // Empty string ⇒ valid (renders no mailto).
+    expect(
+      contactContentSchema.safeParse({ heading: 'Reach me', email_public: '' }).success,
+    ).toBe(true);
+    // A valid email ⇒ valid (the seed copies settings.email_public here for the mailto).
+    expect(
+      contactContentSchema.safeParse({ heading: 'Reach me', email_public: 'hello@example.com' })
+        .success,
+    ).toBe(true);
+    // A malformed email ⇒ rejected by the Zod gate.
+    expect(
+      contactContentSchema.safeParse({ heading: 'Reach me', email_public: 'not-an-email' }).success,
+    ).toBe(false);
+  });
+
   it('blog_preview requires an integer post_count', () => {
     expect(blogPreviewContentSchema.safeParse({ heading: 'Blog', post_count: 3 }).success).toBe(
       true,
