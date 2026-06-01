@@ -99,3 +99,25 @@ body {
   /* Tabular numerals for username-availability + resend cooldown counters (UI-SPEC typography). */
   font-feature-settings: "tnum";
 }
+
+/*
+ * PreviewBanner entry slide (04-UI-SPEC §11). Tailwind v4 ships no `animate-in`
+ * utilities and the repo has no animation plugin, so the reduced-motion-safe slide
+ * is a tiny scoped keyframe applied via `.preview-banner-enter`. It animates ONLY
+ * under `prefers-reduced-motion: no-preference` — under reduced-motion the banner
+ * simply appears in place (no transform), satisfying SHARED-E.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes preview-banner-slide-in {
+    from {
+      transform: translateY(-100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+
+  .preview-banner-enter {
+    animation: preview-banner-slide-in 200ms ease-out;
+  }
+}
