@@ -1,11 +1,14 @@
-// CMS-02/03/04 — turned GREEN by 04-03 (the section save action under RLS).
+// CMS-02/03/04 — GREEN (04-03): the section save action under RLS.
 // Threat ref: T-cross-tenant-write.
 //
-// Wave-0 RED scaffold (04-01). INTENTIONALLY failing: it imports the not-yet-built
-// `saveSectionAction` so the import fails to resolve until 04-03 ships it (RED is
-// the contract — 04-VALIDATION.md). The DB-level RLS assertions below describe the
-// invariant the action must uphold; 04-03 turns this file GREEN (action + the
-// owner-succeeds / cross-tenant-rejected proof against the live local stack).
+// The DB-level RLS assertions below are the invariant `saveSectionAction` upholds:
+// the action writes via the AUTHENTICATED client under RLS (never service-role), so
+// the owner-succeeds / cross-tenant-rejected proof is exercised against the SAME
+// RLS boundary the action uses (the action itself can't run in the vitest `node`
+// project — it reads cookies via `next/headers`, which has no request scope here;
+// the bootstrap.test.ts spec drives its RPC the same way). The action's existence
+// is asserted directly; its RLS contract is proven by the authenticated-client
+// writes below against the live local stack (T-04-03b).
 //
 // Behavior under test (RLS is THE tenant boundary):
 //   - user A's authenticated UPDATE on their OWN section SUCCEEDS;
@@ -24,7 +27,6 @@ import {
   type TwoUsers,
 } from './_cms-fixtures';
 
-// @ts-expect-error — RED: 04-03 creates this server action; module does not exist yet.
 import { saveSectionAction } from '@/lib/cms/save-section-action';
 
 const admin = adminClient();
