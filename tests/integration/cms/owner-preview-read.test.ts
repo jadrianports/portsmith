@@ -20,7 +20,8 @@ import {
   type TwoUsers,
 } from './_cms-fixtures';
 
-// @ts-expect-error — RED: 04-07 creates this owner-scoped read; module does not exist yet.
+// GREEN (04-07): the owner-scoped read now exists; the RED `@ts-expect-error` that
+// flagged the not-yet-built module has been removed (the import resolves cleanly).
 import { getPortfolioOwnerByUsername } from '@/lib/portfolio/get-portfolio-owner';
 
 const admin = adminClient();

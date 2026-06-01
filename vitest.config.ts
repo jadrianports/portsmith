@@ -45,6 +45,12 @@ loadEnv({ path: '.env.local' });
 const resolve = {
   alias: {
     '@': fileURLToPath(new URL('./src', import.meta.url)),
+    // `server-only` resolves to a client-throwing guard under Vitest's `node`
+    // environment (no `react-server` export condition), which would break importing
+    // any server module (e.g. `get-portfolio-owner.ts`) to assert its RUNTIME
+    // behavior. Alias it to a no-op stub for tests only — the production import
+    // guard and the FND-05 `.next/static` secret grep are unaffected.
+    'server-only': fileURLToPath(new URL('./tests/stubs/server-only.ts', import.meta.url)),
   },
 };
 
