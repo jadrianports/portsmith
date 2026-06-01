@@ -42,6 +42,18 @@ const DEFAULT_NEXT = '/dashboard';
 const RECOVERY_NEXT = '/update-password';
 
 /**
+ * The ONLY `type` values this handler accepts (CR-02). The Supabase email
+ * templates emit exactly these two — confirmation links carry `type=email` and
+ * recovery links carry `type=recovery` (see supabase/templates/*.html). Anything
+ * else (`signup`, `email_change`, `magiclink`, `invite`, or arbitrary attacker
+ * input) is treated as a generic failure: we do NOT pass an unvalidated string
+ * into `verifyOtp`, and we never route a non-`recovery` verified token through the
+ * attacker-controlled `next`. Add a value here ONLY when a real runtime path emits
+ * it through this route.
+ */
+const ALLOWED_TYPES = new Set<EmailOtpType>(['email', 'recovery']);
+
+/**
  * Returns a safe, INTERNAL redirect path or `null` if `raw` is not a same-origin
  * absolute path. Rejects:
  *   - null / empty
@@ -70,7 +82,13 @@ function safeInternalPath(raw: string | null): string | null {
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const token_hash = searchParams.get('token_hash');
-  const type = searchParams.get('type') as EmailOtpType | null;
+  // CR-02: allowlist the type rather than blindly casting an arbitrary query
+  // string to EmailOtpType. Anything not in ALLOWED_TYPES → null → generic failure.
+  const rawType = searchParams.get('type');
+  const type =
+    rawType && ALLOWED_TYPES.has(rawType as EmailOtpType)
+      ? (rawType as EmailOtpType)
+      : null;
 
   // Build every redirect from the request's own origin with the query stripped,
   // so neither the token nor an attacker-supplied host is ever carried forward.
