@@ -68,6 +68,10 @@ export function ScrollReveal({
     <Tag
       // The cast keeps a single ref usable across the small allowed tag set.
       ref={ref as React.Ref<HTMLDivElement & HTMLLIElement>}
+      // Class hook for the reduced-motion CSS-level visible-fallback in theme.css
+      // (`.tmpl-reveal { opacity:1 !important }` under prefers-reduced-motion) — a
+      // belt-and-suspenders guarantee independent of this JS effect (UI-SPEC §Motion).
+      className="tmpl-reveal"
       style={{
         opacity: revealed ? 1 : 0,
         transform: revealed ? 'none' : 'translateY(16px)',

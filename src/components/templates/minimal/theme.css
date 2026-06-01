@@ -255,4 +255,17 @@
     transition: none !important;
     scroll-behavior: auto !important;
   }
+
+  /* CSS-level visible-fallback GUARANTEE for the scroll-reveal (UI-SPEC §Motion:
+     "content fully visible without animation — never opacity:0 with no fallback").
+     The ScrollReveal island already short-circuits to visible in JS, but its
+     starting state is an INLINE `opacity:0` — which a stylesheet rule cannot beat
+     without `!important`. This forces the revealed state at the CSS layer so the
+     content is visible under reduced-motion EVEN IF the JS effect is slow/blocked,
+     fully decoupled from JS. The no-JS path is independently safe (the island SSRs
+     `opacity:1`); this closes the reduced-motion-with-JS edge. */
+  .tmpl-minimal .tmpl-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
