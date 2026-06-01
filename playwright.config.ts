@@ -1,23 +1,43 @@
+import { config as loadEnv } from 'dotenv';
+
 import { defineConfig } from '@playwright/test';
 
+// Load `.env.local` so the spec's admin-API cleanup (service-role key) and the
+// Supabase/Mailpit hosts resolve from the same source the rest of the project
+// uses (vitest does the same). `next dev` loads `.env.local` itself.
+loadEnv({ path: '.env.local' });
+
 /**
- * Playwright SCAFFOLD ONLY (CONTEXT D-11).
+ * Playwright config — first real smoke flow (02-06).
  *
- * This is a valid, runnable config with NO specs yet. Real end-to-end smoke
- * flows are deferred:
- *   - P2 (auth):   sign up -> confirm -> land on dashboard.
- *   - P3 (public): publish toggle -> public `/[username]` page renders.
- * (See handoff docs/07-testing.md "Layer 3 — Smoke tests" for the full list.)
+ * The scaffold (CONTEXT D-11) intentionally shipped with NO `webServer` block
+ * and a comment stating that "whichever later plan adds the first spec also adds
+ * the matching `webServer`." This plan (02-06) is that plan: it adds the first
+ * E2E spec (`e2e/auth-signup.spec.ts` — the signup -> confirm -> dashboard
+ * phase-gate flow), so it also wires the `webServer` + `baseURL` the spec needs.
  *
- * NOTE: intentionally NO `webServer` block. Adding one that boots `next dev`/
- * `next start` would make CI hang/fail on a server that has nothing to test yet.
- * Whichever later plan adds the first spec also adds the matching `webServer`.
+ * ORIGIN NOTE (load-bearing): `baseURL` is `http://127.0.0.1:3000`, NOT
+ * `localhost`. The confirmation email link is rendered from Supabase's
+ * `config.toml` `site_url = http://127.0.0.1:3000` (see 02-02-SUMMARY: the
+ * verified link shape is `http://127.0.0.1:3000/auth/confirm?token_hash=...`).
+ * `127.0.0.1` and `localhost` are DISTINCT cookie origins, so the whole
+ * session-bearing flow (signup -> confirm) must run on the SAME origin the
+ * email link carries. Running the spec on `127.0.0.1:3000` keeps the signup
+ * page, the confirm navigation, and the auth-token cookie all on one origin.
  */
 export default defineConfig({
-  testDir: './tests/e2e',
-  // Absolute URLs are driven by NEXT_PUBLIC_SITE_URL everywhere (repo CLAUDE.md
-  // relocatable-rendering constraint); the E2E baseURL follows the same source.
+  testDir: './e2e',
+  // Single-origin consistency with the email link (config.toml site_url).
   use: {
-    baseURL: process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000',
+    baseURL: 'http://127.0.0.1:3000',
+  },
+  // Boot `next dev` for the run; reuse a hand-started dev server locally. A
+  // generous timeout covers a cold Next 16 compile on Windows (first request
+  // triggers route compilation).
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://127.0.0.1:3000',
+    reuseExistingServer: !process.env.CI,
+    timeout: 180_000,
   },
 });
