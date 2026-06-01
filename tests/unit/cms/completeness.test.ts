@@ -11,11 +11,15 @@
 //   It is ADVISORY only — it never blocks publishing (D-P4-08).
 import { describe, expect, it } from 'vitest';
 
-// @ts-expect-error — RED: 04-04 creates this pure helper; module does not exist yet.
 import { deriveCompleteness } from '@/lib/cms/completeness';
 
+const boolsById = (data: Parameters<typeof deriveCompleteness>[0]) =>
+  Object.fromEntries(
+    deriveCompleteness(data).map((i: { id: string; done: boolean }) => [i.id, i.done]),
+  );
+
 // Mixed-state fixture: name + about present; project / contact / avatar absent.
-const fixture = {
+const mixed = {
   displayName: 'Jane Doe',
   avatarUrl: null,
   sections: [
@@ -25,20 +29,59 @@ const fixture = {
   ],
 };
 
-describe('ONB-01 — deriveCompleteness done/todo for a mixed-state fixture', () => {
-  it('returns a checklist with the expected done/todo booleans', () => {
-    const items = deriveCompleteness(fixture);
-    const byId = Object.fromEntries(
-      items.map((i: { id: string; done: boolean }) => [i.id, i.done]),
-    );
+// All-done fixture: every predicate satisfied.
+const allDone = {
+  displayName: 'Jane Doe',
+  avatarUrl: 'https://example.com/me.webp',
+  sections: [
+    { type: 'about', content: { bio: 'A short bio about me.', skills: [] } },
+    {
+      type: 'projects',
+      content: { heading: 'Work', items: [{ id: 'p1', slug: 'a', title: 'A' }] },
+    },
+    { type: 'contact', content: { heading: 'Contact', email_public: 'me@example.com' } },
+  ],
+};
 
-    // DONE: name + about are present.
+// None-done fixture: empty/whitespace name + empty rows + no avatar.
+const noneDone = {
+  displayName: '   ',
+  avatarUrl: '',
+  sections: [
+    { type: 'about', content: { bio: '   ', skills: [] } },
+    { type: 'projects', content: { heading: 'Work', items: [] } },
+    { type: 'contact', content: { heading: 'Contact', email_public: '' } },
+  ],
+};
+
+describe('ONB-01 — deriveCompleteness done/todo derivation (advisory)', () => {
+  it('mixed: name + about done; project / contact / avatar todo', () => {
+    const byId = boolsById(mixed);
     expect(byId.name).toBe(true);
     expect(byId.about).toBe(true);
-
-    // TODO: no project items, no public contact email, no avatar.
     expect(byId.project).toBe(false);
     expect(byId.contact).toBe(false);
     expect(byId.avatar).toBe(false);
+  });
+
+  it('all-done: every item done', () => {
+    const byId = boolsById(allDone);
+    expect(Object.values(byId).every(Boolean)).toBe(true);
+  });
+
+  it('none-done: every item todo (whitespace-only values do not count)', () => {
+    const byId = boolsById(noneDone);
+    expect(Object.values(byId).some(Boolean)).toBe(false);
+  });
+
+  it('returns an advisory list only — no blocking/disable signal', () => {
+    const items = deriveCompleteness(mixed);
+    // Each item is exactly { id, label, done, sectionType? } — no "blocked"
+    // / "disabled" flag exists for the caller to gate Publish on (D-P4-08).
+    for (const item of items) {
+      expect(item).not.toHaveProperty('blocked');
+      expect(item).not.toHaveProperty('disabled');
+      expect(typeof item.done).toBe('boolean');
+    }
   });
 });
