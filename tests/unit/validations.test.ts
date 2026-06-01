@@ -37,6 +37,11 @@ import {
   contactFormSchema,
   // blog
   blogSchema,
+  // auth (signup / login / reset / update-password — server-boundary gate)
+  signupSchema,
+  loginSchema,
+  resetRequestSchema,
+  updatePasswordSchema,
 } from '@/lib/validations';
 
 // ===========================================================================
@@ -484,5 +489,97 @@ describe('blogSchema', () => {
 
   it('rejects more than 10 tags', () => {
     expect(blogSchema.safeParse({ ...validBlog, tags: Array(11).fill('t') }).success).toBe(false);
+  });
+});
+
+// ===========================================================================
+// auth schemas (signup / login / reset / update-password — server gate)
+//   Covers AUTH-01..04: reject bad email/password/username, require ToS.
+//   Client-side parse is UX; the server action re-parses these (the real gate).
+// ===========================================================================
+
+describe('signupSchema', () => {
+  const validSignup = {
+    email: 'jane@example.com',
+    password: 'hunter2hunter2',
+    username: 'jane-doe',
+    turnstile_token: 'tok_abc123',
+    tos_accepted: true as const,
+  };
+
+  it('accepts a fully valid signup payload', () => {
+    expect(signupSchema.safeParse(validSignup).success).toBe(true);
+  });
+
+  it('rejects an invalid email', () => {
+    expect(signupSchema.safeParse({ ...validSignup, email: 'notanemail' }).success).toBe(false);
+  });
+
+  it('rejects an email longer than 320 chars', () => {
+    const longEmail = `${'a'.repeat(312)}@x.com`; // 318 chars + ... push over 320
+    expect(signupSchema.safeParse({ ...validSignup, email: `${longEmail}m`.repeat(2) }).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects a password shorter than 8 chars', () => {
+    expect(signupSchema.safeParse({ ...validSignup, password: 'short' }).success).toBe(false);
+  });
+
+  it('rejects a password longer than 72 bytes (bcrypt cap)', () => {
+    expect(signupSchema.safeParse({ ...validSignup, password: 'a'.repeat(73) }).success).toBe(false);
+  });
+
+  it('rejects an empty turnstile_token', () => {
+    expect(signupSchema.safeParse({ ...validSignup, turnstile_token: '' }).success).toBe(false);
+  });
+
+  it('rejects tos_accepted:false (z.literal(true) — D-09)', () => {
+    expect(signupSchema.safeParse({ ...validSignup, tos_accepted: false }).success).toBe(false);
+  });
+
+  it('rejects a reserved/invalid username via the shared usernameSchema', () => {
+    expect(signupSchema.safeParse({ ...validSignup, username: 'admin' }).success).toBe(false);
+    expect(signupSchema.safeParse({ ...validSignup, username: 'Bad_Name' }).success).toBe(false);
+  });
+});
+
+describe('loginSchema', () => {
+  const validLogin = { email: 'jane@example.com', password: 'anything' };
+
+  it('accepts a valid email + non-empty password', () => {
+    expect(loginSchema.safeParse(validLogin).success).toBe(true);
+  });
+
+  it('rejects a bad email', () => {
+    expect(loginSchema.safeParse({ ...validLogin, email: 'nope' }).success).toBe(false);
+  });
+
+  it('rejects an empty password', () => {
+    expect(loginSchema.safeParse({ ...validLogin, password: '' }).success).toBe(false);
+  });
+});
+
+describe('resetRequestSchema', () => {
+  it('accepts a valid email', () => {
+    expect(resetRequestSchema.safeParse({ email: 'jane@example.com' }).success).toBe(true);
+  });
+
+  it('rejects a bad email', () => {
+    expect(resetRequestSchema.safeParse({ email: 'notanemail' }).success).toBe(false);
+  });
+});
+
+describe('updatePasswordSchema', () => {
+  it('accepts a password of 8–72 chars', () => {
+    expect(updatePasswordSchema.safeParse({ password: 'hunter2hunter2' }).success).toBe(true);
+  });
+
+  it('rejects a password shorter than 8 chars', () => {
+    expect(updatePasswordSchema.safeParse({ password: 'short' }).success).toBe(false);
+  });
+
+  it('rejects a password longer than 72 bytes', () => {
+    expect(updatePasswordSchema.safeParse({ password: 'a'.repeat(73) }).success).toBe(false);
   });
 });
