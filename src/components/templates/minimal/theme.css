@@ -110,6 +110,33 @@
 }
 
 /* ============================================================================
+ * Hero ambient keyframes (03-05) — the "available" dot pulse + the scroll-cue bob.
+ * CSS-only, perf-cheap, and ALWAYS disabled under reduced-motion by the blanket
+ * reset below (UI-SPEC §Motion "Ambient: … all OFF under reduced-motion"). Scoped
+ * by usage to `.tmpl-minimal` descendants; the names are template-prefixed so they
+ * never collide with platform chrome.
+ * ========================================================================== */
+@keyframes tmpl-hero-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 45, 149, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(255, 45, 149, 0);
+  }
+}
+
+@keyframes tmpl-hero-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+
+/* ============================================================================
  * Reduced-motion contract (hard requirement — UI-SPEC §Motion).
  * Under `prefers-reduced-motion: reduce`, ALL animation/transition inside the
  * template is zeroed. Content is never hidden behind motion (the scroll-reveal
