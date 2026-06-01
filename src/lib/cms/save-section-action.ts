@@ -107,6 +107,12 @@ export async function saveSectionAction(input: SaveSectionInput): Promise<SaveSe
   const claims = await getVerifiedClaims();
   if (!claims) return { ok: false, error: NOT_SIGNED_IN };
 
+  // WR-05: a verified claim MUST carry a subject. Treat a missing `sub` as a hard
+  // auth failure — never coerce it to '' (which would turn the username fallback
+  // read into a guaranteed 0-row no-op that masks the invariant violation).
+  const sub = (claims as { sub?: string }).sub;
+  if (!sub) return { ok: false, error: NOT_SIGNED_IN };
+
   // 2) Zod re-parse — THE gate (FND-04). validateSectionContent .parse()s, so it
   //    THROWS on a known type with bad content or on an unregistered type. The
   //    write at step 3 is unreachable when this throws.
@@ -133,11 +139,10 @@ export async function saveSectionAction(input: SaveSectionInput): Promise<SaveSe
   //    the public page so the change is live within seconds (D-P4-01).
   let username = input.username;
   if (!username) {
-    const sub = (claims as { sub?: string }).sub;
     const { data } = await supabase
       .from('profiles')
       .select('username')
-      .eq('id', sub ?? '')
+      .eq('id', sub) // WR-05: `sub` guaranteed present (no `?? ''`).
       .single();
     username = (data as { username?: string } | null)?.username ?? undefined;
   }

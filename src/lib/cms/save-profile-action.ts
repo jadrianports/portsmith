@@ -102,6 +102,12 @@ export async function saveProfileAction(input: SaveProfileInput): Promise<SavePr
   const claims = await getVerifiedClaims();
   if (!claims) return { ok: false, error: NOT_SIGNED_IN };
 
+  // WR-05: a verified claim MUST carry a subject. Treat a missing `sub` as a hard
+  // auth failure — never coerce it to '' (which would scope the UPDATE below to a
+  // non-existent row and silently write 0 rows, masking the invariant violation).
+  const sub = (claims as { sub?: string }).sub;
+  if (!sub) return { ok: false, error: NOT_SIGNED_IN };
+
   // 2) Zod re-parse — THE gate (FND-04). The URL fields reuse the
   //    httpUrlOrEmptyOptional scheme allowlist, so a javascript:/data: avatar or
   //    resume URL is rejected HERE, before the write at step 3.
@@ -133,14 +139,13 @@ export async function saveProfileAction(input: SaveProfileInput): Promise<SavePr
   };
 
   // Write under RLS via the AUTHENTICATED client (never service-role). The
-  // profiles own-update policy + .eq('id', claims.sub) scope the UPDATE to the
-  // owner's own row.
+  // profiles own-update policy + .eq('id', sub) scope the UPDATE to the owner's
+  // own row (WR-05: `sub` is guaranteed present by the guard above — no `?? ''`).
   const supabase = await createClient();
-  const sub = (claims as { sub?: string }).sub;
   const { error } = await supabase
     .from('profiles')
     .update(allowlist)
-    .eq('id', sub ?? '');
+    .eq('id', sub);
   if (error) return { ok: false, error: SAVE_FAILED };
 
   // 4) Resolve the owner username (prefer the dashboard-passed value; else read
@@ -151,7 +156,7 @@ export async function saveProfileAction(input: SaveProfileInput): Promise<SavePr
     const { data } = await supabase
       .from('profiles')
       .select('username')
-      .eq('id', sub ?? '')
+      .eq('id', sub) // WR-05: `sub` is guaranteed present (no `?? ''`).
       .single();
     username = (data as { username?: string } | null)?.username ?? undefined;
   }

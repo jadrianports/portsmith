@@ -56,9 +56,12 @@ export default async function DashboardPage() {
 
   // 3) Resolve the caller's OWN username from the verified profile row (PUB-03 —
   //    never the request host) so the owner read + the editor's revalidate paths
-  //    use the canonical slug.
+  //    use the canonical slug. WR-05: a verified claim MUST carry a subject — a
+  //    missing `sub` is a hard auth failure, never coerced to '' (which would make
+  //    the profile read a guaranteed 0-row no-op).
   const supabase = await createClient();
-  const sub = (claims as { sub?: string }).sub ?? '';
+  const sub = (claims as { sub?: string }).sub;
+  if (!sub) redirect('/login');
   const { data: profileRow } = await supabase
     .from('profiles')
     .select('username')

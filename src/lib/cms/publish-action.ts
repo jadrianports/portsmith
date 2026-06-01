@@ -75,6 +75,13 @@ export async function setPublished(published: boolean): Promise<SetPublishedResu
   const claims = await getVerifiedClaims();
   if (!claims) return { ok: false, error: NOT_SIGNED_IN };
 
+  // WR-05: a verified claim MUST carry a subject. Treat a missing `sub` as a hard
+  // auth failure — never coerce it to '' (which would scope the publish UPDATE to a
+  // non-existent row and silently flip 0 rows, so the user's publish appears to
+  // succeed while nothing changed).
+  const sub = (claims as { sub?: string }).sub;
+  if (!sub) return { ok: false, error: NOT_SIGNED_IN };
+
   // 2) SINGLE-COLUMN write under RLS via the AUTHENTICATED client (never
   //    service-role). `published` is NOT a protected column (verified absent from
   //    the 002:108-118 guard list), so the owner flips it directly. Scope to the
@@ -82,11 +89,10 @@ export async function setPublished(published: boolean): Promise<SetPublishedResu
   //    (T-04-06a). Select the username back on the same write to drive the
   //    revalidate (the verified identity, never the request host — PUB-03).
   const supabase = await createClient();
-  const sub = (claims as { sub?: string }).sub;
   const { data: prof, error } = await supabase
     .from('profiles')
     .update({ published })
-    .eq('id', sub ?? '')
+    .eq('id', sub) // WR-05: `sub` guaranteed present (no `?? ''`).
     .select('username')
     .single();
   if (error) return { ok: false, error: UPDATE_FAILED };

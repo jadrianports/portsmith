@@ -66,6 +66,12 @@ export async function reorderSectionsAction(
   const claims = await getVerifiedClaims();
   if (!claims) return { ok: false, error: NOT_SIGNED_IN };
 
+  // WR-05: a verified claim MUST carry a subject. Treat a missing `sub` as a hard
+  // auth failure — never coerce it to '' (which would make the username fallback
+  // read a guaranteed 0-row no-op that masks the invariant violation).
+  const sub = (claims as { sub?: string }).sub;
+  if (!sub) return { ok: false, error: NOT_SIGNED_IN };
+
   if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
     // Nothing to reorder — treat an empty list as a no-op success.
     return { ok: true };
@@ -88,11 +94,10 @@ export async function reorderSectionsAction(
   //    the public page so the new order is live within seconds (D-P4-01).
   let resolvedUsername = username;
   if (!resolvedUsername) {
-    const sub = (claims as { sub?: string }).sub;
     const { data } = await supabase
       .from('profiles')
       .select('username')
-      .eq('id', sub ?? '')
+      .eq('id', sub) // WR-05: `sub` guaranteed present (no `?? ''`).
       .single();
     resolvedUsername = (data as { username?: string } | null)?.username ?? undefined;
   }

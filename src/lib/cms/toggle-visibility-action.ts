@@ -64,6 +64,12 @@ export async function toggleVisibilityAction(
   const claims = await getVerifiedClaims();
   if (!claims) return { ok: false, error: NOT_SIGNED_IN };
 
+  // WR-05: a verified claim MUST carry a subject. Treat a missing `sub` as a hard
+  // auth failure — never coerce it to '' (which would make the username fallback
+  // read a guaranteed 0-row no-op that masks the invariant violation).
+  const sub = (claims as { sub?: string }).sub;
+  if (!sub) return { ok: false, error: NOT_SIGNED_IN };
+
   // 2) Single-row visibility flip under RLS. The own_all policy + .eq('id', …)
   //    scope the UPDATE to the owner; a cross-tenant target changes 0 rows
   //    (T-04-05a).
@@ -80,11 +86,10 @@ export async function toggleVisibilityAction(
   //    (D-P4-09).
   let resolvedUsername = username;
   if (!resolvedUsername) {
-    const sub = (claims as { sub?: string }).sub;
     const { data } = await supabase
       .from('profiles')
       .select('username')
-      .eq('id', sub ?? '')
+      .eq('id', sub) // WR-05: `sub` guaranteed present (no `?? ''`).
       .single();
     resolvedUsername = (data as { username?: string } | null)?.username ?? undefined;
   }
