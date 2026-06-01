@@ -38,6 +38,7 @@
 import Image from 'next/image';
 import type { SectionProps } from './types';
 import type { TestimonialsContent, TestimonialItem } from '@/lib/validations';
+import { isHttpImageSrc } from '@/lib/safe-image';
 
 /** A string field is "present" when it is a non-empty trimmed string. */
 function present(v: string | null | undefined): v is string {
@@ -90,8 +91,10 @@ function TestimonialCard({ item }: { item: TestimonialItem }) {
   const name = present(item.name) ? item.name : null;
   const company = present(item.company) ? item.company : null;
 
-  // Avatar renders ONLY if a URL is present AND its required alt is present.
-  const avatarUrl = present(item.avatar) ? item.avatar : null;
+  // Avatar renders ONLY if a SAFE http(s) URL is present AND its required alt is
+  // present. WR-05: `unoptimized` skips Next's host allowlist, so the src must be
+  // scheme-checked here (rejects data:/javascript:/arbitrary schemes).
+  const avatarUrl = isHttpImageSrc(item.avatar) ? item.avatar : null;
   const avatarAlt = present(item.avatar_alt) ? item.avatar_alt : null;
   const showAvatar = Boolean(avatarUrl && avatarAlt);
 

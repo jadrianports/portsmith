@@ -32,6 +32,7 @@
 import Image from 'next/image';
 import type { SectionProps } from './types';
 import type { AboutContent } from '@/lib/validations';
+import { isHttpImageSrc } from '@/lib/safe-image';
 
 /** A string field is "present" when it is a non-empty trimmed string. */
 function present(v: string | null | undefined): v is string {
@@ -45,10 +46,11 @@ export function About({ section }: SectionProps) {
 
   const bio = present(content.bio) ? content.bio : null;
 
-  // Avatar renders ONLY if a URL is present AND its required alt is present
-  // (the Zod alt-text refine guarantees alt when avatar is set; we re-guard
-  // defensively since every view column is nullable).
-  const avatarUrl = present(content.avatar) ? content.avatar : null;
+  // Avatar renders ONLY if a SAFE http(s) URL is present AND its required alt is
+  // present (the Zod alt-text refine guarantees alt when avatar is set; we re-guard
+  // defensively since every view column is nullable). WR-05: `unoptimized` skips
+  // Next's host allowlist, so the src must be scheme-checked here (rejects data:/etc).
+  const avatarUrl = isHttpImageSrc(content.avatar) ? content.avatar : null;
   const avatarAlt = present(content.avatar_alt) ? content.avatar_alt : null;
   const showAvatar = Boolean(avatarUrl && avatarAlt);
 
