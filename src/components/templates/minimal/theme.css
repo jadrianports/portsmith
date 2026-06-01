@@ -137,6 +137,63 @@
 }
 
 /* ============================================================================
+ * Projects (03-07) — card glow-lift + link underline-glow on hover.
+ * Inline styles cannot express `:hover`, and the section is a Server Component
+ * (no useState), so the interactive treatment lives here, scoped to
+ * `.tmpl-minimal` (two-layer isolation, D-17). All values read scoped tokens —
+ * no chrome token, no raw hex outside the documented decorative glow alphas
+ * (same exemption the hero glow uses). These are NOT motion (hover glows are
+ * exempt from the reduced-motion contract per UI-SPEC §Motion); the blanket
+ * reduced-motion reset above only zeroes the transition timing, never the glow.
+ * ========================================================================== */
+.tmpl-minimal .tmpl-project-card {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.tmpl-minimal .tmpl-project-card:hover {
+  /* Glow-lift: stronger border + a soft, low-alpha MAGENTA glow (the primary
+     accent for card-level emphasis) — restrained, never blinding (UI-SPEC §4). */
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px var(--accent), 0 10px 30px -14px rgba(255, 45, 149, 0.4);
+  transform: translateY(-2px);
+}
+
+.tmpl-minimal .tmpl-project-link {
+  position: relative;
+  transition: color 140ms ease, text-shadow 140ms ease;
+}
+.tmpl-minimal .tmpl-project-link:hover {
+  /* Cyan underline-glow on hover (secondary accent for project links). */
+  color: var(--accent-cyan);
+  text-shadow: 0 0 10px rgba(45, 226, 230, 0.45);
+}
+.tmpl-minimal .tmpl-project-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: var(--accent-cyan);
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.tmpl-minimal .tmpl-project-link:hover::after {
+  opacity: 1;
+}
+
+/* In light mode the card glow uses the deep-pink primary at lower alpha; the
+   link glow uses the darkened cyan — both scoped, both token-driven. */
+.tmpl-minimal[data-template-theme='light'] .tmpl-project-card:hover {
+  box-shadow: 0 0 0 1px var(--accent), 0 10px 30px -16px rgba(200, 30, 110, 0.32);
+}
+.tmpl-minimal[data-template-theme='light'] .tmpl-project-link:hover {
+  text-shadow: 0 0 8px rgba(11, 126, 146, 0.35);
+}
+
+/* ============================================================================
  * Reduced-motion contract (hard requirement — UI-SPEC §Motion).
  * Under `prefers-reduced-motion: reduce`, ALL animation/transition inside the
  * template is zeroed. Content is never hidden behind motion (the scroll-reveal
