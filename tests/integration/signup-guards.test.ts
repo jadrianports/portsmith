@@ -180,3 +180,44 @@ describe('CR-02 — username is unique only among LIVE rows (reclaim after soft-
     expect(liveRows![0].id).toBe(reclaimed.id);
   });
 });
+
+describe('AUTH-01/02 — public anon signUp creates a profile row and the user is email-unconfirmed', () => {
+  it('auth.signUp({data:{username,display_name}}) provisions a profile via the live trigger; user is unconfirmed', async () => {
+    const anon = createClient(
+      process.env.SUPABASE_URL!,
+      process.env.SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false } },
+    );
+    const username = `happy${RUN}`.slice(0, 30);
+    const email = `${username}@example.test`;
+
+    // Public, unauthenticated signUp — the path a real new user takes. The
+    // `handle_new_user` trigger reads raw_user_meta_data to provision the profile.
+    const { data, error } = await anon.auth.signUp({
+      email,
+      password: 'Test-Password-123!',
+      options: { data: { username, display_name: 'Happy Path' } },
+    });
+    expect(error).toBeNull();
+    const userId = data.user?.id;
+    expect(userId).toBeTruthy();
+    if (userId) createdIds.push(userId);
+
+    // AUTH-01: a profile row was created by the live trigger with the supplied handle.
+    const { data: prof, error: profErr } = await admin
+      .from('profiles')
+      .select('id, username, display_name')
+      .eq('id', userId!)
+      .single();
+    expect(profErr).toBeNull();
+    expect(prof!.username).toBe(username);
+    expect(prof!.display_name).toBe('Happy Path');
+
+    // AUTH-02: with confirmations enabled (Task 1), the new user is UNCONFIRMED
+    // (email_confirmed_at is null) until they verify — they cannot act as confirmed.
+    const { data: adminView, error: adminErr } =
+      await admin.auth.admin.getUserById(userId!);
+    expect(adminErr).toBeNull();
+    expect(adminView.user?.email_confirmed_at ?? null).toBeNull();
+  });
+});
