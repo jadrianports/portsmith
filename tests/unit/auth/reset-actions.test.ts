@@ -11,18 +11,25 @@
  *   passes a `redirectTo` ending in `/auth/confirm` (the shared Plan 04 recovery
  *   handler appends `?token_hash&type=recovery`).
  *
- *   updatePassword (T-02-20) — re-parses `updatePasswordSchema` (min 8 / max 72)
- *   server-side BEFORE `updateUser`, so a too-short password is rejected before the
- *   credential write ever happens. The write runs on the recovery session the
- *   verified OTP minted (Plan 04 confirm handler) — guarded by a verified-claims
- *   check, never `getSession()`.
+ *   updatePassword (T-02-20 / CR-01) — re-parses `updatePasswordSchema` (min 8 /
+ *   max 72) server-side BEFORE `updateUser`, so a too-short password is rejected
+ *   before the credential write ever happens. The write runs ONLY on a RECOVERY
+ *   session the verified OTP minted (Plan 04 confirm handler): the action inspects
+ *   the verified claims' `amr` (getClaims under the hood, never `getSession()`) and
+ *   rejects any session whose authentication method is not a recovery/otp one — so
+ *   a normal `signInWithPassword` session (amr method `password`) is REJECTED, and
+ *   only a recovery session (amr method `otp`) is allowed to change the password.
  *
  * Strategy: mock `@/lib/supabase/server` so `createClient().auth.resetPasswordForEmail`
  * / `.updateUser` are spies we drive per-case, and `getVerifiedClaims` is a spy for
- * the recovery-session guard. Assert:
+ * the recovery-session guard (driven with recovery-shaped vs password-shaped claims).
+ * Assert:
  *   - request outcome is identical for success AND error from resetPasswordForEmail
  *   - request passes redirectTo ending in /auth/confirm
  *   - a < 8 char password is rejected before updateUser is called
+ *   - NO session (null claims) → reject, updateUser never called
+ *   - a NORMAL password session (amr method `password`) → reject (CR-01 regression)
+ *   - a RECOVERY session (amr method `otp`) → updateUser called
  *   - source discipline: 'use server' directive + no `.getSession(`
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,6 +58,7 @@ vi.mock('next/headers', () => ({
 
 // Import AFTER the mocks are registered.
 import {
+  isRecoverySession,
   requestReset,
   updatePassword,
   type RequestResetResult,
@@ -68,11 +76,26 @@ function updFail(result: UpdatePasswordResult): Extract<UpdatePasswordResult, { 
   return result;
 }
 
+/** Verified-claims shape for a RECOVERY session (amr method `otp`). */
+const RECOVERY_CLAIMS = {
+  sub: 'u1',
+  aal: 'aal1',
+  amr: [{ method: 'otp', timestamp: 1780293397 }],
+};
+/** Verified-claims shape for a NORMAL password session (amr method `password`). */
+const PASSWORD_CLAIMS = {
+  sub: 'u1',
+  aal: 'aal1',
+  amr: [{ method: 'password', timestamp: 1780293397 }],
+};
+
 beforeEach(() => {
   process.env.NEXT_PUBLIC_SITE_URL = 'http://localhost:3000';
   resetPasswordForEmail.mockReset().mockResolvedValue({ data: {}, error: null });
   updateUser.mockReset().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
-  getVerifiedClaims.mockReset().mockResolvedValue({ sub: 'u1' });
+  // Default to a recovery session so the happy path proceeds; individual tests
+  // override with PASSWORD_CLAIMS / null to drive the gate.
+  getVerifiedClaims.mockReset().mockResolvedValue(RECOVERY_CLAIMS);
 });
 
 afterEach(() => {
@@ -145,19 +168,46 @@ describe('updatePassword — schema gate before updateUser (T-02-20)', () => {
     expect(updateUser).not.toHaveBeenCalled();
   });
 
-  it('requires a recovery session before updateUser (no session → reject)', async () => {
+  it('requires a session before updateUser (no session → reject)', async () => {
     getVerifiedClaims.mockResolvedValue(null);
     const result = await updatePassword({ password: 'a-good-long-password' });
     expect(updFail(result)).toBeTruthy();
     expect(updateUser).not.toHaveBeenCalled();
   });
 
-  it('calls updateUser({ password }) on a valid password + recovery session', async () => {
+  it('REJECTS a normal password session — updateUser never called (CR-01)', async () => {
+    // A logged-in user with a plain password session (amr method `password`) must
+    // NOT be able to change their password here — only a recovery session may.
+    getVerifiedClaims.mockResolvedValue(PASSWORD_CLAIMS);
+    const result = await updatePassword({ password: 'a-good-long-password' });
+    const f = updFail(result);
+    expect(f.error).toBeTruthy(); // NO_RECOVERY_SESSION message
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('calls updateUser({ password }) on a valid password + RECOVERY session', async () => {
+    getVerifiedClaims.mockResolvedValue(RECOVERY_CLAIMS);
     const result = await updatePassword({ password: 'a-good-long-password' });
     expect(result.ok).toBe(true);
     expect(updateUser).toHaveBeenCalledTimes(1);
     const arg = updateUser.mock.calls[0][0] as { password: string };
     expect(arg.password).toBe('a-good-long-password');
+  });
+});
+
+describe('isRecoverySession — the recovery-session predicate (CR-01)', () => {
+  it('accepts claims whose amr carries an otp/recovery method', () => {
+    expect(isRecoverySession(RECOVERY_CLAIMS)).toBe(true);
+    expect(isRecoverySession({ amr: [{ method: 'recovery' }] })).toBe(true);
+  });
+
+  it('rejects a plain password session and malformed/empty claims', () => {
+    expect(isRecoverySession(PASSWORD_CLAIMS)).toBe(false);
+    expect(isRecoverySession(null)).toBe(false);
+    expect(isRecoverySession(undefined)).toBe(false);
+    expect(isRecoverySession({})).toBe(false);
+    expect(isRecoverySession({ amr: [] })).toBe(false);
+    expect(isRecoverySession({ amr: 'not-an-array' })).toBe(false);
   });
 });
 

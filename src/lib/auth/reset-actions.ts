@@ -21,16 +21,23 @@
  *        and never branch the message (D-07 / T-02-17 / Pitfall 3). A wrapping
  *        try/catch guarantees even a thrown network error yields the same shape.
  *
- *   updatePassword — the update-password write (runs on the recovery session the
- *   verified OTP minted in `/auth/confirm`). The flow:
+ *   updatePassword — the update-password write (runs ONLY on the recovery session
+ *   the verified OTP minted in `/auth/confirm`). The flow:
  *     1. updatePasswordSchema.safeParse (min 8 / max 72) — server-side BEFORE any
  *        write. A too-short password is rejected before `updateUser` is reached
  *        (T-02-20).
- *     2. Guard that a verified recovery session exists via `getVerifiedClaims`
+ *     2. Require a verified RECOVERY session (CR-01). `getVerifiedClaims`
  *        (getClaims under the hood — NEVER `getSession()`, the AUTH-05 guard test
- *        greps for it). No valid session → reject; `updateUser` is unreachable
- *        without the recovery token's session (T-02-19).
- *     3. updateUser({ password }) sets the new password on that session.
+ *        greps for it) yields the claims; the gate then inspects the `amr`
+ *        (authentication-methods) array and requires a recovery/otp method. This
+ *        is the load-bearing distinction: `getClaims()` returns claims for ANY
+ *        authenticated session, so a bare "is some session present" check would let
+ *        a NORMAL logged-in user (amr method `password`) change their password with
+ *        no recovery proof and no current-password challenge. A recovery session
+ *        (minted by `verifyOtp({ type: 'recovery' })`) carries amr method `otp`
+ *        (verified empirically against this gotrue version); a password login
+ *        carries `password`. No recovery-grade session → reject (T-02-19).
+ *     3. updateUser({ password }) sets the new password on that recovery session.
  *
  * On success the caller's form island navigates (`/check-email?type=reset` for the
  * request, `/dashboard` for the update). Returning rather than calling `redirect()`
@@ -38,6 +45,34 @@
  */
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 import { resetRequestSchema, updatePasswordSchema } from '@/lib/validations';
+
+/**
+ * The `amr` (authentication methods reference) entries gotrue stamps on a session
+ * minted by the password-RECOVERY OTP. A `verifyOtp({ type: 'recovery' })` session
+ * carries `{ method: 'otp' }` in this gotrue version; older/other builds may label
+ * it `'recovery'`. A normal `signInWithPassword` session carries `{ method:
+ * 'password' }`, which is exactly what this gate must reject.
+ */
+const RECOVERY_AMR_METHODS = new Set(['otp', 'recovery']);
+
+/**
+ * True iff the verified claims describe a password-RECOVERY session — i.e. some
+ * `amr` entry's `method` is a recovery/otp method (CR-01). Returns false for a
+ * normal password session, for claims without an `amr` array, and for null/
+ * undefined/malformed input. Exported so the integration suite can pin the exact
+ * gate against REAL claims from the live stack (recovery vs password session).
+ */
+export function isRecoverySession(claims: unknown): boolean {
+  if (!claims || typeof claims !== 'object') return false;
+  const amr = (claims as { amr?: unknown }).amr;
+  if (!Array.isArray(amr)) return false;
+  return amr.some(
+    (entry) =>
+      typeof entry === 'object' &&
+      entry !== null &&
+      RECOVERY_AMR_METHODS.has((entry as { method?: unknown }).method as string),
+  );
+}
 
 /** Per-field validation messages for the reset-request form. */
 export type RequestResetFieldErrors = Partial<Record<'email', string>>;
@@ -118,10 +153,14 @@ export async function updatePassword(input: unknown): Promise<UpdatePasswordResu
     return { ok: false, fieldErrors };
   }
 
-  // 2) Require a verified recovery session (getClaims, never getSession). Without
-  //    the session the recovery OTP minted, the write must not run (T-02-19).
+  // 2) Require a verified RECOVERY session (getClaims, never getSession). A bare
+  //    "is some session present" check is NOT enough — getClaims() is true for ANY
+  //    authenticated session, so a normal logged-in user would otherwise change
+  //    their password with no recovery proof (CR-01). The gate inspects the `amr`
+  //    and requires a recovery/otp method, so only the session the recovery OTP
+  //    minted may write (T-02-19).
   const claims = await getVerifiedClaims();
-  if (!claims) {
+  if (!isRecoverySession(claims)) {
     return { ok: false, error: NO_RECOVERY_SESSION };
   }
 
