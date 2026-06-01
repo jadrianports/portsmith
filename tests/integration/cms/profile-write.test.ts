@@ -24,8 +24,13 @@ import {
   type TestUser,
 } from '../_setup';
 
-// @ts-expect-error — RED: 04-04 creates this server action; module does not exist yet.
+// 04-04 ships these. saveProfileAction is the profile-edit write; profileSchema is
+// the SAME gate the action re-parses with server-side (the action's scheme-allowlist
+// rejection is proven here at the schema boundary because the action's first step —
+// getVerifiedClaims() → cookies() — throws "outside a request scope" in the vitest
+// node project, exactly as the 04-03 section save does).
 import { saveProfileAction } from '@/lib/cms/save-profile-action';
+import { profileSchema } from '@/lib/validations';
 
 const admin = adminClient();
 const RUN = crypto.randomUUID().slice(0, 8);
@@ -85,5 +90,29 @@ describe('CMS-02 — profile save: allowlist passes, protected column rejected',
       .select();
     expect(error).not.toBeNull();
     expect(error!.message).toMatch(/protected profile column/i);
+  });
+
+  it('a javascript:-scheme avatar/resume URL is REJECTED by the schema gate', () => {
+    // The action re-parses the four editable fields with profileSchema before any
+    // write (T-04-04b). The httpUrlOrEmptyOptional scheme allowlist rejects
+    // dangerous schemes — so a javascript:/data: avatar never reaches the DB.
+    const bad = profileSchema.safeParse({
+      username: `cmspw${RUN}`.slice(0, 30),
+      display_name: 'Valid Name',
+      avatar_url: 'javascript:alert(1)',
+    });
+    expect(bad.success).toBe(false);
+    const avatarIssue = bad.success
+      ? undefined
+      : bad.error.issues.find((i) => i.path[0] === 'avatar_url');
+    expect(avatarIssue).toBeDefined();
+
+    // An http(s) avatar with the same other fields passes the gate.
+    const good = profileSchema.safeParse({
+      username: `cmspw${RUN}`.slice(0, 30),
+      display_name: 'Valid Name',
+      avatar_url: 'https://example.com/me.webp',
+    });
+    expect(good.success).toBe(true);
   });
 });
