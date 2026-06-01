@@ -92,8 +92,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // Build every redirect from the request's own origin with the query stripped,
   // so neither the token nor an attacker-supplied host is ever carried forward.
+  //
+  // ORIGIN FIDELITY (load-bearing — keeps the verifyOtp cookie usable): under
+  // `next dev` the request can arrive on one host (e.g. 127.0.0.1:3000, the
+  // config.toml site_url the confirm email carries) while `request.nextUrl`
+  // normalizes to the server's bound host (localhost:3000). Redirecting to the
+  // normalized host would land the browser on a DIFFERENT cookie origin than the
+  // one verifyOtp just wrote the session to — so the very next request (the
+  // dashboard) sees no session and bounces to /login. We therefore anchor the
+  // redirect to the CLIENT's actual `Host` header (same-origin only — we keep the
+  // scheme + only swap the host/path, never accept an off-origin target), so the
+  // post-confirm navigation stays on the cookie's origin.
   const redirectTo = request.nextUrl.clone();
   redirectTo.search = '';
+  const hostHeader = request.headers.get('host');
+  if (hostHeader) {
+    // Same-origin only: keep the request scheme, adopt the real client host. The
+    // pathname is set below from the allowlisted next/recovery/login values, so no
+    // attacker-controlled host or path can be smuggled here.
+    redirectTo.host = hostHeader;
+  }
 
   if (token_hash && type) {
     const supabase = await createClient();
