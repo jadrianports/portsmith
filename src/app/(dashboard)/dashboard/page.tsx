@@ -12,10 +12,15 @@
  *      RPC is SECURITY DEFINER + auth.uid-guarded + IDEMPOTENT, so calling it on
  *      every load is a cheap no-op after the first (RESEARCH OQ-3 / D-P4-07). The
  *      FIRST call seeds the 7 default sections with neutral starter content.
- *   3. LOADS the owner's OWN unpublished+visible portfolio via
- *      `getPortfolioOwnerByUsername(username)` (the authenticated, base-table,
- *      owner-scoped read — so the editor shows last-saved UNPUBLISHED content), and
- *      hands the loaded rows to the `'use client'` `EditorShell` island.
+ *   3. LOADS the owner's OWN unpublished portfolio — INCLUDING HIDDEN SECTIONS
+ *      (CR-01: `{ includeHidden: true }`) — via `getPortfolioOwnerByUsername`
+ *      (the authenticated, base-table, owner-scoped read), so the editor shows
+ *      last-saved UNPUBLISHED content AND every hidden section carrying its real
+ *      `visible` flag (the owner must be able to re-show a hidden section; the
+ *      eye-toggle must round-trip). Hands the loaded rows to the `'use client'`
+ *      `EditorShell` island. NOTE: the DRAFT-MODE PREVIEW path
+ *      (`[username]/page.tsx`) calls the SAME read WITHOUT `includeHidden`, so the
+ *      preview still drops hidden sections and matches the public page.
  *
  * TWO-LAYER IDENTITY (SHARED-E / D-P4-04, LOAD-BEARING): this page and the editor
  * it renders import NO template component and NO template token. The editor is
@@ -66,9 +71,11 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  // 4) Load the owner's OWN unpublished+visible portfolio (authenticated base-table
-  //    read) so the editor shows last-saved content. Owner-only by construction.
-  const data = await getPortfolioOwnerByUsername(username);
+  // 4) Load the owner's OWN unpublished portfolio INCLUDING HIDDEN SECTIONS
+  //    (CR-01 — `{ includeHidden: true }`) via the authenticated base-table read,
+  //    so the editor shows last-saved content AND every hidden section (carrying
+  //    its real `visible` flag) the owner can re-show. Owner-only by construction.
+  const data = await getPortfolioOwnerByUsername(username, { includeHidden: true });
   if (!data) redirect('/login');
 
   return <EditorShell data={data} portfolioId={bootstrap.portfolioId} />;

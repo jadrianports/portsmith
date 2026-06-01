@@ -107,6 +107,10 @@ export default async function PortfolioPage({
   // └───────────────────────────────────────────────────────────────────────────┘
   const { isEnabled } = await draftMode(); // Next 16: draftMode() is async — MUST await.
   if (isEnabled) {
+    // CR-01: the PREVIEW must match the PUBLIC page — hidden stays hidden. We call
+    // the owner read WITHOUT `includeHidden`, so it returns visible-only sections
+    // (the editor, by contrast, passes `{ includeHidden: true }` to see + re-show
+    // hidden sections). This keeps preview ≡ public.
     const ownerData = await getPortfolioOwnerByUsername(username);
     if (!ownerData) notFound(); // no verified owner / not the caller's own slug.
     return (

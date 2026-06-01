@@ -108,12 +108,17 @@ export function EditorShell({ data, portfolioId }: EditorShellProps) {
   const username = data.profile.username ?? '';
   const published = data.profile.published ?? false;
 
-  // The visible-shaped section rows from the RSC load. `content` is loose JSONB.
+  // The section rows from the RSC load — INCLUDING hidden ones, each carrying its
+  // REAL `visible` flag (CR-01: the dashboard loads with `includeHidden: true`).
+  // `content` is loose JSONB.
   const rawSections = useMemo(
     () =>
       data.sections.map((s) => ({
         id: s.id ?? '',
         type: s.type ?? '',
+        // CR-01: carry the REAL visibility flag, not a hard-coded true. Default to
+        // true only when the row genuinely omits it (it never should post-CR-01).
+        visible: s.visible ?? true,
         content: (s.content ?? {}) as ContentRecord,
       })),
     [data.sections],
@@ -134,7 +139,8 @@ export function EditorShell({ data, portfolioId }: EditorShellProps) {
     const editorSections: EditorSection[] = rawSections.map((s) => ({
       id: s.id,
       title: titleFor(s.type, s.content),
-      visible: true, // the owner read already filtered to visible sections (D-P4-09)
+      visible: s.visible, // CR-01: the REAL flag — the rail shows hidden sections as
+      //                      "Hidden" and the eye-toggle round-trips against it.
       hasContent: hasContentFor(s.type, s.content),
     }));
     queryClient.setQueryData<EditorSection[]>(sectionsKey, editorSections);
@@ -153,7 +159,7 @@ export function EditorShell({ data, portfolioId }: EditorShellProps) {
       rawSections.map((s) => ({
         id: s.id,
         title: titleFor(s.type, s.content),
-        visible: true,
+        visible: s.visible, // CR-01: the REAL flag (mirrors the seed above)
         hasContent: hasContentFor(s.type, s.content),
       })),
     staleTime: Infinity,

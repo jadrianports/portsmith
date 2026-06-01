@@ -32,9 +32,16 @@
  *   return null. RLS would already scope the base-table reads to the caller's own
  *   rows, but the explicit ownership check makes a non-owner preview impossible
  *   even before any row read (the integration test proves non-owner → null).
- * - VISIBILITY (D-P4-09): sections are filtered to `visible === true` IN APP CODE
- *   (the base table carries hidden rows; the preview must respect visibility, so
- *   hidden sections do NOT appear).
+ * - VISIBILITY (D-P4-09 / CR-01): this read backs TWO consumers with OPPOSITE
+ *   needs, so visibility filtering is the CALLER's choice via `opts.includeHidden`:
+ *     · the DRAFT-MODE PREVIEW ([username]/page.tsx) must DROP hidden sections so
+ *       the preview is byte-for-byte the PUBLIC page (hidden stays hidden) — it
+ *       calls with the default (`includeHidden` falsy) and gets visible-only rows;
+ *     · the OWNER EDITOR (dashboard/page.tsx) must SEE ALL sections carrying their
+ *       REAL `visible` flag so the owner can re-show a hidden section (the
+ *       eye-toggle must round-trip) — it calls with `{ includeHidden: true }`.
+ *   Either way every returned row carries its REAL `visible` value; the option
+ *   only controls whether hidden rows are present.
  *
  * `import 'server-only'` keeps this (and the cookie/env reads) out of any client
  * bundle.
@@ -55,6 +62,20 @@ import { createClient } from '@/lib/supabase/server';
 export type OwnerPortfolioData = PortfolioData & { published: boolean };
 
 /**
+ * Options for {@link getPortfolioOwnerByUsername}.
+ *
+ * `includeHidden` (CR-01) selects the consumer's visibility contract:
+ *   - omitted / false → DRAFT-MODE PREVIEW: hidden sections are dropped so the
+ *     preview matches the public page exactly (D-P4-09).
+ *   - true            → OWNER EDITOR: ALL sections are returned with their real
+ *     `visible` flag so the owner can see + re-show hidden sections.
+ */
+export interface GetPortfolioOwnerOptions {
+  /** Return hidden sections too (the editor needs them; the preview must not). */
+  includeHidden?: boolean;
+}
+
+/**
  * Assemble {@link OwnerPortfolioData} for the AUTHENTICATED caller's OWN portfolio
  * — including UNPUBLISHED + (hidden-filtered) rows — or `null` when:
  *   - there is no verified session,
@@ -71,7 +92,9 @@ export type OwnerPortfolioData = PortfolioData & { published: boolean };
  */
 export async function getPortfolioOwnerByUsername(
   username: string,
+  opts: GetPortfolioOwnerOptions = {},
 ): Promise<OwnerPortfolioData | null> {
+  const includeHidden = opts.includeHidden === true;
   // Authenticated cookie/RLS client — the owner's own_* policies let them read
   // their UNPUBLISHED + HIDDEN base-table rows (Pitfall 3).
   const db = await createClient();
@@ -136,16 +159,19 @@ export async function getPortfolioOwnerByUsername(
   }
   if (!settings) return null; // no settings row (genuine not-found).
 
-  // (5) VISIBILITY (D-P4-09): keep ONLY visible sections — the base table returns
-  //     hidden rows the public read never would, so the filter is mandatory here.
-  const visibleSections: PublicSection[] = (sections ?? [])
-    .filter((s) => s.visible === true)
+  // (5) VISIBILITY (D-P4-09 / CR-01): map EVERY base-table row carrying its REAL
+  //     `visible` flag (never forced true), then drop hidden rows ONLY when the
+  //     caller did not opt in to seeing them. The PREVIEW (default) keeps the
+  //     visible-only filter so it matches the public page; the EDITOR
+  //     (`includeHidden: true`) keeps hidden rows so the eye-toggle can round-trip.
+  const projectedSections: PublicSection[] = (sections ?? [])
+    .filter((s) => includeHidden || s.visible === true)
     .map((s) => ({
       id: s.id,
       portfolio_id: s.portfolio_id,
       type: s.type,
       sort_order: s.sort_order,
-      visible: s.visible,
+      visible: s.visible, // the REAL flag — the editor relies on it (CR-01)
       content: s.content,
     }));
 
@@ -183,7 +209,7 @@ export async function getPortfolioOwnerByUsername(
   return {
     profile: profileData,
     settings: settingsData,
-    sections: visibleSections,
+    sections: projectedSections,
     recentPosts: [], // blog deferred (D-19) — matches the public read.
     templateSpec: minimalSpec, // local spec leads the DB row (RESEARCH Pitfall 6).
     published: profile.published, // for the PreviewBanner "not public yet" caption.
