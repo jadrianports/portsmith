@@ -41,7 +41,18 @@ vi.mock('next/headers', () => ({
 }));
 
 // Import AFTER the mocks are registered.
-import { signupAction } from '@/lib/auth/signup-action';
+import { signupAction, type SignupResult } from '@/lib/auth/signup-action';
+
+/** Narrow to the failure branch for assertions (throws if it was a success). */
+function fail(result: SignupResult): Extract<SignupResult, { ok: false }> {
+  if (result.ok) throw new Error('expected a failure result, got ok:true');
+  return result;
+}
+/** Narrow to the success branch for assertions (throws if it was a failure). */
+function ok(result: SignupResult): Extract<SignupResult, { ok: true }> {
+  if (!result.ok) throw new Error('expected a success result, got ok:false');
+  return result;
+}
 
 const VALID = {
   email: 'new.user@gmail.com',
@@ -69,16 +80,14 @@ afterEach(() => {
 describe('signupAction — Zod gate (step 1)', () => {
   it('rejects an invalid email with a field error and never verifies/creates', async () => {
     const result = await signupAction(input({ email: 'not-an-email' }));
-    expect(result.ok).toBeFalsy();
-    expect(result.fieldErrors?.email).toBeTruthy();
+    expect(fail(result).fieldErrors?.email).toBeTruthy();
     expect(verifyTurnstile).not.toHaveBeenCalled();
     expect(signUp).not.toHaveBeenCalled();
   });
 
   it('rejects a reserved/invalid username before any side effect', async () => {
     const result = await signupAction(input({ username: 'admin' }));
-    expect(result.ok).toBeFalsy();
-    expect(result.fieldErrors?.username).toBeTruthy();
+    expect(fail(result).fieldErrors?.username).toBeTruthy();
     expect(signUp).not.toHaveBeenCalled();
   });
 });
@@ -86,8 +95,7 @@ describe('signupAction — Zod gate (step 1)', () => {
 describe('signupAction — ToS gate (step 2, D-09)', () => {
   it('rejects when tos_accepted is not true, before Turnstile/signUp', async () => {
     const result = await signupAction(input({ tos_accepted: false }));
-    expect(result.ok).toBeFalsy();
-    expect(result.fieldErrors?.tos_accepted).toBeTruthy();
+    expect(fail(result).fieldErrors?.tos_accepted).toBeTruthy();
     expect(verifyTurnstile).not.toHaveBeenCalled();
     expect(signUp).not.toHaveBeenCalled();
   });
@@ -97,7 +105,7 @@ describe('signupAction — Turnstile gate (step 3, D-05 — the bot-bypass guara
   it('does NOT reach signUp when the Turnstile token fails verification', async () => {
     verifyTurnstile.mockResolvedValue(false);
     const result = await signupAction(input());
-    expect(result.ok).toBeFalsy();
+    expect(fail(result)).toBeTruthy();
     expect(verifyTurnstile).toHaveBeenCalledTimes(1);
     expect(isDisposableEmail).not.toHaveBeenCalled(); // gate order: stops here
     expect(signUp).not.toHaveBeenCalled();
@@ -105,7 +113,7 @@ describe('signupAction — Turnstile gate (step 3, D-05 — the bot-bypass guara
 
   it('rejects an empty Turnstile token at the Zod step (still never reaches signUp)', async () => {
     const result = await signupAction(input({ turnstile_token: '' }));
-    expect(result.ok).toBeFalsy();
+    expect(fail(result)).toBeTruthy();
     expect(signUp).not.toHaveBeenCalled();
   });
 });
@@ -114,8 +122,7 @@ describe('signupAction — disposable-email gate (step 4, SAFE-01 / D-04)', () =
   it('rejects a disposable email with the specific D-04 message, before signUp', async () => {
     isDisposableEmail.mockReturnValue(true);
     const result = await signupAction(input({ email: 'x@mailinator.com' }));
-    expect(result.ok).toBeFalsy();
-    expect(result.error).toMatch(/disposable or temporary email/i);
+    expect(fail(result).error).toMatch(/disposable or temporary email/i);
     expect(verifyTurnstile).toHaveBeenCalledTimes(1); // ran before disposable
     expect(signUp).not.toHaveBeenCalled(); // disposable blocks creation
   });
@@ -151,9 +158,7 @@ describe('signupAction — enumeration-safe outcome (D-07 / T-02-07)', () => {
     });
     const existing = await signupAction(input());
 
-    expect(fresh.ok).toBe(true);
-    expect(existing.ok).toBe(true);
-    expect(existing.email).toBe(fresh.email);
+    expect(ok(existing).email).toBe(ok(fresh).email);
     // Identical shape (no extra fields leaking existence).
     expect(Object.keys(existing).sort()).toEqual(Object.keys(fresh).sort());
   });
