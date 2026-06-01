@@ -44,7 +44,7 @@
  *   Prod:   SEED_TARGET=prod npm run seed:founder         (or `npm run seed:founder -- --confirm-prod`)
  */
 import { createClient } from '@supabase/supabase-js';
-import { validateSectionContent } from '@/lib/validations';
+import { profileSchema, validateSectionContent } from '@/lib/validations';
 import { FOUNDER } from './seed/founder-content';
 
 // Load .env.local so `npm run seed:founder` works without manual `export`s.
@@ -95,8 +95,19 @@ function buildSections(): { type: string; content: unknown; visible: boolean }[]
     ...s.contact,
     email_public: FOUNDER.settings.email_public,
   };
+  // WR-01 (03-REVIEW): surface profile.resume_url INTO the hero content so the
+  // "Download résumé" button (D-14) actually renders. `heroContentSchema` now carries
+  // an OPTIONAL `resume_url`, so the field survives the Zod gate (without the schema
+  // field it would be stripped — the dead-button bug). Same additive idiom the
+  // contact section uses for `email_public`; no Postgres migration (CMS-08). The
+  // value is empty-allowed/http(s)-validated by the gate, so a placeholder run with
+  // no résumé simply keeps the button hidden.
+  const heroContent = {
+    ...s.hero,
+    resume_url: FOUNDER.profile.resume_url,
+  };
   return [
-    { type: 'hero', content: s.hero, visible: true },
+    { type: 'hero', content: heroContent, visible: true },
     { type: 'about', content: s.about, visible: true },
     { type: 'skills', content: s.skills, visible: true },
     { type: 'projects', content: s.projects, visible: true },
@@ -208,16 +219,39 @@ async function main(): Promise<void> {
   log(`founder profile resolved: ${username} (${userId})`);
 
   // --- 2. Update the profiles row (service-role bypasses the protected trigger). --
+  // WR-04 (03-REVIEW): the service-role write bypasses RLS + the protected-columns
+  // trigger, so the profile columns it sets must STILL pass the SAME Zod gate the
+  // Phase-4 profile-edit form will use. In particular `resume_url` / `avatar_url`
+  // are now http(s)-validated (`profileSchema`) so the seed can never write a
+  // dangerous-scheme URL that would later flow into an `href` / `<Image src>`. A Zod
+  // throw aborts the seed before any write.
+  let validatedProfile: ReturnType<typeof profileSchema.parse>;
+  try {
+    validatedProfile = profileSchema.parse({
+      username,
+      display_name: FOUNDER.profile.display_name,
+      headline: FOUNDER.profile.headline,
+      resume_url: FOUNDER.profile.resume_url,
+      avatar_url: FOUNDER.profile.avatar_url ?? '',
+    });
+  } catch (err) {
+    fail(
+      `profile columns failed the Zod gate (WR-04): ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+
   // `published: true` is the sanctioned service-role write (Plan 01-09).
   const profileUpdate: Record<string, unknown> = {
-    display_name: FOUNDER.profile.display_name,
-    headline: FOUNDER.profile.headline,
-    resume_url: FOUNDER.profile.resume_url,
+    display_name: validatedProfile.display_name,
+    headline: validatedProfile.headline,
+    resume_url: validatedProfile.resume_url,
     published: true,
     updated_at: new Date().toISOString(),
   };
-  if (FOUNDER.profile.avatar_url) {
-    profileUpdate.avatar_url = FOUNDER.profile.avatar_url;
+  if (validatedProfile.avatar_url) {
+    profileUpdate.avatar_url = validatedProfile.avatar_url;
   }
   const { error: profileError } = await admin
     .from('profiles')

@@ -218,6 +218,74 @@ describe('section content schemas', () => {
     expect(heroContentSchema.safeParse({ heading: 'x'.repeat(101) }).success).toBe(false);
   });
 
+  // --- WR-01: hero carries an OPTIONAL, http(s)-validated resume_url ---
+  it('hero accepts an optional http(s) resume_url, empty, or omitted; rejects a bad scheme (WR-01 + CR-01)', () => {
+    // Omitted ⇒ valid (optional/additive — the button hides).
+    expect(heroContentSchema.safeParse({ heading: 'Hi' }).success).toBe(true);
+    // Empty string ⇒ valid (button hides).
+    expect(heroContentSchema.safeParse({ heading: 'Hi', resume_url: '' }).success).toBe(true);
+    // A valid https URL ⇒ valid (the seed surfaces profile.resume_url here; D-14 button renders).
+    expect(
+      heroContentSchema.safeParse({ heading: 'Hi', resume_url: 'https://x.com/cv.pdf' }).success,
+    ).toBe(true);
+    // A dangerous scheme ⇒ rejected by the CR-01 gate (resume_url feeds an href).
+    expect(
+      heroContentSchema.safeParse({ heading: 'Hi', resume_url: 'javascript:alert(1)' }).success,
+    ).toBe(false);
+  });
+
+  // --- CR-01: the shared URL gate must REJECT dangerous schemes on every URL field ---
+  it('CR-01: URL fields REJECT javascript:/data:/vbscript: and ACCEPT https (stored-XSS gate)', () => {
+    const DANGEROUS = [
+      'javascript:alert(1)',
+      'JavaScript:alert(1)', // case-insensitive scheme
+      'data:text/html;base64,PHNjcmlwdD4=',
+      'vbscript:msgbox(1)',
+      'ftp://example.com/x', // non-http(s) scheme also rejected
+    ];
+    for (const bad of DANGEROUS) {
+      // cta_url (hero), live_url (project item), and a settings social all share the
+      // SAME gate — assert the rejection on each representative sink.
+      expect(
+        heroContentSchema.safeParse({ heading: 'Hi', cta_url: bad }).success,
+        `hero.cta_url should reject ${bad}`,
+      ).toBe(false);
+      expect(
+        projectItemSchema.safeParse({ ...validProjectItem, live_url: bad }).success,
+        `project.live_url should reject ${bad}`,
+      ).toBe(false);
+      expect(
+        settingsSchema.safeParse({ github_url: bad }).success,
+        `settings.github_url should reject ${bad}`,
+      ).toBe(false);
+    }
+    // ACCEPT: valid https (and http, and uppercase scheme) still pass — the gate
+    // must not break legitimate URLs.
+    expect(heroContentSchema.safeParse({ heading: 'Hi', cta_url: 'https://x.com' }).success).toBe(
+      true,
+    );
+    expect(
+      projectItemSchema.safeParse({ ...validProjectItem, live_url: 'http://x.com/p' }).success,
+    ).toBe(true);
+    expect(settingsSchema.safeParse({ website_url: 'HTTPS://x.com' }).success).toBe(true);
+    // Empty string remains valid (the URL-or-empty contract is preserved).
+    expect(settingsSchema.safeParse({ website_url: '' }).success).toBe(true);
+  });
+
+  // --- WR-04: profile resume_url / avatar_url are http(s)-gated ---
+  it('WR-04: profileSchema REJECTS dangerous-scheme resume_url/avatar_url, ACCEPTS https/empty', () => {
+    const base = { username: 'jane-doe', display_name: 'Jane Doe' };
+    expect(profileSchema.safeParse({ ...base, resume_url: 'javascript:alert(1)' }).success).toBe(
+      false,
+    );
+    expect(profileSchema.safeParse({ ...base, avatar_url: 'data:text/html,x' }).success).toBe(false);
+    expect(
+      profileSchema.safeParse({ ...base, resume_url: 'https://x.com/cv.pdf' }).success,
+    ).toBe(true);
+    expect(profileSchema.safeParse({ ...base, avatar_url: '' }).success).toBe(true);
+    expect(profileSchema.safeParse(base).success).toBe(true); // both omitted ⇒ valid
+  });
+
   it('about rejects bio > 2000 and skills > 30', () => {
     expect(aboutContentSchema.safeParse({ bio: 'ok', skills: [] }).success).toBe(true);
     expect(
