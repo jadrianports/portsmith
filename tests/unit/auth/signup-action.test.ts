@@ -1,0 +1,181 @@
+/**
+ * Unit coverage for the server-fronted signup action — the gate (AUTH-01, D-05, D-07).
+ *
+ * The action is the highest-stakes security surface in the phase. It MUST enforce
+ * the gate ORDER and never reach a later step when an earlier one fails:
+ *
+ *   1. signupSchema.safeParse  → field errors            (Zod re-parse, server gate)
+ *   2. tos_accepted required    → field error            (D-09; literal(true))
+ *   3. verifyTurnstile          → reject (Turnstile msg)  (D-05 — BEFORE signUp)
+ *   4. isDisposableEmail        → reject (specific D-04)  (SAFE-01 — BEFORE signUp)
+ *   5. supabase.auth.signUp     → generic "check your email" on success OR
+ *                                 already-registered (D-07 — no existence branch)
+ *
+ * Strategy: mock `verifyTurnstile`, `isDisposableEmail`, and `@/lib/supabase/server`
+ * (so `createClient().auth.signUp` is a spy). Assert that `signUp` is NOT called
+ * when an earlier gate fails (the bot-bypass guarantee), and that an
+ * already-registered result returns the SAME generic outcome as a fresh signup.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+
+// --- Mocks for the composed guards + the supabase server client ---------------
+const verifyTurnstile = vi.fn();
+const isDisposableEmail = vi.fn();
+const signUp = vi.fn();
+
+vi.mock('@/lib/auth/turnstile', () => ({
+  verifyTurnstile: (...args: unknown[]) => verifyTurnstile(...args),
+}));
+vi.mock('@/lib/auth/disposable-email', () => ({
+  isDisposableEmail: (...args: unknown[]) => isDisposableEmail(...args),
+}));
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: async () => ({ auth: { signUp: (...args: unknown[]) => signUp(...args) } }),
+}));
+// next/headers is referenced transitively in some action setups; stub defensively.
+vi.mock('next/headers', () => ({
+  headers: async () => new Map(),
+  cookies: async () => ({ getAll: () => [], set: () => {} }),
+}));
+
+// Import AFTER the mocks are registered.
+import { signupAction } from '@/lib/auth/signup-action';
+
+const VALID = {
+  email: 'new.user@gmail.com',
+  password: 'correct horse battery',
+  username: 'newuser',
+  turnstile_token: 'tok-valid',
+  tos_accepted: true,
+} as const;
+
+function input(overrides: Record<string, unknown> = {}) {
+  return { ...VALID, ...overrides };
+}
+
+beforeEach(() => {
+  process.env.NEXT_PUBLIC_SITE_URL = 'http://localhost:3000';
+  verifyTurnstile.mockReset().mockResolvedValue(true);
+  isDisposableEmail.mockReset().mockReturnValue(false);
+  signUp.mockReset().mockResolvedValue({ data: { user: {} }, error: null });
+});
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('signupAction — Zod gate (step 1)', () => {
+  it('rejects an invalid email with a field error and never verifies/creates', async () => {
+    const result = await signupAction(input({ email: 'not-an-email' }));
+    expect(result.ok).toBeFalsy();
+    expect(result.fieldErrors?.email).toBeTruthy();
+    expect(verifyTurnstile).not.toHaveBeenCalled();
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
+  it('rejects a reserved/invalid username before any side effect', async () => {
+    const result = await signupAction(input({ username: 'admin' }));
+    expect(result.ok).toBeFalsy();
+    expect(result.fieldErrors?.username).toBeTruthy();
+    expect(signUp).not.toHaveBeenCalled();
+  });
+});
+
+describe('signupAction — ToS gate (step 2, D-09)', () => {
+  it('rejects when tos_accepted is not true, before Turnstile/signUp', async () => {
+    const result = await signupAction(input({ tos_accepted: false }));
+    expect(result.ok).toBeFalsy();
+    expect(result.fieldErrors?.tos_accepted).toBeTruthy();
+    expect(verifyTurnstile).not.toHaveBeenCalled();
+    expect(signUp).not.toHaveBeenCalled();
+  });
+});
+
+describe('signupAction — Turnstile gate (step 3, D-05 — the bot-bypass guarantee)', () => {
+  it('does NOT reach signUp when the Turnstile token fails verification', async () => {
+    verifyTurnstile.mockResolvedValue(false);
+    const result = await signupAction(input());
+    expect(result.ok).toBeFalsy();
+    expect(verifyTurnstile).toHaveBeenCalledTimes(1);
+    expect(isDisposableEmail).not.toHaveBeenCalled(); // gate order: stops here
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty Turnstile token at the Zod step (still never reaches signUp)', async () => {
+    const result = await signupAction(input({ turnstile_token: '' }));
+    expect(result.ok).toBeFalsy();
+    expect(signUp).not.toHaveBeenCalled();
+  });
+});
+
+describe('signupAction — disposable-email gate (step 4, SAFE-01 / D-04)', () => {
+  it('rejects a disposable email with the specific D-04 message, before signUp', async () => {
+    isDisposableEmail.mockReturnValue(true);
+    const result = await signupAction(input({ email: 'x@mailinator.com' }));
+    expect(result.ok).toBeFalsy();
+    expect(result.error).toMatch(/disposable or temporary email/i);
+    expect(verifyTurnstile).toHaveBeenCalledTimes(1); // ran before disposable
+    expect(signUp).not.toHaveBeenCalled(); // disposable blocks creation
+  });
+});
+
+describe('signupAction — signUp call shape (step 5)', () => {
+  it('calls signUp with options.data {username, display_name} + emailRedirectTo /auth/confirm', async () => {
+    await signupAction(input());
+    expect(signUp).toHaveBeenCalledTimes(1);
+    const arg = signUp.mock.calls[0][0] as {
+      email: string;
+      password: string;
+      options: { data: { username: string; display_name: string }; emailRedirectTo: string };
+    };
+    expect(arg.email).toBe(VALID.email);
+    expect(arg.password).toBe(VALID.password);
+    expect(arg.options.data).toEqual({ username: 'newuser', display_name: 'newuser' });
+    expect(arg.options.emailRedirectTo).toMatch(/\/auth\/confirm$/);
+  });
+});
+
+describe('signupAction — enumeration-safe outcome (D-07 / T-02-07)', () => {
+  it('returns the SAME generic success outcome for a fresh signup and an already-registered email', async () => {
+    // Fresh signup
+    signUp.mockResolvedValueOnce({ data: { user: { id: 'u1' } }, error: null });
+    const fresh = await signupAction(input());
+
+    // Already-registered: Supabase returns an obfuscated user with no identities;
+    // the action must NOT branch the message on this.
+    signUp.mockResolvedValueOnce({
+      data: { user: { id: 'u2', identities: [] } },
+      error: null,
+    });
+    const existing = await signupAction(input());
+
+    expect(fresh.ok).toBe(true);
+    expect(existing.ok).toBe(true);
+    expect(existing.email).toBe(fresh.email);
+    // Identical shape (no extra fields leaking existence).
+    expect(Object.keys(existing).sort()).toEqual(Object.keys(fresh).sort());
+  });
+
+  it('does not contain a real .getSession( call (verified-identity discipline)', () => {
+    const { readFileSync } = require('node:fs');
+    const { join } = require('node:path');
+    const src = readFileSync(join(process.cwd(), 'src/lib/auth/signup-action.ts'), 'utf-8');
+    expect(src).not.toMatch(/\.getSession\(/);
+  });
+
+  it("begins with the 'use server' directive", () => {
+    const { readFileSync } = require('node:fs');
+    const { join } = require('node:path');
+    const src = readFileSync(join(process.cwd(), 'src/lib/auth/signup-action.ts'), 'utf-8');
+    const firstCode = src
+      .split('\n')
+      .map((l: string) => l.trim())
+      .find(
+        (l: string) =>
+          l.length > 0 && !l.startsWith('//') && !l.startsWith('/*') && !l.startsWith('*'),
+      );
+    expect(firstCode).toMatch(/^['"]use server['"];?$/);
+  });
+});
