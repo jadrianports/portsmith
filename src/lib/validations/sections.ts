@@ -153,6 +153,35 @@ export const blogPreviewContentSchema = z.object({
   post_count: z.number().int(),
 });
 
+/**
+ * Skills — the first NET-NEW section type added after the Phase-1 baseline, and
+ * the first real exercise of CMS-08's "new type, no Postgres migration" promise
+ * (CONTEXT D-08). Registering `skills` below is a one-line additive change; the
+ * `validateSectionContent` gate, the `SectionType` union, and the `@/lib/validations`
+ * barrel all pick it up automatically.
+ *
+ * Profession-agnostic by construction (CONTEXT D-27): `icon` and `tier` are BOTH
+ * optional, so a marketer's "Core Competencies" group is as valid as a developer's
+ * "Tech Stack". `tier` uses tasteful labels — never numeric / percentage gauges
+ * (CONTEXT D-09). `icon` is a free-form simple-icons slug string (e.g. 'react');
+ * leaving it a bare string keeps the schema profession-neutral.
+ */
+export const skillItemSchema = z.object({
+  name: z.string().min(1).max(60),
+  icon: z.string().optional(), // simple-icons slug, e.g. 'react' — optional ⇒ profession-agnostic
+  tier: z.enum(['core', 'proficient', 'learning']).optional(), // tasteful labels, NOT % gauges (D-09)
+});
+
+export const skillGroupSchema = z.object({
+  label: z.string().min(1).max(60), // "Core Competencies" / "Tech Stack" / "Currently Learning"
+  items: z.array(skillItemSchema).max(40),
+});
+
+export const skillsContentSchema = z.object({
+  heading: z.string().max(100),
+  groups: z.array(skillGroupSchema).max(6),
+});
+
 // ---------------------------------------------------------------------------
 // Soft-enum registry + the gate function
 // ---------------------------------------------------------------------------
@@ -170,6 +199,7 @@ export const sectionContentSchemas = {
   experience: experienceContentSchema,
   contact: contactContentSchema,
   blog_preview: blogPreviewContentSchema,
+  skills: skillsContentSchema, // CMS-08: additive new type — no Postgres migration (D-08)
 } as const;
 
 /** The currently-known section types (derived from the registry keys). */
@@ -206,3 +236,4 @@ export type TestimonialsContent = z.infer<typeof testimonialsContentSchema>;
 export type ExperienceContent = z.infer<typeof experienceContentSchema>;
 export type ContactContent = z.infer<typeof contactContentSchema>;
 export type BlogPreviewContent = z.infer<typeof blogPreviewContentSchema>;
+export type SkillsContent = z.infer<typeof skillsContentSchema>;

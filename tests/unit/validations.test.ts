@@ -27,6 +27,7 @@ import {
   experienceContentSchema,
   contactContentSchema,
   blogPreviewContentSchema,
+  skillsContentSchema,
   // profile / username
   profileSchema,
   usernameSchema,
@@ -197,9 +198,18 @@ describe('section item schemas', () => {
 // ===========================================================================
 
 describe('section content schemas', () => {
-  it('registry has all 7 known section types', () => {
+  it('registry has all 8 known section types', () => {
     expect(Object.keys(sectionContentSchemas).sort()).toEqual(
-      ['about', 'blog_preview', 'contact', 'experience', 'hero', 'projects', 'testimonials'].sort(),
+      [
+        'about',
+        'blog_preview',
+        'contact',
+        'experience',
+        'hero',
+        'projects',
+        'skills',
+        'testimonials',
+      ].sort(),
     );
   });
 
@@ -294,6 +304,62 @@ describe('section content schemas', () => {
 });
 
 // ===========================================================================
+// skills content schema (the NEW soft-enum branch — first CMS-08 exercise, D-08)
+// ===========================================================================
+
+describe('skills content schema', () => {
+  const validSkills = {
+    heading: 'Skills',
+    groups: [
+      {
+        label: 'Tech Stack',
+        items: [
+          { name: 'TypeScript', icon: 'typescript', tier: 'core' },
+          { name: 'React' }, // bare { name } — icon/tier optional (profession-agnostic, D-27)
+        ],
+      },
+    ],
+  };
+
+  it('accepts valid grouped content (with and without optional icon/tier)', () => {
+    expect(skillsContentSchema.safeParse(validSkills).success).toBe(true);
+  });
+
+  it('accepts an empty groups array (heading-only is valid)', () => {
+    expect(skillsContentSchema.safeParse({ heading: 'Skills', groups: [] }).success).toBe(true);
+  });
+
+  it('rejects an unknown tier (only core/proficient/learning — D-09)', () => {
+    const bad = {
+      heading: 'Skills',
+      groups: [{ label: 'Tech Stack', items: [{ name: 'React', tier: 'expert' }] }],
+    };
+    expect(skillsContentSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it('rejects an empty skill name', () => {
+    const bad = {
+      heading: 'Skills',
+      groups: [{ label: 'Tech Stack', items: [{ name: '' }] }],
+    };
+    expect(skillsContentSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it('rejects a heading > 100 chars', () => {
+    expect(
+      skillsContentSchema.safeParse({ heading: 'x'.repeat(101), groups: [] }).success,
+    ).toBe(false);
+  });
+
+  it('rejects more than 6 groups', () => {
+    const oneGroup = { label: 'G', items: [{ name: 'X' }] };
+    expect(
+      skillsContentSchema.safeParse({ heading: 'Skills', groups: Array(7).fill(oneGroup) }).success,
+    ).toBe(false);
+  });
+});
+
+// ===========================================================================
 // validateSectionContent (the gate)
 // ===========================================================================
 
@@ -308,6 +374,22 @@ describe('validateSectionContent gate', () => {
 
   it('throws for an unregistered section type', () => {
     expect(() => validateSectionContent('unknown_type', {})).toThrow();
+  });
+
+  it('parses valid content for the new "skills" type (CMS-08, no migration)', () => {
+    expect(validateSectionContent('skills', { heading: 'Skills', groups: [] })).toEqual({
+      heading: 'Skills',
+      groups: [],
+    });
+  });
+
+  it('throws for the "skills" type with invalid content', () => {
+    expect(() =>
+      validateSectionContent('skills', {
+        heading: 'Skills',
+        groups: [{ label: 'G', items: [{ name: 'X', tier: 'expert' }] }],
+      }),
+    ).toThrow();
   });
 });
 
