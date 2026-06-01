@@ -110,6 +110,33 @@
 }
 
 /* ============================================================================
+ * CONTENT SHELL (03 verification polish — the founder's "everything is margined
+ * to the left" desktop defect). ONE shared, responsive centered column applied to
+ * every section's CONTENT (Hero foreground, About, Skills, Projects, Experience,
+ * Contact) and the Footer content. Before this rule there was NO horizontal gutter
+ * and NO centered max-width anywhere, so each section's content pinned to x=0.
+ *
+ * Mechanism (lowest-duplication, matches the `.tmpl-*` class idiom): a single class
+ * the section content wrappers opt into. Decorative full-bleed layers (the Hero
+ * sunset/sun/grid backdrop, the Footer grid-horizon echo) are DELIBERATELY left
+ * OUTSIDE the shell so they still span the viewport — only foreground content is
+ * shelled (never clip the sun).
+ *
+ *   - max-width 72rem (1152px) — centered via `margin-inline: auto`.
+ *   - padding-inline clamp(1.5rem, 5vw, 4rem) — ≈24px mobile gutter → up to ~64px
+ *     desktop gutter. Never x=0 on desktop, comfortable edge padding on mobile.
+ *   - `width: 100%` + `box-sizing: border-box` so it fills the available track and
+ *     the gutter is padding (no overflow), regardless of the section's own flex/grid.
+ * ========================================================================== */
+.tmpl-minimal .tmpl-shell {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.5rem, 5vw, 4rem);
+}
+
+/* ============================================================================
  * Hero ambient keyframes (03-05) — the "available" dot pulse + the scroll-cue bob.
  * CSS-only, perf-cheap, and ALWAYS disabled under reduced-motion by the blanket
  * reset below (UI-SPEC §Motion "Ambient: … all OFF under reduced-motion"). Scoped

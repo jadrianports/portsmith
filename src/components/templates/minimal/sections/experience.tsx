@@ -187,12 +187,15 @@ export function Experience({ section }: SectionProps) {
 
   return (
     <div
+      // `.tmpl-shell`: the shared centered max-width + horizontal gutter (theme.css).
+      // The prior inline `maxWidth: 72ch` is dropped in favor of the uniform shell
+      // width so Experience aligns with the other shelled sections.
+      className="tmpl-shell"
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: '32px',
-        padding: '64px 0',
-        maxWidth: '72ch',
+        paddingBlock: '64px',
       }}
     >
       {/* Mono section label `05 / experience` (cyan, per the section precedent). */}

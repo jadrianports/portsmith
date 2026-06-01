@@ -139,17 +139,33 @@ export function Hero({ section }: SectionProps) {
         />
       </div>
 
-      {/* Foreground content (above the backdrop). */}
+      {/* Foreground content (above the backdrop). SHELLED: `.tmpl-shell` gives the
+          centered 72rem column + horizontal gutter (theme.css) so the hero text no
+          longer pins to x=0 — while the decorative backdrop above stays FULL-BLEED
+          (it is a sibling outside this shell, so the sun/grid/glow still span the
+          viewport). Inside the shell the text keeps its ~62ch reading measure and
+          sits LEFT (`marginRight: auto`) per the hero's left-aligned design. */}
       <div
+        className="tmpl-shell"
         style={{
           position: 'relative',
           zIndex: 1,
           display: 'flex',
           flexDirection: 'column',
+          alignItems: 'flex-start',
           gap: '24px',
-          maxWidth: '62ch',
         }}
       >
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px',
+            width: '100%',
+            maxWidth: '62ch',
+            marginRight: 'auto',
+          }}
+        >
         {/* Mono section label `01 / intro`. */}
         <p
           style={{
@@ -283,14 +299,17 @@ export function Hero({ section }: SectionProps) {
             </a>
           ) : null}
         </div>
+        </div>
       </div>
 
-      {/* Scroll cue at the bottom (subtle bob; static under reduced-motion). */}
+      {/* Scroll cue at the bottom (subtle bob; static under reduced-motion). The
+          left offset matches the shell's responsive gutter (`clamp(1.5rem,5vw,4rem)`)
+          so the cue aligns with the shelled content instead of pinning to x=0. */}
       <div
         aria-hidden="true"
         style={{
           position: 'absolute',
-          left: '0',
+          left: 'clamp(1.5rem, 5vw, 4rem)',
           bottom: '32px',
           zIndex: 1,
           color: 'var(--muted-fg)',

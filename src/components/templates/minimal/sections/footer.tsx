@@ -88,7 +88,10 @@ export function Footer({ data }: FooterProps) {
         }}
       />
 
+      {/* Footer CONTENT is shelled (centered max-width + gutter); the decorative
+          grid-horizon echo above is a full-bleed sibling outside the shell. */}
       <div
+        className="tmpl-shell"
         style={{
           position: 'relative',
           zIndex: 1,
@@ -170,8 +173,10 @@ export function Footer({ data }: FooterProps) {
         ) : null}
       </div>
 
-      {/* Copyright line — the owner's name only; NO platform attribution. */}
+      {/* Copyright line — the owner's name only; NO platform attribution. Shelled
+          (same centered max-width + gutter) so it aligns under the content row. */}
       <p
+        className="tmpl-shell"
         style={{
           position: 'relative',
           zIndex: 1,

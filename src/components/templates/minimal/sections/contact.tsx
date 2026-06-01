@@ -100,11 +100,13 @@ export function Contact({ section }: SectionProps) {
   return (
     <div
       id="contact"
+      // `.tmpl-shell`: the shared centered max-width + horizontal gutter (theme.css).
+      className="tmpl-shell"
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: '32px',
-        padding: '64px 0',
+        paddingBlock: '64px',
       }}
     >
       {/* Mono section label `07 / contact` (cyan, per the hero precedent). */}

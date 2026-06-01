@@ -111,12 +111,15 @@ export function Skills({ section }: SectionProps) {
 
   return (
     <div
+      // `.tmpl-shell`: the shared centered max-width + horizontal gutter (theme.css).
+      // The prior inline `maxWidth: 72ch` is dropped in favor of the uniform shell
+      // width so Skills aligns with the other shelled sections (no off-width column).
+      className="tmpl-shell"
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: '32px',
-        padding: '64px 0',
-        maxWidth: '72ch',
+        paddingBlock: '64px',
       }}
     >
       {/* Mono section label `03 / skills` (cyan, per the hero precedent). */}
