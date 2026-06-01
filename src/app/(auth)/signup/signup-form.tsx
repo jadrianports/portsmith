@@ -63,6 +63,16 @@ export function SignupForm() {
       if (result.fieldErrors) setFieldErrors(result.fieldErrors);
       if (result.error) setBanner(result.error);
 
+      // WR-03: a server-side Turnstile rejection returns
+      // `{ fieldErrors: { turnstile_token } }`, but the widget has no field-error
+      // slot of its own, so without this the form would clear and re-render with
+      // NO visible error — a silent dead-end. Surface it in the banner (unless a
+      // top-level banner error already occupies it) so the failure is never
+      // invisible. The widget itself resets below for a fresh token.
+      if (result.fieldErrors?.turnstile_token && !result.error) {
+        setBanner(result.fieldErrors.turnstile_token);
+      }
+
       // Reset the single-use Turnstile token after any failed submit (Pitfall 5).
       setToken(null);
       setResetSignal((n) => n + 1);

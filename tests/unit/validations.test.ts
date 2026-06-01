@@ -511,6 +511,12 @@ describe('signupSchema', () => {
     expect(signupSchema.safeParse(validSignup).success).toBe(true);
   });
 
+  it('normalizes email to trimmed lowercase (IN-04 canonical identity)', () => {
+    const res = signupSchema.safeParse({ ...validSignup, email: '  Jane.DOE@Example.COM  ' });
+    expect(res.success).toBe(true);
+    expect(res.success && res.data.email).toBe('jane.doe@example.com');
+  });
+
   it('rejects an invalid email', () => {
     expect(signupSchema.safeParse({ ...validSignup, email: 'notanemail' }).success).toBe(false);
   });
@@ -551,6 +557,12 @@ describe('loginSchema', () => {
     expect(loginSchema.safeParse(validLogin).success).toBe(true);
   });
 
+  it('normalizes email to trimmed lowercase (IN-04 — same canonical form as signup)', () => {
+    const res = loginSchema.safeParse({ ...validLogin, email: '  JANE@Example.com ' });
+    expect(res.success).toBe(true);
+    expect(res.success && res.data.email).toBe('jane@example.com');
+  });
+
   it('rejects a bad email', () => {
     expect(loginSchema.safeParse({ ...validLogin, email: 'nope' }).success).toBe(false);
   });
@@ -563,6 +575,12 @@ describe('loginSchema', () => {
 describe('resetRequestSchema', () => {
   it('accepts a valid email', () => {
     expect(resetRequestSchema.safeParse({ email: 'jane@example.com' }).success).toBe(true);
+  });
+
+  it('normalizes email to trimmed lowercase (IN-04)', () => {
+    const res = resetRequestSchema.safeParse({ email: '  Jane@Example.COM ' });
+    expect(res.success).toBe(true);
+    expect(res.success && res.data.email).toBe('jane@example.com');
   });
 
   it('rejects a bad email', () => {

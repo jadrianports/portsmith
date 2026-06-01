@@ -14,14 +14,36 @@
  *
  * Password cap: `.max(72)` — Supabase/bcrypt truncates at 72 bytes, so capping
  * here avoids silent-truncation surprises. `.min(8)` is the sane minimum.
+ *
+ * Email canonicalization (IN-04): every email field is `.trim().toLowerCase()`-d
+ * at the schema boundary so the disposable-email check, the stored auth row, and
+ * later logins all agree on ONE canonical form — mixed-case or whitespace-padded
+ * input can never split an identity. `usernameSchema` already lowercases via its
+ * own regex/transform, so it is left untouched.
  */
 import { z } from 'zod';
 
 import { usernameSchema } from './username';
 
+/**
+ * A canonical email (IN-04). We FIRST normalize the raw input — `.trim()` strips
+ * stray whitespace and `.toLowerCase()` canonicalizes case — then `.pipe()` the
+ * cleaned string through the top-level `z.email()` validator + length cap. Order
+ * matters: the trim/lowercase must run BEFORE validation, otherwise a
+ * whitespace-padded value would fail the email check before it could be cleaned.
+ * (The normalizing `z.string()` carries NO `.email()` of its own — the platform's
+ * "no chained `z.string().email()`" rule is about the VALIDATOR, which still lives
+ * in the top-level `z.email()` on the pipe target.)
+ */
+const canonicalEmail = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email({ error: 'A valid email is required' }).max(320));
+
 /** Signup body — gated server-side by Turnstile + the disposable-email check (Wave 2). */
 export const signupSchema = z.object({
-  email: z.email({ error: 'A valid email is required' }).max(320),
+  email: canonicalEmail,
   password: z
     .string()
     .min(8, { error: 'Password must be at least 8 characters' })
@@ -34,13 +56,13 @@ export const signupSchema = z.object({
 
 /** Login body — enumeration-safe (the action returns a generic invalid-credentials message). */
 export const loginSchema = z.object({
-  email: z.email({ error: 'A valid email is required' }).max(320),
+  email: canonicalEmail,
   password: z.string().min(1, { error: 'Password is required' }),
 });
 
 /** Forgot-password request body — always answered generically (enumeration-safe). */
 export const resetRequestSchema = z.object({
-  email: z.email({ error: 'A valid email is required' }).max(320),
+  email: canonicalEmail,
 });
 
 /** Update-password body (recovery session) — same 8–72 cap as signup. */

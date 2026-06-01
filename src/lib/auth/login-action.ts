@@ -23,6 +23,12 @@
  *     `{ unconfirmed: true, email }` outcome so the login page can render the
  *     "Please confirm your email — resend?" affordance. This is the one place a
  *     differential signal is allowed.
+ *   - OPERATIONAL failures are NOT credential failures (WR-04): a rate-limit, a
+ *     5xx, a network blip, a banned user, or an unknown/renamed gotrue code must
+ *     return the NEUTRAL "something went wrong" message — never "your password is
+ *     wrong" — so a transient outage does not push users into a reset loop. Only
+ *     `invalid_credentials` earns the credential message; a status-based fallback
+ *     (429 / >=500) keeps this correct across gotrue code renames.
  *
  * Verified-identity discipline carries over (AUTH-05): this action NEVER calls
  * `getSession()` (the guard test greps for it). It does not need to read identity
@@ -95,17 +101,27 @@ export async function loginAction(input: unknown): Promise<LoginResult> {
     return { ok: false, error: UNCONFIRMED_MESSAGE, unconfirmed: true, email };
   }
 
-  // Every credential failure (wrong email OR wrong password — `invalid_credentials`)
-  // collapses to the SAME generic message. We never branch on existence (D-07).
+  // Only a genuine CREDENTIAL failure earns the credential message. A wrong email
+  // and a wrong password are INDISTINGUISHABLE — both surface `invalid_credentials`
+  // — and collapse to the SAME generic message; we never branch on existence (D-07).
   if (error.code === 'invalid_credentials') {
     return { ok: false, error: GENERIC_INVALID };
   }
 
-  // Any other auth error (rate-limit, network, banned, …) → generic, no leak.
-  // Treated as a credential failure to keep the surface uniform; a rare
-  // operational error gets the neutral "something went wrong" instead.
-  if (error.code === 'over_request_rate_limit' || error.status === 429) {
+  // Everything else is an OPERATIONAL failure, NOT a credential one (WR-04). A
+  // rate-limit, a 5xx, a network blip, a banned user, or an unknown/renamed
+  // gotrue code must NOT tell the user "your password is wrong" — that drives a
+  // futile password-reset loop. Return the NEUTRAL "something went wrong" instead.
+  // The status-based fallback (429 / >=500) keeps this correct even if gotrue
+  // renames a code string in a version bump.
+  if (
+    error.code === 'over_request_rate_limit' ||
+    error.status === 429 ||
+    (error.status ?? 0) >= 500
+  ) {
     return { ok: false, error: GENERIC_ERROR };
   }
-  return { ok: false, error: GENERIC_INVALID };
+
+  // Unknown error → neutral, never credential-blaming (WR-04).
+  return { ok: false, error: GENERIC_ERROR };
 }

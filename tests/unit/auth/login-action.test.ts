@@ -67,6 +67,14 @@ function authError(code: string) {
   return { error: { code, message: 'GoTrue error', status: 400 }, data: { session: null, user: null } };
 }
 
+/** A Supabase auth error with an explicit status (and optional code) — for WR-04. */
+function authErrorStatus(status: number, code?: string) {
+  return {
+    error: { code, message: 'GoTrue error', status },
+    data: { session: null, user: null },
+  };
+}
+
 beforeEach(() => {
   process.env.NEXT_PUBLIC_SITE_URL = 'http://localhost:3000';
   signInWithPassword.mockReset().mockResolvedValue({
@@ -112,6 +120,42 @@ describe('loginAction — invalid credentials are enumeration-safe (D-07 / T-02-
     const wrongEmail = await loginAction(input({ email: 'ghost@gmail.com' }));
     expect(fail(wrongPassword).error).toBe(fail(wrongEmail).error);
     expect(Object.keys(wrongPassword).sort()).toEqual(Object.keys(wrongEmail).sort());
+  });
+});
+
+describe('loginAction — operational errors are NEUTRAL, not credential-blaming (WR-04)', () => {
+  const NEUTRAL = /something went wrong/i;
+  const CREDENTIAL = /that email or password isn't right/i;
+
+  it('an explicit rate-limit code → neutral message (not "wrong password")', async () => {
+    signInWithPassword.mockResolvedValue(authError('over_request_rate_limit'));
+    const result = await loginAction(input());
+    expect(fail(result).error).toMatch(NEUTRAL);
+    expect(fail(result).error).not.toMatch(CREDENTIAL);
+  });
+
+  it('a 429 status (even without the rate-limit code) → neutral message', async () => {
+    signInWithPassword.mockResolvedValue(authErrorStatus(429));
+    expect(fail(await loginAction(input())).error).toMatch(NEUTRAL);
+  });
+
+  it('a 5xx server error → neutral message (no reset-loop bait)', async () => {
+    signInWithPassword.mockResolvedValue(authErrorStatus(500));
+    expect(fail(await loginAction(input())).error).toMatch(NEUTRAL);
+    signInWithPassword.mockResolvedValue(authErrorStatus(503, 'unexpected_failure'));
+    expect(fail(await loginAction(input())).error).toMatch(NEUTRAL);
+  });
+
+  it('an unknown / renamed gotrue code → neutral message (never credential-blaming)', async () => {
+    signInWithPassword.mockResolvedValue(authError('some_future_unknown_code'));
+    const f = fail(await loginAction(input()));
+    expect(f.error).toMatch(NEUTRAL);
+    expect(f.error).not.toMatch(CREDENTIAL);
+  });
+
+  it('only invalid_credentials gets the credential message (the funnel is precise)', async () => {
+    signInWithPassword.mockResolvedValue(authError('invalid_credentials'));
+    expect(fail(await loginAction(input())).error).toMatch(CREDENTIAL);
   });
 });
 

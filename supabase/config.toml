@@ -90,8 +90,14 @@ site_url = "http://127.0.0.1:3000"
 # (127.0.0.1) and the NEXT_PUBLIC_SITE_URL origin (localhost) are allow-listed so
 # either dev origin can complete confirm/reset. T-02-04: this allowlist is the
 # open-redirect boundary; the Wave-2 confirm route additionally constrains `next`.
+#
+# WR-02: the first entry was `https://127.0.0.1:3000` (TLS) — the dev server runs
+# plain http ([api.tls] enabled = false), so a TLS origin matched nothing the app
+# emits. Corrected to the bare http origin (the site_url / NEXT_PUBLIC_SITE_URL
+# origin), so a redirect to the origin without the /auth/confirm suffix is also
+# covered alongside the two explicit /auth/confirm landing paths.
 additional_redirect_urls = [
-  "https://127.0.0.1:3000",
+  "http://127.0.0.1:3000",
   "http://127.0.0.1:3000/auth/confirm",
   "http://localhost:3000/auth/confirm",
 ]
