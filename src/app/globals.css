@@ -4,23 +4,91 @@
  * - Design tokens live in the `@theme` block below, NOT in a `tailwind.config.js`.
  * - No autoprefixer / postcss-import (handled by the Oxide engine).
  *
- * Phase 1 is non-UI; this carries only baseline tokens. Template/dashboard themes
- * (color presets, font presets driven by portfolio settings) land in P3/P4.
+ * Phase 2 establishes the FOUNDATIONAL platform-chrome design system (the
+ * "Evergreen & Copper" identity — 02-UI-SPEC, A-2/A-3/A-4). These `@theme`
+ * tokens are CMS-chrome-only and are inherited by every later platform screen
+ * (dashboard P4, media P5, contact/SEO P6). Portfolio templates (P3/P7) MUST
+ * define their OWN scoped theme variables and MUST NOT consume these chrome
+ * tokens — the two UI layers never share tokens (UI-SPEC isolation rule).
+ *
+ * Color values are the only hex literals in the codebase; every component
+ * resolves color through these tokens (no inline hex anywhere else).
  */
 @import "tailwindcss";
 
 @theme {
-  --color-background: #ffffff;
-  --color-foreground: #0a0a0a;
+  /* ---- Neutral roles (light) ---- */
+  --color-background: #FBFAF8; /* warm near-white page canvas (overrides Phase 1 pure white) */
+  --color-surface: #FFFFFF; /* the auth card / elevated surfaces */
+  --color-surface-muted: #F2F0EC; /* inset fills, disabled inputs, info panels */
+  --color-foreground: #16181C; /* primary text */
+  --color-muted-foreground: #5B6066; /* secondary text, helper text, labels-at-rest */
+  --color-border: #E4E1DB; /* input borders, dividers, card hairline */
+  --color-border-strong: #CFCBC3; /* hover border, focus-adjacent emphasis */
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* ---- Brand (deep evergreen — identity weight) ---- */
+  --color-brand: #1B3A2E; /* wordmark + primary-button fill */
+  --color-brand-foreground: #FBFAF8; /* text/icon on brand fill */
+  --color-brand-hover: #142C23; /* primary-button hover/active */
+
+  /* ---- Accent (warm copper — the scarce 10%) ---- */
+  --color-accent: #C9683A; /* focus rings, "available", link hover, button focus halo ONLY */
+  --color-accent-foreground: #FFFFFF; /* text on accent fill (rare) */
+
+  /* ---- Semantic ---- */
+  --color-success: #1F7A4D; /* username "available", "email sent" */
+  --color-success-bg: #E7F4EC; /* success panel/interstitial tint */
+  --color-destructive: #B23A2E; /* field errors, invalid username, failed verification */
+  --color-destructive-bg: #FBEAE7; /* error banner/panel tint */
+  --color-warning: #B8791B; /* provisional-legal banner, unconfirmed-account accent */
+  --color-ring: #C9683A; /* visible focus ring (= accent); 2px outline + 2px offset */
+
+  /* ---- Radius ---- */
+  --radius-sm: 6px; /* inputs, checkbox, small chips */
+  --radius-md: 10px; /* buttons, Turnstile wrapper, inline alerts */
+  --radius-lg: 16px; /* the auth card */
+  --radius-full: 9999px; /* status dots, spinner */
+
+  /* ---- Elevation ---- */
+  --shadow-card: 0 1px 2px rgba(16, 24, 32, 0.04), 0 8px 24px -8px rgba(16, 24, 32, 0.1);
+  --shadow-focus: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-ring);
+
+  /* ---- Typography ---- */
+  --font-sans: var(--font-inter), Inter, ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-background: #0a0a0a;
-    --color-foreground: #ededed;
+    /* ---- Neutral roles (dark) ---- */
+    --color-background: #0B0C0E; /* near-black, slightly blue-cool */
+    --color-surface: #16181C;
+    --color-surface-muted: #1F2228;
+    --color-foreground: #ECEDEE;
+    --color-muted-foreground: #9BA1A8;
+    --color-border: #2A2E35;
+    --color-border-strong: #3A3F47;
+
+    /* ---- Brand (dark) ---- */
+    --color-brand: #3E7A60;
+    --color-brand-foreground: #0B0C0E;
+    --color-brand-hover: #4A8E70;
+
+    /* ---- Accent (dark) ---- */
+    --color-accent: #E08A55;
+    --color-accent-foreground: #0B0C0E;
+
+    /* ---- Semantic (dark) ---- */
+    --color-success: #46B07C;
+    --color-success-bg: #13251C;
+    --color-destructive: #E06A5C;
+    --color-destructive-bg: #2A1714;
+    --color-warning: #E0A040;
+    --color-ring: #E08A55;
+
+    /* ---- Elevation (dark) ---- */
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px -8px rgba(0, 0, 0, 0.6);
   }
 }
 
@@ -28,4 +96,6 @@ body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
+  /* Tabular numerals for username-availability + resend cooldown counters (UI-SPEC typography). */
+  font-feature-settings: "tnum";
 }
