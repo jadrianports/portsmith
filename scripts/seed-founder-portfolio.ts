@@ -83,6 +83,18 @@ function isLocalTarget(url: string): boolean {
  */
 function buildSections(): { type: string; content: unknown; visible: boolean }[] {
   const s = FOUNDER.sections;
+  // OPTION A (03-08): surface the intended-public contact email INTO the contact
+  // section content as the additive, OPTIONAL `email_public` field so the Contact
+  // section can render a `mailto:` fallback under the FROZEN `{ section }`
+  // SectionProps contract (the section never receives `data.settings`). The source
+  // of truth stays `settings.email_public`; we copy it here (the same idiom the
+  // hero uses for `resume_url`). This is additive JSONB content — no migration
+  // (CMS-08) — and is validated by the SAME Zod gate (`contactContentSchema` now
+  // carries the optional `email_public`).
+  const contactContent = {
+    ...s.contact,
+    email_public: FOUNDER.settings.email_public,
+  };
   return [
     { type: 'hero', content: s.hero, visible: true },
     { type: 'about', content: s.about, visible: true },
@@ -95,7 +107,7 @@ function buildSections(): { type: string; content: unknown; visible: boolean }[]
       content: { heading: 'Testimonials', items: [] },
       visible: false,
     },
-    { type: 'contact', content: s.contact, visible: true },
+    { type: 'contact', content: contactContent, visible: true },
   ];
 }
 

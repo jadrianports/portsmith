@@ -194,6 +194,26 @@
 }
 
 /* ============================================================================
+ * Contact (03-08) — form-field focus ring + inert-button affordance.
+ * Inline styles cannot express `:focus-visible`, and the Contact section is a
+ * Server Component (no useState), so the focus treatment lives here, scoped to
+ * `.tmpl-minimal` (two-layer isolation, D-17). All values read scoped tokens.
+ * The MAGENTA focus-ring on `:focus-visible` is the UI-SPEC §7 requirement; the
+ * button is a styled `type="button"` no-op (functional submit is P6, CONT-01/02/03).
+ * ========================================================================== */
+.tmpl-minimal .tmpl-contact-field {
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.tmpl-minimal .tmpl-contact-field:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  /* Magenta focus-ring (= --ring): 2px ring + 2px offset, PASS UI >=3:1 every surface. */
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+}
+
+/* ============================================================================
  * Reduced-motion contract (hard requirement — UI-SPEC §Motion).
  * Under `prefers-reduced-motion: reduce`, ALL animation/transition inside the
  * template is zeroed. Content is never hidden behind motion (the scroll-reveal

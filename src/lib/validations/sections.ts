@@ -146,6 +146,16 @@ export const experienceContentSchema = z.object({
 export const contactContentSchema = z.object({
   heading: z.string().max(100),
   subheading: z.string().optional(),
+  // OPTIONAL public contact email surfaced INTO the contact content so the section
+  // can render a `mailto:` fallback under the FROZEN `{ section }` SectionProps
+  // contract (03-04) — the section never receives `data.settings`, so the public
+  // email is carried here instead (the SAME additive idiom the hero uses for
+  // `resume_url`). This is purely additive on the schemaless JSONB content — NO
+  // Postgres migration (CMS-08 "new field, no migration"). The seed copies
+  // `settings.email_public` → `contact.email_public`. Profession-agnostic + optional:
+  // a contact section with no public email simply renders no mailto. Accepts a valid
+  // email, the empty string, or omission (the empty string ⇒ no mailto rendered).
+  email_public: z.email().or(z.literal('')).optional(),
 });
 
 export const blogPreviewContentSchema = z.object({
