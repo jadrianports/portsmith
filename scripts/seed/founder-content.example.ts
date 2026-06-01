@@ -22,7 +22,11 @@
  * URL fields (`resume_url`, project `live_url`/`repo_url`, the social links) are
  * validated by Zod as URLs (`z.url()`), so the placeholders here MUST be
  * shape-valid URLs (`https://example.com/REPLACE`), NOT bare `REPLACE:` strings —
- * otherwise `validateSectionContent` would throw on a placeholder run.
+ * otherwise `validateSectionContent` would throw on a placeholder run. The SAME
+ * rule applies to the EMAIL fields (`bootstrap.email`, `settings.email_public`):
+ * `auth.admin.createUser` rejects a malformed email, so the placeholders are
+ * shape-valid addresses (`replace-…@example.com`) — fill them with James's real
+ * values in the gitignored copy, but never break the format.
  *
  * Testimonials content is intentionally OMITTED (D-06): never ship placeholder
  * quotes. The seed writes the Testimonials section `visible: false` until James
@@ -116,8 +120,10 @@ export const FOUNDER: FounderContent = {
   username: 'jadrianports',
 
   bootstrap: {
-    email: 'REPLACE: founder-real-account@example.com', // local-bootstrap + profile lookup key
-    password: 'REPLACE: local-only-bootstrap-password',
+    // SHAPE-VALID email (auth.admin.createUser rejects malformed) — replace the
+    // local-part with James's real account email in the gitignored copy.
+    email: 'replace-founder-account@example.com',
+    password: 'replace-local-only-bootstrap-password',
   },
 
   profile: {
@@ -131,7 +137,7 @@ export const FOUNDER: FounderContent = {
   settings: {
     page_title: 'REPLACE: James Adrian Porter — Portfolio',
     meta_description: 'REPLACE: A short SEO description of James and what he builds.',
-    email_public: 'REPLACE: hello@example.com', // intended-public contact email
+    email_public: 'replace-hello@example.com', // intended-public contact email (shape-valid)
     github_url: 'https://github.com/REPLACE',
     linkedin_url: 'https://www.linkedin.com/in/REPLACE',
     twitter_url: undefined, // optional — set a https URL or leave undefined

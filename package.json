@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "promote-admin": "tsx scripts/promote-admin.ts"
+    "promote-admin": "tsx scripts/promote-admin.ts",
+    "seed:founder": "tsx scripts/seed-founder-portfolio.ts"
   },
   "dependencies": {
     "@marsidev/react-turnstile": "^1.5.2",
