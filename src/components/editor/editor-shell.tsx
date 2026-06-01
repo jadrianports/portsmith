@@ -41,7 +41,7 @@
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { cmsKeys } from '@/lib/query/cms-keys';
 import { useUIStore } from '@/lib/stores/uiStore';
@@ -159,10 +159,16 @@ export function EditorShell({ data, portfolioId }: EditorShellProps) {
   }, [queryClient, rawSections, sectionsKey]);
 
   // Read the section list back from the cache so reorder/visibility stay live.
+  // CACHE-ONLY QUERY (idiomatic v5): this query is intentionally never-fetch — the
+  // cache is seeded by the effect above + `initialData`, and the rail's optimistic
+  // reorder / eye-toggle write straight to the cache via `setQueryData(sectionsKey)`.
+  // `queryFn: skipToken` is the v5 way to DECLARE a cache-only query: it silences
+  // the "No queryFn was passed as an option" console error and makes any accidental
+  // refetch (e.g. an `invalidateQueries` on this key) a no-op instead of a throw,
+  // while `initialData` + `staleTime: Infinity` keep the seeded data live.
   const { data: sections = [] } = useQuery<EditorSection[]>({
     queryKey: sectionsKey,
-    // The cache is seeded above; this query never refetches (no queryFn needed for
-    // a hydrated cache — initialData mirrors the seed so the first paint is filled).
+    queryFn: skipToken,
     initialData: () =>
       rawSections.map((s) => ({
         id: s.id,
