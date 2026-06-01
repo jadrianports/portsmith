@@ -41,6 +41,42 @@ import { useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/lib/stores/uiStore';
 
+/**
+ * WR-01 — the ACTIVE-SAVE registry. The dirty dialog's "Save and continue" must
+ * actually SAVE the active panel before navigating (it used to silently discard).
+ * The active form island (SectionForm / ProfileForm) registers its save function
+ * here while mounted; the guard invokes it and only proceeds when the save
+ * RESOLVES SUCCESSFULLY (the form clears `dirty` on a resolved ok save). The save
+ * returns `{ ok }` so the guard can keep the user on a FAILED save instead of
+ * navigating away from unsaved edits.
+ */
+type ActiveSaveFn = () => Promise<{ ok: boolean }>;
+
+interface ActiveSaveState {
+  /** The active panel's save function, or null when no saveable panel is mounted. */
+  save: ActiveSaveFn | null;
+  /** Register / replace the active save fn (a mounted form calls this). */
+  setSave: (fn: ActiveSaveFn | null) => void;
+}
+
+const useActiveSaveStore = create<ActiveSaveState>((set) => ({
+  save: null,
+  setSave: (fn) => set({ save: fn }),
+}));
+
+/**
+ * Register the active panel's save function for the dirty guard's "Save and
+ * continue" (WR-01). Call from a form island; the registration is cleared on
+ * unmount so a stale handler can never run after the panel changes.
+ */
+export function useRegisterActiveSave(save: ActiveSaveFn): void {
+  const setSave = useActiveSaveStore((s) => s.setSave);
+  useEffect(() => {
+    setSave(save);
+    return () => setSave(null);
+  }, [save, setSave]);
+}
+
 /** Copy (04-UI-SPEC §14 Copywriting / Destructive-confirm — load-bearing). */
 const COPY = {
   heading: 'You have unsaved changes',
@@ -99,24 +135,24 @@ export function useGuardedNavigate(): (proceed: () => void) => void {
 export interface UnsavedChangesGuardProps {
   /** The active section's label, woven into the dialog body ("edits to {section}"). */
   sectionLabel?: string;
-  /**
-   * Optional Save handler for "Save and continue" — runs the save, then proceeds.
-   * When omitted, "Save and continue" falls back to proceeding without saving (the
-   * SectionForm's own Save remains the canonical content write); the option is kept
-   * so the dialog copy/affordance matches the UI-SPEC.
-   */
-  onSave?: () => Promise<void> | void;
 }
 
 /**
  * Mounts the `beforeunload` fallback (Path 2) and renders the single shared in-app
  * "unsaved changes" dialog (Path 1). Mount ONCE near the editor root.
+ *
+ * WR-01: "Save and continue" runs the ACTIVE panel's registered save (via
+ * `useRegisterActiveSave`) and only proceeds when the save RESOLVES SUCCESSFULLY —
+ * it never silently discards. If no save is registered (no saveable panel mounted)
+ * the dialog hides the "Save and continue" button entirely, so it can never present
+ * a primary action that promises to save and then abandons the edit.
  */
-export function UnsavedChangesGuard({ sectionLabel, onSave }: UnsavedChangesGuardProps) {
+export function UnsavedChangesGuard({ sectionLabel }: UnsavedChangesGuardProps) {
   const dirty = useUIStore((s) => s.dirty);
   const setDirty = useUIStore((s) => s.setDirty);
   const pending = useGuardState((s) => s.pending);
   const clear = useGuardState((s) => s.clear);
+  const activeSave = useActiveSaveStore((s) => s.save);
 
   // ── Path 2: arm beforeunload WHILE dirty; remove it when clean. ──
   useEffect(() => {
@@ -142,12 +178,15 @@ export function UnsavedChangesGuard({ sectionLabel, onSave }: UnsavedChangesGuar
   }
 
   async function handleSaveAndContinue() {
-    if (onSave) {
-      await onSave();
-    }
-    // The SectionForm clears `dirty` on a resolved save; proceed regardless so the
-    // navigation isn't trapped if the save path is owned by the form island.
-    runPending();
+    // WR-01: run the active panel's real save; proceed ONLY on a resolved ok save.
+    // On failure (validation/network) we KEEP the dialog open so the user does not
+    // lose their edits — the form surfaces its own field/banner errors. If no save
+    // is registered, the button is not rendered (see `canSave` below), so this is
+    // unreachable without a real save.
+    if (!activeSave) return;
+    const result = await activeSave();
+    if (result.ok) runPending();
+    // else: stay on the dialog (honest — no silent discard).
   }
 
   function handleDiscard() {
@@ -159,6 +198,9 @@ export function UnsavedChangesGuard({ sectionLabel, onSave }: UnsavedChangesGuar
   return (
     <DirtyDialog
       sectionLabel={sectionLabel}
+      // Only offer "Save and continue" when a real save is registered (WR-01 —
+      // never a button that promises to save and then discards).
+      canSave={activeSave !== null}
       onSaveAndContinue={handleSaveAndContinue}
       onDiscard={handleDiscard}
       onKeepEditing={clear}
@@ -172,11 +214,14 @@ export function UnsavedChangesGuard({ sectionLabel, onSave }: UnsavedChangesGuar
  */
 function DirtyDialog({
   sectionLabel,
+  canSave,
   onSaveAndContinue,
   onDiscard,
   onKeepEditing,
 }: {
   sectionLabel?: string;
+  /** Whether a real save is available — gates whether "Save and continue" renders. */
+  canSave: boolean;
   onSaveAndContinue: () => void;
   onDiscard: () => void;
   onKeepEditing: () => void;
@@ -265,10 +310,15 @@ function DirtyDialog({
             {COPY.keepEditing}
           </Button>
 
-          {/* Save and continue — the primary path (save, then proceed). */}
-          <Button variant="primary" onClick={onSaveAndContinue} className="sm:w-auto">
-            {COPY.saveAndContinue}
-          </Button>
+          {/* Save and continue — the primary path (save, then proceed). WR-01:
+              rendered ONLY when a real save is registered, so it never promises a
+              save it cannot perform. When absent the safe "Keep editing" + the
+              explicit "Discard changes" remain the honest choices. */}
+          {canSave ? (
+            <Button variant="primary" onClick={onSaveAndContinue} className="sm:w-auto">
+              {COPY.saveAndContinue}
+            </Button>
+          ) : null}
 
           {/* Discard changes — the ghost-destructive proceed. */}
           <button

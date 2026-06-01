@@ -23,7 +23,7 @@
  * state (it arms the CMS-07 guard); section CONTENT lives in TanStack Query, never
  * mirrored here (CLAUDE.md non-overlap).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
 import { CharCounter } from '@/components/ui/char-counter';
@@ -34,6 +34,7 @@ import { useUIStore } from '@/lib/stores/uiStore';
 
 import { FormPanelHeader } from './form-panel-header';
 import type { SaveState } from './save-button';
+import { useRegisterActiveSave } from './unsaved-guard';
 
 /** The simple section types this form edits (hero / about / contact). CMS-03. */
 export type SimpleSectionType = 'hero' | 'about' | 'contact';
@@ -111,9 +112,13 @@ export function SectionForm({ sectionId, type, initialContent, username }: Secti
     [type, initialContent, heading, subheading, bio],
   );
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (saveState === 'saving') return;
+  /**
+   * The canonical content save. Runs the server action, maps the result to the UI
+   * (saved beat / field+banner errors), and returns `{ ok }` so callers (the form
+   * submit AND the dirty guard's "Save and continue", WR-01) can branch on success.
+   */
+  const doSave = useCallback(async (): Promise<{ ok: boolean }> => {
+    if (saveState === 'saving') return { ok: false };
 
     setFieldErrors({});
     setBanner(null);
@@ -131,7 +136,7 @@ export function SectionForm({ sectionId, type, initialContent, username }: Secti
         // Resolved ok → clear dirty (Zustand) + fire the saved-&-live beat. Never
         // before the action resolves (the save is not optimistic).
         setSaveState('saved');
-        return;
+        return { ok: true };
       }
 
       // Failure: map field errors back to inputs, form-level error to the Alert,
@@ -139,10 +144,21 @@ export function SectionForm({ sectionId, type, initialContent, username }: Secti
       if (result.fieldErrors) setFieldErrors(result.fieldErrors);
       if (result.error) setBanner(result.error);
       setSaveState('dirty');
+      return { ok: false };
     } catch {
       setBanner(GENERIC_ERROR);
       setSaveState('dirty');
+      return { ok: false };
     }
+  }, [saveState, sectionId, type, buildContent, username]);
+
+  // WR-01: register this panel's save so the dirty guard's "Save and continue"
+  // performs a REAL save (and only navigates on a resolved ok save).
+  useRegisterActiveSave(doSave);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await doSave();
   }
 
   return (
