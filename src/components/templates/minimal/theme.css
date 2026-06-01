@@ -137,6 +137,38 @@
 }
 
 /* ============================================================================
+ * ABOVE-THE-FOLD HERO LOAD-REVEAL (03 verification perf fix 2026-06-01 — TMPL-04
+ * LCP ≤ 2.5s). The Hero is the page's LCP element and is ALWAYS in view, so it must
+ * NOT be gated by the JS IntersectionObserver opacity:0 reveal (that delayed the LCP
+ * text until the island hydrated + the observer fired ≈2.9s on throttled mobile —
+ * the "entrance animation on the LCP element" anti-pattern). Instead the Hero wrapper
+ * (`.tmpl-load-reveal`, rendered STATIC server-side by ScrollReveal's `priority`
+ * branch) gets this CSS-ONLY orchestrated load reveal (UI-SPEC §Motion "one
+ * orchestrated page-load reveal … via animation-delay").
+ *
+ * LCP-SAFE BY CONSTRUCTION — the Hero LCP element is STATIC (no entrance):
+ *   - opacity: 1; transform: none; animation: none — the hero (incl. the tagline <p>
+ *     and the name <h1>, the two LCP candidates) is painted at its FINAL position
+ *     from frame 1. It never fades and never MOVES.
+ *   - WHY no transform entrance either (the second 03-verification iteration): even an
+ *     opacity-STABLE translate-only entrance (translateY → 0) still defers the measured
+ *     LCP, because Lighthouse marks LCP at the moment the element reaches its FINAL
+ *     STABLE position — a 0.6s slide on the LCP text pushes LCP out by the full
+ *     animation duration even though the text was visible at FCP. So the LCP element
+ *     gets ZERO entrance motion: it is locked at its resting box and paints once.
+ *   - The UI-SPEC's "orchestrated page-load reveal" is honored as the gentle per-section
+ *     fade-up for the BELOW-the-fold sections (`.tmpl-reveal`); the above-the-fold Hero
+ *     simply appears (an instant hero is the standard LCP-correct treatment).
+ *   - CLS = 0: nothing animates here — the element occupies its final box immediately.
+ * ========================================================================== */
+.tmpl-minimal .tmpl-load-reveal {
+  /* Static, fully visible, final position — no entrance, never gated by JS/opacity. */
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+/* ============================================================================
  * Hero ambient keyframes (03-05) — the "available" dot pulse + the scroll-cue bob.
  * CSS-only, perf-cheap, and ALWAYS disabled under reduced-motion by the blanket
  * reset below (UI-SPEC §Motion "Ambient: … all OFF under reduced-motion"). Scoped

@@ -35,7 +35,16 @@ export const clashDisplay = localFont({
 
 /**
  * General Sans (Fontshare / ITF-FFL) — Body face. Weights 400 (default copy) +
- * 600 (emphasis — NOT italics-as-bold). Not preloaded (below-the-fold body copy).
+ * 600 (emphasis — NOT italics-as-bold).
+ *
+ * PRELOADED (03 verification perf fix 2026-06-01 — TMPL-04 LCP ≤ 2.5s): the hero
+ * TAGLINE `<p>` (the measured LCP element) is rendered in this Body face. With
+ * `display: 'swap'` and NO preload, the tagline first paints in the fallback face
+ * (FCP) and then RE-RENDERS the instant General Sans arrives — and that font-swap
+ * repaint RESETS the LCP timing to when the web font loads, which (un-preloaded)
+ * is late = the ~2.8s LCP render-delay. Preloading the Body face so it is fetched
+ * with the critical assets removes that swap-repaint from the LCP path. Still
+ * `latin`-subset + `swap` + the TMPL-04 ≤2-weights budget (no extra weight added).
  */
 export const generalSans = localFont({
   src: [
@@ -44,7 +53,7 @@ export const generalSans = localFont({
   ],
   variable: '--font-body',
   display: 'swap',
-  preload: false,
+  preload: true,
 });
 
 /**

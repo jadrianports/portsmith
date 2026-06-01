@@ -79,8 +79,18 @@ export default function MinimalTemplate({ data }: { data: PortfolioData }) {
 
       {/* The 7 sections IN THE D-05 ORDER. ScrollReveal (a 03-10 island) is wired
           here as template chrome so the per-section fade-up belongs to index.tsx —
-          the section components own only their content/hide-if-empty logic. */}
-      <ScrollReveal as="section">
+          the section components own only their content/hide-if-empty logic.
+
+          LCP / above-the-fold (03 verification perf fix 2026-06-01): the Hero is the
+          page's LCP element and is always in view, so it gets `priority` — it renders
+          a STATIC, fully-visible wrapper (NOT gated by JS opacity:0 / hydration), so
+          the hero text paints at FCP instead of after the island hydrates + the
+          IntersectionObserver fires (~2.9s render-delay = the "entrance animation on
+          the LCP element" anti-pattern). Its entrance is the CSS-only, opacity-stable
+          `.tmpl-load-reveal` (theme.css, translate-only — never starts at opacity:0).
+          The 6 below-the-fold sections keep the JS fade-up-on-scroll + the
+          reduced-motion / no-JS visible fallback (d6e4c7a). */}
+      <ScrollReveal as="section" priority>
         <Hero section={sectionOfType(sections, 'hero')} />
       </ScrollReveal>
       <ScrollReveal as="section">
