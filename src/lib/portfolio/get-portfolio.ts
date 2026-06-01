@@ -55,25 +55,43 @@ export const getPortfolioByUsername = cache(
       { auth: { persistSession: false } },
     );
 
+    // WR-02 (03-REVIEW): distinguish a GENUINE not-found (no row → returns null →
+    // `notFound()`, which ISR may legitimately cache) from a REAL read error
+    // (network blip, RLS misconfig, view-grant revocation, Postgres hiccup). On a
+    // real error we THROW so Next renders the error boundary and does NOT cache a
+    // hard 404 for a published portfolio for up to `revalidate` (3600s). Only a
+    // clean missing/unpublished row yields `null`. Each of the four reads inspects
+    // `.error` separately from `.data`. This keeps the path cookie-less + ISR-safe
+    // (no request-time dynamism is introduced; the client is still anon/no-session).
+
     // (1) public_profiles already filters to published / non-deleted / non-locked.
-    // maybeSingle() returns null (not throw) when there is no row → notFound().
-    const { data: profile } = await db
+    // maybeSingle() returns { data: null, error: null } when there is no row.
+    const { data: profile, error: profileError } = await db
       .from('public_profiles')
       .select('*')
       .eq('username', username)
       .maybeSingle();
-    if (!profile || !profile.id) return null;
+    if (profileError) {
+      throw new Error(`public_profiles read failed: ${profileError.message}`);
+    }
+    if (!profile || !profile.id) return null; // genuine not-found / unpublished
 
     // (2) the portfolio for that user.
-    const { data: portfolio } = await db
+    const { data: portfolio, error: portfolioError } = await db
       .from('public_portfolios')
       .select('*')
       .eq('user_id', profile.id)
       .maybeSingle();
-    if (!portfolio || !portfolio.id) return null;
+    if (portfolioError) {
+      throw new Error(`public_portfolios read failed: ${portfolioError.message}`);
+    }
+    if (!portfolio || !portfolio.id) return null; // genuine not-found
 
     // (3) settings + visible sections (sorted by sort_order) in parallel.
-    const [{ data: settings }, { data: sections }] = await Promise.all([
+    const [
+      { data: settings, error: settingsError },
+      { data: sections, error: sectionsError },
+    ] = await Promise.all([
       db
         .from('public_portfolio_settings')
         .select('*')
@@ -85,7 +103,13 @@ export const getPortfolioByUsername = cache(
         .eq('portfolio_id', portfolio.id)
         .order('sort_order', { ascending: true }),
     ]);
-    if (!settings) return null;
+    if (settingsError) {
+      throw new Error(`public_portfolio_settings read failed: ${settingsError.message}`);
+    }
+    if (sectionsError) {
+      throw new Error(`public_sections read failed: ${sectionsError.message}`);
+    }
+    if (!settings) return null; // genuine not-found
 
     return {
       profile,
