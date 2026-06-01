@@ -50,10 +50,18 @@ import type { OwnerPortfolioData } from '@/lib/portfolio/get-portfolio-owner';
 
 import { CompletenessChecklist } from './completeness-checklist';
 import { ItemManager, type ItemSectionType } from './item-card';
+import { ProfileForm } from './profile-form';
 import { PublishToggle } from './publish-toggle';
 import { SectionForm, type SimpleSectionType } from './section-form';
 import { SectionList, type EditorSection } from './section-list-row';
 import { UnsavedChangesGuard, useGuardedNavigate } from './unsaved-guard';
+
+/**
+ * The sentinel `activeSectionId` for the PROFILE / IDENTITY panel (WR-02). The
+ * profile is not a `sections` row, so it gets its own non-UUID id; selecting the
+ * "Profile" rail entry sets this, routing the panel to the ProfileForm.
+ */
+const PROFILE_PANEL_ID = '__profile__';
 
 /** The simple (single-form) section types handled by SectionForm. */
 const SIMPLE_TYPES = new Set<string>(['hero', 'about', 'contact']);
@@ -167,6 +175,8 @@ export function EditorShell({ data, portfolioId }: EditorShellProps) {
 
   // The active section's type + content (for the panel). Look up the raw row.
   const activeRaw = rawSections.find((s) => s.id === activeSectionId) ?? null;
+  // WR-02: whether the PROFILE / IDENTITY panel is the active selection.
+  const profileActive = activeSectionId === PROFILE_PANEL_ID;
 
   // Advisory completeness (pure, data-derived — never a publish gate, D-P4-08).
   const checklistItems = useMemo(
@@ -192,8 +202,17 @@ export function EditorShell({ data, portfolioId }: EditorShellProps) {
   return (
     <div className="flex min-h-dvh flex-col bg-background font-sans text-foreground">
       {/* The CMS-07 dirty guard: arms beforeunload while dirty + renders the
-          in-app "unsaved changes" dialog when a guarded navigation is intercepted. */}
-      <UnsavedChangesGuard sectionLabel={activeRaw ? titleFor(activeRaw.type, activeRaw.content) : undefined} />
+          in-app "unsaved changes" dialog when a guarded navigation is intercepted.
+          "Save and continue" runs the active panel's registered save (WR-01). */}
+      <UnsavedChangesGuard
+        sectionLabel={
+          profileActive
+            ? 'Profile'
+            : activeRaw
+              ? titleFor(activeRaw.type, activeRaw.content)
+              : undefined
+        }
+      />
 
       {/* ── Header bar (surface, hairline) — H1 + status + Preview + Publish ── */}
       <header className="flex flex-wrap items-center gap-4 border-b border-border bg-surface px-4 py-3 sm:px-6">
@@ -238,6 +257,14 @@ export function EditorShell({ data, portfolioId }: EditorShellProps) {
           aria-label="Sections"
         >
           <div className="flex flex-col gap-4">
+            {/* PROFILE / IDENTITY entry (WR-02 — CMS-02 reachable). Sits at the top
+                of the rail; selecting it routes the panel to the ProfileForm. The
+                selection is dirty-guarded like every other in-app navigation. */}
+            <ProfileRailEntry
+              active={profileActive}
+              onSelect={() => selectSection(PROFILE_PANEL_ID)}
+            />
+
             <RailSectionList
               sections={sections}
               portfolioId={portfolioId}
@@ -275,7 +302,20 @@ export function EditorShell({ data, portfolioId }: EditorShellProps) {
           ) : null}
 
           <div className="mx-auto w-full max-w-2xl">
-            {activeRaw ? (
+            {profileActive ? (
+              // WR-02: the PROFILE / IDENTITY editor — the UI caller for
+              // saveProfileAction (CMS-02 / D-P4-05).
+              <ProfileForm
+                key={PROFILE_PANEL_ID}
+                initial={{
+                  display_name: data.profile.display_name,
+                  headline: data.profile.headline,
+                  avatar_url: data.profile.avatar_url,
+                  resume_url: data.profile.resume_url,
+                }}
+                username={username}
+              />
+            ) : activeRaw ? (
               <SectionPanel
                 key={activeRaw.id}
                 sectionId={activeRaw.id}
@@ -317,6 +357,42 @@ function RailSectionList({
 }) {
   void onSelect; // selection happens inside SectionListRow; kept for symmetry.
   return <SectionList sections={sections} portfolioId={portfolioId} username={username} />;
+}
+
+/**
+ * The PROFILE / IDENTITY rail entry (WR-02). A selectable row, styled like a
+ * section row, that routes the panel to the ProfileForm. Carries the active brand
+ * marker when selected (parity with the section rows' selected state).
+ */
+function ProfileRailEntry({
+  active,
+  onSelect,
+}: {
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      className={
+        'group relative flex min-h-11 items-center gap-2 rounded-md border border-border ' +
+        'bg-surface px-3 py-2 text-left outline-none transition-colors ' +
+        'hover:border-border-strong hover:text-accent ' +
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+        'motion-reduce:transition-none'
+      }
+    >
+      {active ? (
+        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] rounded-l-md bg-brand" />
+      ) : null}
+      <span className="text-sm font-semibold text-foreground">Profile</span>
+      <span className="ml-auto text-[13px] leading-tight text-muted-foreground">
+        Name · headline · links
+      </span>
+    </button>
+  );
 }
 
 /** Route a section to its per-type editor (SectionForm vs ItemManager vs note). */
