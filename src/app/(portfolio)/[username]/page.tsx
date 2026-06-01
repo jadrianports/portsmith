@@ -67,6 +67,29 @@ export async function generateMetadata({
   params: Promise<{ username: string }>;
 }): Promise<Metadata> {
   const { username } = await params; // Next 16: params is a Promise — MUST await.
+
+  // ┌───────────────────────────────────────────────────────────────────────────┐
+  // │ DRAFT-MODE PREVIEW METADATA (mirrors the page body's draftMode() branch):    │
+  // │ read `draftMode()` EXACTLY as the page does (`const { isEnabled } = await     │
+  // │ draftMode()`), so this does NOT introduce a new always-on dynamic read — Next │
+  // │ only takes this branch for the cookie-bearing OWNER request; every anonymous  │
+  // │ visitor skips it and keeps the cookie-less public read below, so `/[username]`│
+  // │ stays `● (SSG)` / ISR (the load-bearing 04-07 / D-22 invariant). In preview   │
+  // │ the page BODY renders the owner's UNPUBLISHED portfolio, so the public read   │
+  // │ (null for unpublished) would mislabel the tab "Not found"; instead we title   │
+  // │ it as a preview and FORCE `noindex` (a preview must never be indexable).      │
+  // └───────────────────────────────────────────────────────────────────────────┘
+  const { isEnabled } = await draftMode(); // Next 16: draftMode() is async — MUST await.
+  if (isEnabled) {
+    const ownerData = await getPortfolioOwnerByUsername(username);
+    const previewName = ownerData?.profile.display_name ?? username;
+    return {
+      title: `Preview — ${previewName}`,
+      robots: { index: false, follow: false }, // preview is never indexable.
+    };
+  }
+
+  // PUBLIC PATH — UNCHANGED, cookie-LESS, ISR-cacheable (lines below this comment).
   const data = await getPortfolioByUsername(username); // cache() dedupes with the body.
   if (!data) {
     // Missing/unpublished: a non-indexable, detail-free title (the page 404s).
