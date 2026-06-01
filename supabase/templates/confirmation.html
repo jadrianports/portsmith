@@ -1,0 +1,30 @@
+<!--
+  Portsmith — Confirm-signup email template (AUTH-02 / AUTH-06).
+
+  Pitfall 1 / Pitfall 2 / A4: the action link is the token_hash form pointing at
+  the bare /auth/confirm path. The Wave-2 /auth/confirm route reads `token_hash`
+  + `type` and calls `verifyOtp` to establish the session.
+
+  HARD RULES (verified by acceptance criteria — do NOT change to the alternatives):
+    - USE the token_hash + /auth/confirm link below.
+    - Do NOT switch to the default Supabase magic-link variable (breaks verifyOtp).
+    - Do NOT switch to a PKCE code-query link (that path needs exchangeCodeForSession).
+
+  {{ .SiteURL }} resolves to config.toml [auth] site_url; /auth/confirm must be in
+  additional_redirect_urls (it is). `next` is constrained to internal paths by the
+  Wave-2 handler (T-02-04 open-redirect mitigation).
+-->
+<h2>Confirm your Portsmith account</h2>
+
+<p>Welcome to Portsmith. Confirm your email address to finish creating your account and head to your dashboard.</p>
+
+<p>
+  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/dashboard">
+    Confirm my email
+  </a>
+</p>
+
+<p>If the button doesn't work, copy and paste this link into your browser:</p>
+<p>{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/dashboard</p>
+
+<p>If you didn't create a Portsmith account, you can safely ignore this email.</p>

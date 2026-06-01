@@ -85,8 +85,16 @@ enabled = true
 # constructing URLs used in emails.
 site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to
-# post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# post authentication. The `/auth/confirm` entries are the token_hash
+# confirm/recovery landing path (Pitfall 1 / AUTH-06); both the site_url origin
+# (127.0.0.1) and the NEXT_PUBLIC_SITE_URL origin (localhost) are allow-listed so
+# either dev origin can complete confirm/reset. T-02-04: this allowlist is the
+# open-redirect boundary; the Wave-2 confirm route additionally constrains `next`.
+additional_redirect_urls = [
+  "https://127.0.0.1:3000",
+  "http://127.0.0.1:3000/auth/confirm",
+  "http://localhost:3000/auth/confirm",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum
 # 604,800 (1 week).
 jwt_expiry = 3600
@@ -106,7 +114,22 @@ enable_signup = true
 # confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# AUTH-02 / AUTH-06: email confirmation is the auth gate — users must click the
+# token_hash link before they can act as confirmed.
+enable_confirmations = true
+
+# Confirm-signup and Reset-password email templates (Pitfall 1 / Pitfall 2 / A4).
+# Both templates emit the token_hash form pointing at /auth/confirm so the
+# Wave-2 route exchanges the token via `verifyOtp` (NOT the PKCE `?code=` /
+# `exchangeCodeForSession` path, and NOT `{{ .ConfirmationURL }}`). T-02-03:
+# token_hash is single-use + server-verified.
+[auth.email.template.confirmation]
+subject = "Confirm your Portsmith account"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Portsmith password"
+content_path = "./supabase/templates/recovery.html"
 
 # Use an external OAuth provider. The full list of providers are:
 # `apple`, `azure`, `bitbucket`, `discord`, `facebook`, `github`, `gitlab`,

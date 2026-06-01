@@ -1,0 +1,30 @@
+<!--
+  Portsmith — Reset-password (recovery) email template (AUTH-04).
+
+  Pitfall 1 / Pitfall 2 / A4: the action link is the token_hash form pointing at
+  the bare /auth/confirm path with type=recovery. The Wave-2 /auth/confirm route
+  reads `token_hash` + `type=recovery`, calls `verifyOtp`, and routes the user to
+  /update-password — so there is intentionally NO `next` param here.
+
+  HARD RULES (verified by acceptance criteria — do NOT change to the alternatives):
+    - USE the token_hash + /auth/confirm link below (type=recovery, no next param).
+    - Do NOT switch to the default Supabase magic-link variable (breaks verifyOtp).
+    - Do NOT switch to a PKCE code-query link (that path needs exchangeCodeForSession).
+
+  T-02-03: token_hash is single-use + server-verified. T-02-05: reset messaging is
+  enumeration-safe at the Wave-2 action layer (this template carries no existence signal).
+-->
+<h2>Reset your Portsmith password</h2>
+
+<p>We received a request to reset the password for this Portsmith account. Click below to choose a new password.</p>
+
+<p>
+  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery">
+    Reset my password
+  </a>
+</p>
+
+<p>If the button doesn't work, copy and paste this link into your browser:</p>
+<p>{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery</p>
+
+<p>If you didn't request a password reset, you can safely ignore this email — your password won't change.</p>
