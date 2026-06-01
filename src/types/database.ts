@@ -857,6 +857,10 @@ export type Database = {
         Returns: boolean
       }
       profile_is_public: { Args: { p_user_id: string }; Returns: boolean }
+      reorder_sections: {
+        Args: { p_ordered_ids: string[]; p_portfolio_id: string }
+        Returns: undefined
+      }
       request_account_deletion: { Args: never; Returns: undefined }
     }
     Enums: {

@@ -15,15 +15,20 @@
  *      unverified, spoofable cookie-session getter. A null claim ⇒
  *      { ok:false, 'Not signed in.' }. Drives the username for the revalidate
  *      (the identity, never the request host — PUB-03 / T-04-05c).
- *   2. createClient() write — authenticated, under RLS. Pitfall 6: the action
- *      takes the FULL ordered id list and writes EACH row's new contiguous
- *      `sort_order` 0..n — never just the moved row. Writing a single row
- *      leaves duplicate / gapped orders that corrupt the public read (which
- *      sorts `sort_order ASC` — get-portfolio.ts). The owner's
- *      `sections.own_all` policy + `.eq('id', id)` scope every UPDATE to the
- *      caller's own rows; a cross-tenant id silently affects 0 rows
- *      (T-04-05a, proven by tests/integration/cms/reorder-visibility.test.ts).
- *      NEVER the service-role client for a user edit.
+ *   2. ATOMIC reorder via the `reorder_sections` RPC (WR-04) — a single
+ *      SECURITY INVOKER function (migration 007) that sets every named row's
+ *      contiguous 0-based `sort_order` in ONE statement, so all rows commit or
+ *      none do. This replaces the former per-row UPDATE loop, whose mid-loop
+ *      failure could leave duplicate / gapped orders that corrupt the public
+ *      read (which sorts `sort_order ASC` — get-portfolio.ts). Pitfall 6 still
+ *      holds: pass the FULL ordered id list (index → new sort_order), never just
+ *      the moved row. The RPC runs as the CALLER, so the `sections.own_all` RLS
+ *      policy + the `portfolio_id = p_portfolio_id` predicate scope the write to
+ *      the owner's own portfolio; a cross-tenant id matches no row (T-04-05a,
+ *      proven by tests/integration/cms/reorder-visibility.test.ts). The
+ *      `p_portfolio_id` is resolved SERVER-SIDE from the verified identity (the
+ *      caller's own portfolio under RLS), never trusted from the client. NEVER
+ *      the service-role client for a user edit.
  *   3. revalidatePath('/' + username) — on-demand ISR purge so the PUBLISHED
  *      public page reflects the new order within seconds (D-P4-01). LITERAL
  *      path, NO second arg (RESEARCH Pitfall 1 / the CLAUDE.md correction —
@@ -33,7 +38,8 @@
  *
  * Source: action shape from src/lib/cms/save-section-action.ts (SHARED-A) +
  * src/lib/auth/reset-actions.ts updatePassword (the verified-claims-then-write
- * shape); revalidatePath signature [VERIFIED: Next 16.2.6].
+ * shape); the atomic `reorder_sections` RPC from migration 007 (WR-04);
+ * revalidatePath signature [VERIFIED: Next 16.2.6].
  */
 import { revalidatePath } from 'next/cache';
 
@@ -77,19 +83,30 @@ export async function reorderSectionsAction(
     return { ok: true };
   }
 
-  // 2) Write each row's new contiguous sort_order (0..n) under RLS (Pitfall 6 —
-  //    ALL affected rows, never just the moved one). RLS + .eq('id', id) scope
-  //    every UPDATE to the owner; a cross-tenant id changes 0 rows (T-04-05a).
+  // 2) Resolve the caller's OWN portfolio id SERVER-SIDE under RLS (never trusted
+  //    from the client). The portfolios row is owner-scoped, so this yields only
+  //    the caller's own portfolio; the RPC then scopes the reorder to it.
   const supabase = await createClient();
-  for (let sortOrder = 0; sortOrder < orderedIds.length; sortOrder++) {
-    const { error } = await supabase
-      .from('sections')
-      .update({ sort_order: sortOrder })
-      .eq('id', orderedIds[sortOrder]);
-    if (error) return { ok: false, error: REORDER_FAILED };
-  }
+  const { data: portfolioRow, error: portfolioError } = await supabase
+    .from('portfolios')
+    .select('id')
+    .eq('user_id', sub) // RLS scopes to the owner; WR-05: `sub` guaranteed present.
+    .maybeSingle();
+  if (portfolioError) return { ok: false, error: REORDER_FAILED };
+  const portfolioId = (portfolioRow as { id?: string } | null)?.id;
+  if (!portfolioId) return { ok: false, error: REORDER_FAILED };
 
-  // 3) Resolve the owner username (prefer the dashboard-passed value; else read
+  // 3) ATOMIC reorder via the SECURITY INVOKER RPC (WR-04 / migration 007): one
+  //    statement sets every named row's contiguous 0-based sort_order, all-or-
+  //    nothing. RLS + the p_portfolio_id predicate scope it to the owner; a
+  //    cross-tenant id matches no row (Pitfall 6 — pass the FULL ordered list).
+  const { error } = await supabase.rpc('reorder_sections', {
+    p_portfolio_id: portfolioId,
+    p_ordered_ids: orderedIds,
+  });
+  if (error) return { ok: false, error: REORDER_FAILED };
+
+  // 4) Resolve the owner username (prefer the dashboard-passed value; else read
   //    the verified profile row — NEVER the request host, PUB-03) and revalidate
   //    the public page so the new order is live within seconds (D-P4-01).
   let resolvedUsername = username;
