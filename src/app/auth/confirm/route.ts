@@ -18,13 +18,28 @@
  *     a single generic redirect that NEVER leaks which token or type failed
  *     (Pitfall 3 / T-02-15).
  *
- * Security — open-redirect hardening (Security A5 / T-02-12): `next` is an
+ * Security — open-redirect hardening (Security A5 / T-02-12 / WR-03): `next` is an
  * UNTRUSTED query parameter. It is constrained to an internal, same-origin,
  * absolute-path string (must start with a single `/`, must not start with `//`
  * or `/\`, and must not parse as an absolute URL). Anything else falls back to
- * `/dashboard`. The redirect URL is built from the request's own origin with the
- * query string stripped, so an attacker cannot smuggle an external host or carry
- * the token forward.
+ * `/dashboard`.
+ *
+ * The redirect is RELATIVE (WR-03): we emit the validated PATH as the `Location`
+ * header (a 303 with a bare `/dashboard`-style value) and let the BROWSER resolve
+ * it against the actual request origin. This is the fix for two compounding
+ * problems the earlier absolute-URL form had:
+ *   - it built the redirect origin from the untrusted `Host` header → a classic
+ *     open-redirect (a request with `Host: attacker.example` bounced the
+ *     just-authenticated user to `https://attacker.example/dashboard`);
+ *   - but it COULD NOT simply adopt the server's normalized host either, because
+ *     under `next dev` the confirm email lands on 127.0.0.1:3000 while the server
+ *     normalizes to localhost:3000 — two DISTINCT cookie origins, so an absolute
+ *     redirect to the normalized host would land the browser on a different origin
+ *     than the one verifyOtp wrote the session cookie to (no session → bounce to
+ *     /login).
+ * A relative Location resolves against the origin the browser is ALREADY on (the
+ * verifyOtp cookie's origin), so it neither trusts the Host header nor drops the
+ * dev cookie. The token query is never carried forward (we emit only the path).
  *
  * NOTE on location: this handler lives at the BARE `/auth/confirm` path, NOT
  * inside the `(auth)` route group — the email-template URL must match this exact
@@ -79,6 +94,16 @@ function safeInternalPath(raw: string | null): string | null {
   return raw;
 }
 
+/**
+ * Emit a RELATIVE 303 redirect (WR-03). `path` is an already-validated internal
+ * absolute path (begins with a single `/`); the browser resolves it against the
+ * request origin it is already on, so we never trust the `Host` header and never
+ * drop the verifyOtp cookie by hopping origins. The token query is never carried.
+ */
+function relativeRedirect(path: string): NextResponse {
+  return new NextResponse(null, { status: 303, headers: { Location: path } });
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const token_hash = searchParams.get('token_hash');
@@ -90,43 +115,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ? (rawType as EmailOtpType)
       : null;
 
-  // Build every redirect from the request's own origin with the query stripped,
-  // so neither the token nor an attacker-supplied host is ever carried forward.
-  //
-  // ORIGIN FIDELITY (load-bearing — keeps the verifyOtp cookie usable): under
-  // `next dev` the request can arrive on one host (e.g. 127.0.0.1:3000, the
-  // config.toml site_url the confirm email carries) while `request.nextUrl`
-  // normalizes to the server's bound host (localhost:3000). Redirecting to the
-  // normalized host would land the browser on a DIFFERENT cookie origin than the
-  // one verifyOtp just wrote the session to — so the very next request (the
-  // dashboard) sees no session and bounces to /login. We therefore anchor the
-  // redirect to the CLIENT's actual `Host` header (same-origin only — we keep the
-  // scheme + only swap the host/path, never accept an off-origin target), so the
-  // post-confirm navigation stays on the cookie's origin.
-  const redirectTo = request.nextUrl.clone();
-  redirectTo.search = '';
-  const hostHeader = request.headers.get('host');
-  if (hostHeader) {
-    // Same-origin only: keep the request scheme, adopt the real client host. The
-    // pathname is set below from the allowlisted next/recovery/login values, so no
-    // attacker-controlled host or path can be smuggled here.
-    redirectTo.host = hostHeader;
-  }
-
   if (token_hash && type) {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (!error) {
-      redirectTo.pathname =
+      // The destination is an allowlisted INTERNAL path (recovery / validated next
+      // / default), emitted as a RELATIVE Location so the browser stays on the
+      // verifyOtp cookie's origin (no Host trust, no cross-origin cookie drop).
+      const destination =
         type === 'recovery'
           ? RECOVERY_NEXT
           : (safeInternalPath(searchParams.get('next')) ?? DEFAULT_NEXT);
-      return NextResponse.redirect(redirectTo);
+      return relativeRedirect(destination);
     }
   }
 
   // Generic failure — never leak which token/type failed (Pitfall 3 / T-02-15).
-  redirectTo.pathname = '/login';
-  redirectTo.searchParams.set('error', 'auth');
-  return NextResponse.redirect(redirectTo);
+  // A relative path with the generic error flag.
+  return relativeRedirect('/login?error=auth');
 }
