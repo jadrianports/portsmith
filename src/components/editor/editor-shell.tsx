@@ -122,7 +122,14 @@ export function EditorShell({ data, portfolioId }: EditorShellProps) {
   // Seed TanStack Query with the RSC-loaded section list + each section's content
   // ONCE on mount (server data lives in the query cache, never Zustand). The rail
   // reads `cmsKeys.sections` so the optimistic reorder/visibility flips update it.
-  const sectionsKey = cmsKeys.sections(portfolioId);
+  //
+  // MEMOIZED key (load-bearing): `cmsKeys.sections(portfolioId)` returns a FRESH
+  // tuple every call. Used raw in the seed-effect deps below it would make the
+  // effect's reference-compared deps change on EVERY render, so the effect (which
+  // calls setQueryData → re-render) would re-run forever ("Maximum update depth
+  // exceeded"). Memoizing on `portfolioId` gives the key a stable identity so the
+  // effect runs only when the portfolio (or its loaded rows) actually change.
+  const sectionsKey = useMemo(() => cmsKeys.sections(portfolioId), [portfolioId]);
   useEffect(() => {
     const editorSections: EditorSection[] = rawSections.map((s) => ({
       id: s.id,
