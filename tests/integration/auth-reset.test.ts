@@ -33,7 +33,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { isRecoverySession } from '@/lib/auth/reset-actions';
+import { isRecoverySession } from '@/lib/auth/recovery-session';
 
 import {
   adminClient,

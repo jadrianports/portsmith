@@ -43,36 +43,13 @@
  * request, `/dashboard` for the update). Returning rather than calling `redirect()`
  * keeps the surface symmetric with login-action / signup-action.
  */
+import { isRecoverySession } from '@/lib/auth/recovery-session';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 import { resetRequestSchema, updatePasswordSchema } from '@/lib/validations';
 
-/**
- * The `amr` (authentication methods reference) entries gotrue stamps on a session
- * minted by the password-RECOVERY OTP. A `verifyOtp({ type: 'recovery' })` session
- * carries `{ method: 'otp' }` in this gotrue version; older/other builds may label
- * it `'recovery'`. A normal `signInWithPassword` session carries `{ method:
- * 'password' }`, which is exactly what this gate must reject.
- */
-const RECOVERY_AMR_METHODS = new Set(['otp', 'recovery']);
-
-/**
- * True iff the verified claims describe a password-RECOVERY session — i.e. some
- * `amr` entry's `method` is a recovery/otp method (CR-01). Returns false for a
- * normal password session, for claims without an `amr` array, and for null/
- * undefined/malformed input. Exported so the integration suite can pin the exact
- * gate against REAL claims from the live stack (recovery vs password session).
- */
-export function isRecoverySession(claims: unknown): boolean {
-  if (!claims || typeof claims !== 'object') return false;
-  const amr = (claims as { amr?: unknown }).amr;
-  if (!Array.isArray(amr)) return false;
-  return amr.some(
-    (entry) =>
-      typeof entry === 'object' &&
-      entry !== null &&
-      RECOVERY_AMR_METHODS.has((entry as { method?: unknown }).method as string),
-  );
-}
+// `isRecoverySession` (the CR-01 recovery-session predicate) lives in the plain
+// `./recovery-session` module — a `'use server'` module may only export async
+// functions in the Next 16 production build, and this predicate is synchronous.
 
 /** Per-field validation messages for the reset-request form. */
 export type RequestResetFieldErrors = Partial<Record<'email', string>>;

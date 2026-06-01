@@ -57,8 +57,8 @@ vi.mock('next/headers', () => ({
 }));
 
 // Import AFTER the mocks are registered.
+import { isRecoverySession } from '@/lib/auth/recovery-session';
 import {
-  isRecoverySession,
   requestReset,
   updatePassword,
   type RequestResetResult,
