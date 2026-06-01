@@ -1,0 +1,127 @@
+/*
+ * Scoped theme tokens for the `minimal` / founder template — "Midnight Outrun".
+ *
+ * TWO-LAYER UI ISOLATION (D-17, SHARED-D, RESEARCH Pitfall 4 + Threat T-03-13):
+ * This file declares the template's OWN tokens scoped to the `.tmpl-minimal` root.
+ * It shares NOTHING with the platform-chrome design tokens in `src/app/globals.css`
+ * (Evergreen/Copper, CMS-only). There is deliberately:
+ *   - no Tailwind at-rule theme block here (chrome owns that; the template uses
+ *     plain scoped CSS custom properties instead).
+ *   - no reference to any chrome color custom property (the `color-` prefixed ones).
+ *   - no chrome UI font (the chrome sans face is forbidden inside the template).
+ * Every other template file reads `var(--token)` — this file is the SOLE token source,
+ * so it is the ONLY place hardcoded hex values live in the template.
+ *
+ * Token values are the approved UI-SPEC contract ("Midnight Outrun" DARK / "Miami Day"
+ * LIGHT — both WCAG-AA-verified 2026-06-01). DARK is the default set (theme_mode
+ * defaults `dark`); the LIGHT set activates via the `[data-template-theme='light']`
+ * attribute (D-16: "load both, switch via CSS — never a conditional import").
+ *
+ * CHROME-GUTTER FIX (Pitfall 4): the `.tmpl-minimal` root sets `background: var(--bg)`
+ * + `min-height: 100vh` so the template paints its OWN full-bleed canvas; the
+ * `(portfolio)` route-group layout additionally neutralizes the chrome `body`
+ * background for that group only (see (portfolio)/layout.tsx).
+ */
+
+/* ============================================================================
+ * DARK — "Midnight Outrun" (primary / default). theme_mode defaults `dark`.
+ * ========================================================================== */
+.tmpl-minimal {
+  /* Surfaces — deep midnight indigo-purple (bluer/purpler than chrome's #0B0C0E). */
+  --bg: #0c0b1e; /* page canvas */
+  --surface: #16122e; /* elevated cards / contact panel */
+  --surface-muted: #1e1840; /* inset fills, tech-chip / skill-group panels */
+
+  /* Foreground. */
+  --fg: #f0ecfb; /* primary text — slight lavender-white (16.72:1 on bg) */
+  --muted-fg: #a39dc4; /* muted-body / meta / dates (7.56:1 on bg) */
+
+  /* Borders — decorative hairlines (low-contrast by design, WCAG 1.4.11 exempt). */
+  --border: #2a2350;
+  --border-strong: #3d3470;
+
+  /* Accents — the synthwave system (2 primary + sparing details). */
+  --accent: #ff2d95; /* PRIMARY hot magenta — CTA fill/glow, link-hover, dot, active-nav */
+  --accent-cyan: #2de2e6; /* SECONDARY electric cyan — ghost interactive, chips, toggle ring */
+  --accent-gold: #ffd23f; /* DETAIL gold (sparing) — "Core" marker, sun-line. NEVER body/fills */
+  --accent-violet: #9d5cff; /* BRIDGE violet — sunset mid-stop, glow gradients (large/decorative) */
+  --accent-orange: #ff901f; /* sunset gradient stop ONLY (atmosphere, never text/UI) */
+
+  --ring: #ff2d95; /* focus ring = magenta (PASS UI >=3:1 on every surface) */
+  --success: #34d399;
+  --destructive: #fb7185; /* contact form-shell error state only */
+
+  /* Sunset gradient — THE signature (hero name text-clip, retro-sun arc, horizon glow). */
+  --sunset-gradient: linear-gradient(
+    90deg,
+    #ffd23f 0%,
+    #ff901f 25%,
+    #ff2d95 50%,
+    #c026d3 75%,
+    #8c1eff 100%
+  );
+
+  /* Radius — the template's OWN scale (distinct from chrome). */
+  --radius-sm: 8px; /* tech-chips, small inputs, tier pills */
+  --radius-md: 10px; /* buttons, form fields */
+  --radius-lg: 14px; /* project/testimonial cards, contact panel */
+  --radius-full: 9999px; /* status dot, avatar, toggle knob */
+
+  /* The template owns its full-bleed canvas (no chrome gutter behind the scroll). */
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+}
+
+/* ============================================================================
+ * LIGHT — "Miami Day" (first-class designed inversion, not a fallback).
+ * Activated by the `data-template-theme='light'` attribute on the same root.
+ * Neon accents DARKEN for AA on the light canvas (UI-SPEC §Theming LIGHT table).
+ * Only color variables swap — radius, fonts, and layout do not change.
+ * ========================================================================== */
+.tmpl-minimal[data-template-theme='light'] {
+  --bg: #f6f3fb; /* pale lavender-white canvas */
+  --surface: #ffffff;
+  --surface-muted: #ece7f6;
+
+  --fg: #1a1330; /* deep ink-purple (16.22:1 on canvas) */
+  --muted-fg: #5e5680; /* 6.13:1 on canvas */
+
+  --border: #ded7ee;
+  --border-strong: #c7bee2;
+
+  --accent: #c81e6e; /* PRIMARY deep pink (darkened magenta) — text ON fill uses white */
+  --accent-cyan: #0b7e92; /* SECONDARY — body-safe on white surface; hover/links */
+  --accent-gold: #8a6300; /* gold-as-text fails on white → dark-amber for any gold TEXT */
+  --accent-violet: #6d28d9;
+  --accent-orange: #ff901f; /* sunset stop (pastel-toned in light, atmosphere only) */
+
+  --ring: #c81e6e;
+  --success: #15803d;
+  --destructive: #e11d48; /* surface-safe (4.70:1 on #FFFFFF form-shell panel) */
+
+  /* Light-mode sunset — toned to pastel (peach -> pink -> lavender), not removed. */
+  --sunset-gradient: linear-gradient(
+    90deg,
+    #ffb877 0%,
+    #ff8fb1 50%,
+    #b98fe6 100%
+  );
+}
+
+/* ============================================================================
+ * Reduced-motion contract (hard requirement — UI-SPEC §Motion).
+ * Under `prefers-reduced-motion: reduce`, ALL animation/transition inside the
+ * template is zeroed. Content is never hidden behind motion (the scroll-reveal
+ * island also short-circuits to fully-visible). Hover glows (not motion) remain.
+ * Scoped to `.tmpl-minimal *` so it never touches platform chrome.
+ * ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .tmpl-minimal *,
+  .tmpl-minimal *::before,
+  .tmpl-minimal *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
