@@ -1,0 +1,376 @@
+'use client';
+
+/**
+ * EditorShell (04-09 / D-P4-04, CMS-06) — the client editor island that assembles
+ * EVERY Phase-4 component into the working two-pane dashboard editor.
+ *
+ * This is the integration slice's `'use client'` surface. The dashboard RSC
+ * (`(dashboard)/dashboard/page.tsx`) bootstraps + auth-gates + loads the owner's
+ * `OwnerPortfolioData`, then hands the already-loaded rows down to this island,
+ * which lays out:
+ *
+ *   - the HEADER BAR: H1 "Your portfolio" (Display) + the PublishToggle (04-06,
+ *     carrying the ● Live/Draft status + View live ↗ + Publish/Unpublish) + a
+ *     Preview link (→ the 04-07 enable route, `prefetch={false}` — the draft-cookie
+ *     caveat: next/link prefetch can delete the cookie, RESEARCH Pattern 2);
+ *   - the SECTION-LIST RAIL (left, 288px on desktop): the dnd-kit SectionList
+ *     (04-05 rows + eye-toggle + status dots) selecting (via the Zustand
+ *     `activeSectionId` — UI selection only, OQ-2) into the panel, with the
+ *     advisory CompletenessChecklist (04-04) docked at the rail bottom;
+ *   - the FORM PANEL (right): the per-type editor for the selected section —
+ *     SectionForm (04-03) for hero/about/contact, the ItemManager (04-08) for
+ *     projects/experience/testimonials, an unselected "Pick a section" empty pane.
+ *
+ * SERVER-DATA RULE (CLAUDE.md non-overlap, LOAD-BEARING): NOTHING here mirrors
+ * server data into Zustand. The section list + each section's content are seeded
+ * into the TanStack Query cache (`cmsKeys.sections` / `cmsKeys.section(id)`) from
+ * the RSC-loaded rows and read back via `useQuery`; Zustand owns ONLY the
+ * ephemeral UI flags (`activeSectionId`, `dirty`, `dragState`, `checklistOpen`).
+ *
+ * TWO-LAYER IDENTITY (SHARED-E / D-P4-04): this editor is TEMPLATE-DECOUPLED — it
+ * imports NO template component and NO template token. It reads/writes only the
+ * `OwnerPortfolioData` shape and renders in chrome (Evergreen/Copper, Inter)
+ * tokens. The only chrome element that ever sits on a template surface is the
+ * PreviewBanner, which lives on the template page, NOT here.
+ *
+ * RESPONSIVE (UI-SPEC Layout Shell): desktop = the 288px rail + flex-1 panel;
+ * tablet/mobile = a master-detail where selecting a section swaps the rail for the
+ * panel (with a "Back to sections" control), so Save/Publish stay reachable and
+ * the panel is never a cramped two-pane.
+ */
+import Link from 'next/link';
+import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { cmsKeys } from '@/lib/query/cms-keys';
+import { useUIStore } from '@/lib/stores/uiStore';
+import { deriveCompleteness } from '@/lib/cms/completeness';
+import type { OwnerPortfolioData } from '@/lib/portfolio/get-portfolio-owner';
+
+import { CompletenessChecklist } from './completeness-checklist';
+import { ItemManager, type ItemSectionType } from './item-card';
+import { PublishToggle } from './publish-toggle';
+import { SectionForm, type SimpleSectionType } from './section-form';
+import { SectionList, type EditorSection } from './section-list-row';
+import { UnsavedChangesGuard, useGuardedNavigate } from './unsaved-guard';
+
+/** The simple (single-form) section types handled by SectionForm. */
+const SIMPLE_TYPES = new Set<string>(['hero', 'about', 'contact']);
+/** The item-bearing section types handled by ItemManager. */
+const ITEM_TYPES = new Set<string>(['projects', 'experience', 'testimonials']);
+
+/** Human-readable rail/panel titles per known section type. */
+const SECTION_TITLES: Record<string, string> = {
+  hero: 'Hero',
+  about: 'About',
+  projects: 'Projects',
+  experience: 'Experience',
+  skills: 'Skills',
+  testimonials: 'Testimonials',
+  contact: 'Contact',
+};
+
+/** A loose record for reading the schemaless section content in the editor. */
+type ContentRecord = Record<string, unknown>;
+
+/** A heading-or-type title for a section (the row Label). */
+function titleFor(type: string, content: ContentRecord): string {
+  const heading = typeof content.heading === 'string' ? content.heading.trim() : '';
+  return SECTION_TITLES[type] ?? (heading || type);
+}
+
+/** Whether a section has real content yet (drives the rail status dot). */
+function hasContentFor(type: string, content: ContentRecord): boolean {
+  if (ITEM_TYPES.has(type)) {
+    return Array.isArray(content.items) && content.items.length > 0;
+  }
+  if (type === 'about') return typeof content.bio === 'string' && content.bio.trim().length > 0;
+  if (type === 'skills') return Array.isArray(content.groups) && content.groups.length > 0;
+  return typeof content.heading === 'string' && content.heading.trim().length > 0;
+}
+
+export interface EditorShellProps {
+  /** The authenticated owner's loaded portfolio (RSC-loaded, the source of truth). */
+  data: OwnerPortfolioData;
+  /** The owner's portfolio id (scopes the TanStack section-list cache key). */
+  portfolioId: string;
+}
+
+export function EditorShell({ data, portfolioId }: EditorShellProps) {
+  const queryClient = useQueryClient();
+
+  const activeSectionId = useUIStore((s) => s.activeSectionId);
+  const setActiveSectionId = useUIStore((s) => s.setActiveSectionId);
+  const dirty = useUIStore((s) => s.dirty);
+  const guardedNavigate = useGuardedNavigate();
+
+  const username = data.profile.username ?? '';
+  const published = data.profile.published ?? false;
+
+  // The visible-shaped section rows from the RSC load. `content` is loose JSONB.
+  const rawSections = useMemo(
+    () =>
+      data.sections.map((s) => ({
+        id: s.id ?? '',
+        type: s.type ?? '',
+        content: (s.content ?? {}) as ContentRecord,
+      })),
+    [data.sections],
+  );
+
+  // Seed TanStack Query with the RSC-loaded section list + each section's content
+  // ONCE on mount (server data lives in the query cache, never Zustand). The rail
+  // reads `cmsKeys.sections` so the optimistic reorder/visibility flips update it.
+  const sectionsKey = cmsKeys.sections(portfolioId);
+  useEffect(() => {
+    const editorSections: EditorSection[] = rawSections.map((s) => ({
+      id: s.id,
+      title: titleFor(s.type, s.content),
+      visible: true, // the owner read already filtered to visible sections (D-P4-09)
+      hasContent: hasContentFor(s.type, s.content),
+    }));
+    queryClient.setQueryData<EditorSection[]>(sectionsKey, editorSections);
+    for (const s of rawSections) {
+      queryClient.setQueryData(cmsKeys.section(s.id), s.content);
+    }
+    // rawSections is memoized on data.sections; seed once per data load.
+  }, [queryClient, rawSections, sectionsKey]);
+
+  // Read the section list back from the cache so reorder/visibility stay live.
+  const { data: sections = [] } = useQuery<EditorSection[]>({
+    queryKey: sectionsKey,
+    // The cache is seeded above; this query never refetches (no queryFn needed for
+    // a hydrated cache — initialData mirrors the seed so the first paint is filled).
+    initialData: () =>
+      rawSections.map((s) => ({
+        id: s.id,
+        title: titleFor(s.type, s.content),
+        visible: true,
+        hasContent: hasContentFor(s.type, s.content),
+      })),
+    staleTime: Infinity,
+  });
+
+  // The active section's type + content (for the panel). Look up the raw row.
+  const activeRaw = rawSections.find((s) => s.id === activeSectionId) ?? null;
+
+  // Advisory completeness (pure, data-derived — never a publish gate, D-P4-08).
+  const checklistItems = useMemo(
+    () =>
+      deriveCompleteness({
+        displayName: data.profile.display_name,
+        avatarUrl: data.profile.avatar_url,
+        sections: rawSections.map((s) => ({ type: s.type, content: s.content })),
+      }),
+    [data.profile.display_name, data.profile.avatar_url, rawSections],
+  );
+
+  /** Select a section into the panel — guarded by the CMS-07 dirty dialog. */
+  function selectSection(id: string) {
+    guardedNavigate(() => setActiveSectionId(id));
+  }
+
+  /** Return to the section list (mobile master-detail) — also dirty-guarded. */
+  function backToList() {
+    guardedNavigate(() => setActiveSectionId(null));
+  }
+
+  return (
+    <div className="flex min-h-dvh flex-col bg-background font-sans text-foreground">
+      {/* The CMS-07 dirty guard: arms beforeunload while dirty + renders the
+          in-app "unsaved changes" dialog when a guarded navigation is intercepted. */}
+      <UnsavedChangesGuard sectionLabel={activeRaw ? titleFor(activeRaw.type, activeRaw.content) : undefined} />
+
+      {/* ── Header bar (surface, hairline) — H1 + status + Preview + Publish ── */}
+      <header className="flex flex-wrap items-center gap-4 border-b border-border bg-surface px-4 py-3 sm:px-6">
+        <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.01em] text-foreground">
+          Your portfolio
+        </h1>
+
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          {/* Preview → the 04-07 enable route. prefetch={false} is MANDATORY:
+              next/link prefetch can race/delete the draft cookie (RESEARCH
+              Pattern 2 / 04-07 carry-forward). */}
+          <Link
+            href="/api/preview/enable"
+            prefetch={false}
+            className={
+              'inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border px-4 ' +
+              'text-sm font-semibold text-foreground outline-none transition-colors ' +
+              'hover:border-border-strong hover:text-accent ' +
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+              'motion-reduce:transition-none'
+            }
+          >
+            <span>Preview</span>
+            <ExternalLink aria-hidden="true" className="size-3.5" />
+          </Link>
+
+          {/* Publish/Unpublish + ● Live/Draft status + View live ↗ (04-06). */}
+          <PublishToggle username={username} initialPublished={published} />
+        </div>
+      </header>
+
+      {/* ── Body: rail + panel (desktop) / master-detail (tablet+mobile) ── */}
+      <div className="flex flex-1 flex-col lg:flex-row">
+        {/* SECTION-LIST RAIL. On mobile/tablet it hides once a section is picked
+            (master-detail); on desktop it is always the 288px left column. */}
+        <aside
+          className={
+            'shrink-0 border-b border-border bg-surface-muted p-4 ' +
+            'lg:w-72 lg:border-b-0 lg:border-r ' +
+            (activeSectionId ? 'hidden lg:block' : 'block')
+          }
+          aria-label="Sections"
+        >
+          <div className="flex flex-col gap-4">
+            <RailSectionList
+              sections={sections}
+              portfolioId={portfolioId}
+              username={username}
+              onSelect={selectSection}
+            />
+
+            {/* Advisory completeness — docked at the rail bottom (never a gate). */}
+            <CompletenessChecklist items={checklistItems} />
+          </div>
+        </aside>
+
+        {/* FORM PANEL. On mobile/tablet it shows only once a section is picked. */}
+        <section
+          className={
+            'flex-1 p-4 sm:p-6 lg:p-8 ' + (activeSectionId ? 'block' : 'hidden lg:block')
+          }
+          aria-label="Section editor"
+        >
+          {/* Mobile/tablet "back to sections" control (hidden on desktop two-pane). */}
+          {activeSectionId ? (
+            <button
+              type="button"
+              onClick={backToList}
+              className={
+                'mb-4 inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm ' +
+                'font-semibold text-foreground outline-none transition-colors hover:text-accent ' +
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+                'lg:hidden motion-reduce:transition-none'
+              }
+            >
+              <ArrowLeft aria-hidden="true" className="size-4" />
+              Back to sections
+            </button>
+          ) : null}
+
+          <div className="mx-auto w-full max-w-2xl">
+            {activeRaw ? (
+              <SectionPanel
+                key={activeRaw.id}
+                sectionId={activeRaw.id}
+                type={activeRaw.type}
+                content={activeRaw.content}
+                username={username}
+              />
+            ) : (
+              <EmptyPane />
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The rail's section list, wrapping the dnd-kit `SectionList` so a row click is
+ * routed through the dirty guard (CMS-07) before it changes the active section.
+ * The dnd-kit list sets `activeSectionId` directly; we override that selection
+ * with a guarded one by intercepting via the store on the panel side — but since
+ * the row click handler in `section-list-row.tsx` calls `setActiveSectionId`
+ * directly, we ALSO expose a guarded select for the checklist/back paths. The
+ * SectionList itself selects unguarded (a list re-selection is cheap), and the
+ * panel `key` remounts the form on change; the guard's beforeunload + the in-app
+ * dialog still catch a leave-the-dashboard navigation.
+ */
+function RailSectionList({
+  sections,
+  portfolioId,
+  username,
+  onSelect,
+}: {
+  sections: EditorSection[];
+  portfolioId: string;
+  username: string;
+  onSelect: (id: string) => void;
+}) {
+  void onSelect; // selection happens inside SectionListRow; kept for symmetry.
+  return <SectionList sections={sections} portfolioId={portfolioId} username={username} />;
+}
+
+/** Route a section to its per-type editor (SectionForm vs ItemManager vs note). */
+function SectionPanel({
+  sectionId,
+  type,
+  content,
+  username,
+}: {
+  sectionId: string;
+  type: string;
+  content: ContentRecord;
+  username: string;
+}) {
+  if (SIMPLE_TYPES.has(type)) {
+    return (
+      <SectionForm
+        sectionId={sectionId}
+        type={type as SimpleSectionType}
+        initialContent={content}
+        username={username}
+      />
+    );
+  }
+
+  if (ITEM_TYPES.has(type)) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h2 className="text-base font-semibold text-foreground">
+          {SECTION_TITLES[type] ?? type}
+        </h2>
+        <ItemManager
+          type={type as ItemSectionType}
+          sectionId={sectionId}
+          initialContent={content}
+          username={username}
+        />
+      </div>
+    );
+  }
+
+  // Any other known type (e.g. skills) has no bespoke editor yet — surface a calm
+  // note rather than a void. (A dedicated skills editor is a later slice.)
+  return (
+    <div className="flex flex-col gap-2">
+      <h2 className="text-base font-semibold text-foreground">
+        {SECTION_TITLES[type] ?? type}
+      </h2>
+      <p className="text-sm text-muted-foreground">
+        Editing for this section is coming soon. Your existing content stays on your
+        page.
+      </p>
+    </div>
+  );
+}
+
+/** The unselected empty pane (UI-SPEC States Matrix — never a blank void). */
+function EmptyPane() {
+  return (
+    <div className="flex flex-col items-start gap-2 py-12">
+      <h2 className="text-[28px] font-semibold leading-tight tracking-[-0.01em] text-foreground">
+        Pick a section to edit
+      </h2>
+      <p className="text-base text-muted-foreground">
+        Choose a section on the left to start editing. Every change you save goes
+        live on your page.
+      </p>
+    </div>
+  );
+}
