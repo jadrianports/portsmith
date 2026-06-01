@@ -18,9 +18,9 @@ import {
   type TwoUsers,
 } from './_cms-fixtures';
 
-// @ts-expect-error — RED: 04-05 creates these server actions; module does not exist yet.
+// GREEN (04-05): these server actions now exist — the RED `@ts-expect-error`
+// import guards were removed once the modules resolved (the RED→GREEN flip).
 import { reorderSectionsAction } from '@/lib/cms/reorder-sections-action';
-// @ts-expect-error — RED: 04-05 creates these server actions; module does not exist yet.
 import { toggleVisibilityAction } from '@/lib/cms/toggle-visibility-action';
 
 const admin = adminClient();
