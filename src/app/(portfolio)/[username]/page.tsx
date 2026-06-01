@@ -31,11 +31,14 @@
  * OG / Person JSON-LD is Phase 6; the MINIMAL metadata (title + description +
  * canonical) is authored now, not stubbed empty.
  */
+import { draftMode } from 'next/headers';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
+import { PreviewBanner } from '@/components/editor/preview-banner';
 import { TemplateRenderer } from '@/components/templates/template-renderer';
 import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
+import { getPortfolioOwnerByUsername } from '@/lib/portfolio/get-portfolio-owner';
 import { siteUrl } from '@/lib/url';
 
 /** D-21 ISR backstop — 1 hour. On-demand revalidatePath on publish is Phase 4. */
@@ -89,6 +92,32 @@ export default async function PortfolioPage({
   params: Promise<{ username: string }>;
 }) {
   const { username } = await params; // Next 16: params is a Promise — MUST await.
+
+  // ┌───────────────────────────────────────────────────────────────────────────┐
+  // │ DRAFT-MODE OWNER PREVIEW BRANCH (TMPL-05 / D-P4-09 / RESEARCH Pattern 2):    │
+  // │ This is the SINGLE sanctioned dynamic path on this ISR route. `draftMode()`  │
+  // │ is async in Next 16 — `await` it, then read `.isEnabled`. Reading it is      │
+  // │ itself a request-time signal, but Next only takes the dynamic branch for a   │
+  // │ request that CARRIES the `__prerender_bypass` cookie (i.e. the owner who     │
+  // │ clicked Preview). A request WITHOUT the cookie — every anonymous visitor —   │
+  // │ skips this branch and still serves the cached ISR static HTML below          │
+  // │ (Pitfall 2; the route stays `●` ISR in the build output). The owner read     │
+  // │ (`getPortfolioOwnerByUsername`) is the cookie/RLS, base-table module reached │
+  // │ ONLY here — the public path never imports a cookie-reading client (SHARED-F).│
+  // └───────────────────────────────────────────────────────────────────────────┘
+  const { isEnabled } = await draftMode(); // Next 16: draftMode() is async — MUST await.
+  if (isEnabled) {
+    const ownerData = await getPortfolioOwnerByUsername(username);
+    if (!ownerData) notFound(); // no verified owner / not the caller's own slug.
+    return (
+      <>
+        <PreviewBanner username={username} published={ownerData.published} />
+        <TemplateRenderer slug="minimal" data={ownerData} />
+      </>
+    );
+  }
+
+  // PUBLIC PATH — UNCHANGED, cookie-LESS, ISR-cacheable (lines below this comment).
   const data = await getPortfolioByUsername(username);
   if (!data) notFound(); // D-24 — missing/unpublished.
 
