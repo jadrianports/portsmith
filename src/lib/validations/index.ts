@@ -21,3 +21,6 @@ export * from './contact';
 
 // Blog post (P2 feature, schema authored now per D-04).
 export * from './blog';
+
+// Auth (signup/login/reset/update-password request bodies — server-boundary gate).
+export * from './auth';
