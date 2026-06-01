@@ -10,6 +10,11 @@
  *     and "Keep editing" CANCELS the navigation (App Router has no router-blocking
  *     API — the nav is intercepted at the click source and simply doesn't happen
  *     until the user resolves the dialog).
+ *   - WR-01: "Save and continue" is HONEST — it runs the active panel's real save
+ *     (the edit PERSISTS) and only then navigates. It no longer silently discards
+ *     the edit while wearing a "Save" label. This spec proves the edit survives the
+ *     "Save and continue" path (the saved-&-live beat fires + the value is still
+ *     there on re-select), i.e. no silent data loss.
  *
  * VIEWPORT NOTE (load-bearing): in the assembled editor (04-09) a rail row click
  * selects UNGUARDED (cheap re-selection); the guarded in-app navigation source is
@@ -91,5 +96,55 @@ test.describe('CMS-07 — dirty-state guard', () => {
 
     // And beforeunload is still armed (we are still dirty).
     expect(await beforeUnloadArmed(page)).toBe(true);
+  });
+
+  test('WR-01: "Save and continue" actually SAVES the edit (no silent data loss)', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+
+    // < lg so the responsive master-detail "Back to sections" guarded nav is active.
+    await page.setViewportSize({ width: 800, height: 900 });
+
+    await signInAsOwner(page, owner);
+
+    // Select Hero and make a unique edit WITHOUT saving.
+    await page.getByRole('button', { name: 'Hero', exact: true }).click();
+    const headingField = page.getByLabel('Heading', { exact: true });
+    await expect(headingField).toBeVisible();
+
+    const savedHeading = `Saved via guard ${Date.now().toString(36)}`;
+    await headingField.fill(savedHeading);
+    await expect(page.getByText('Unsaved changes')).toBeVisible();
+
+    // Attempt an in-app navigation (Back to sections) → the dirty dialog appears.
+    await page.getByRole('button', { name: 'Back to sections' }).click();
+    const dialog = page.getByRole('alertdialog', { name: 'You have unsaved changes' });
+    await expect(dialog).toBeVisible();
+
+    // WR-01: "Save and continue" runs the REAL save, then proceeds ONLY on success.
+    // The dialog closing + landing back on the rail is the proof the save RESOLVED
+    // ok (on a FAILED save the guard keeps the dialog open — it never navigates away
+    // from unsaved edits). The transient saved-&-live beat lives in the SectionForm,
+    // which the proceed unmounts, so we prove persistence by re-selecting below.
+    await dialog.getByRole('button', { name: 'Save and continue' }).click();
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+
+    // The navigation proceeded: on < lg the rail is shown again (Hero row visible)
+    // and the panel is CLEAN (no "Unsaved changes" — the edit was saved, not left
+    // dirty-then-abandoned).
+    await expect(page.getByRole('button', { name: 'Hero', exact: true })).toBeVisible();
+    await expect(page.getByText('Unsaved changes')).toBeHidden();
+
+    // No silent data loss: RELOAD (re-fetches the owner read from the DB) and
+    // re-select Hero — the saved value is THERE. A reload reads the persisted row,
+    // so this proves the guard's "Save and continue" actually WROTE the edit (the
+    // pre-WR-01 behavior discarded it, so a reload would show the original heading).
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Your portfolio' })).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByRole('button', { name: 'Hero', exact: true }).click();
+    await expect(page.getByLabel('Heading', { exact: true })).toHaveValue(savedHeading);
   });
 });
