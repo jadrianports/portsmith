@@ -6,13 +6,14 @@
  * as="section">`, so this renders the section's INNER content (no `<section>` of its
  * own).
  *
- * FORM SHELL ONLY — NO SUBMIT WIRING (D-11 / CONT-01/02/03 → Phase 6). This is the
- * real DESIGN of the contact form, but it is deliberately inert: there is NO network
- * call, NO server action, NO Turnstile verify, NO inbox write, and NO email send.
- * The "Send Message" button is a styled `type="button"` no-op (T-03-22 — the form is
- * "visibly the design," never dead-but-claimed functionality). The ONLY working
- * interaction is the public-email `mailto:` fallback. Functional submission (inbox +
- * Resend + Turnstile) lands in Phase 6.
+ * LIVE WIRING (06-02, CONT-01/03 / D-05). This server section now hosts the live
+ * `<ContactForm>` client island: it reads `section.portfolio_id` (present on the
+ * `public_sections` row — RESEARCH Open-Q1) and, when present, renders the island
+ * (real `<form>` + Turnstile + POST `/api/contact` + idle/submitting/success/error
+ * states). The FROZEN `SectionProps = { section }` is preserved (NO new prop). When
+ * the portfolio id is absent, ONLY the public-email `mailto:` fallback renders —
+ * never a dead form. The 03 design is untouched: the island reuses the SAME
+ * `.tmpl-contact-field` / field + label styles, so the live form is pixel-identical.
  *
  * PUBLIC EMAIL via the content (Option A — additive field, NOT a contract change):
  * the FROZEN `SectionProps` passes this section ONLY its resolved `section` row, so
@@ -40,6 +41,7 @@
  * The button label is `var(--bg)` (dark ink on the magenta fill) — the UI-SPEC's
  * hard "never white on magenta" rule, AA-safe in both modes.
  */
+import { ContactForm } from '@/components/public/contact-form';
 import type { SectionProps } from './types';
 import type { ContactContent } from '@/lib/validations';
 import { safeHref } from '@/lib/safe-url';
@@ -57,32 +59,6 @@ type ContactSectionContent = ContactContent & { email_public?: string | null };
 function present(v: string | null | undefined): v is string {
   return typeof v === 'string' && v.trim().length > 0;
 }
-
-/** Shared field-label style (mono, muted, uppercase). */
-const labelStyle: React.CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: '13px',
-  fontWeight: 500,
-  textTransform: 'uppercase',
-  letterSpacing: '0.12em',
-  lineHeight: 1.4,
-  color: 'var(--muted-fg)',
-};
-
-/** Shared field style (surface inset, hairline border, body type). The magenta
- *  `:focus-visible` ring comes from the scoped `.tmpl-contact-field` class. */
-const fieldStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '12px 16px',
-  borderRadius: 'var(--radius-md)',
-  background: 'var(--surface-muted)',
-  border: '1px solid var(--border)',
-  fontFamily: 'var(--font-body)',
-  fontWeight: 400,
-  fontSize: '16px',
-  lineHeight: 1.6,
-  color: 'var(--fg)',
-};
 
 export function Contact({ section }: SectionProps) {
   // Cast the validated JSONB content; null-guard the row + every field.
@@ -161,124 +137,30 @@ export function Contact({ section }: SectionProps) {
         {subheading}
       </p>
 
-      {/* The form SHELL — a purple-tinted elevated panel. INERT: the form has NO
-          action and NO submit handler (functional submit is P6, CONT-01/02/03).
-          Rendered as a plain <div>, not a posting <form>, so there is no submit
-          path at all — "visibly the design," not dead-but-claimed (T-03-22). */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '24px',
-          maxWidth: '640px',
-          padding: '24px',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-        }}
-      >
-        {/* Name field. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <label htmlFor="contact-name" style={labelStyle}>
-            Name
-          </label>
-          <input
-            id="contact-name"
-            name="name"
-            type="text"
-            autoComplete="name"
-            placeholder="Your name"
-            className="tmpl-contact-field"
-            style={fieldStyle}
-          />
-        </div>
-
-        {/* Email field. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <label htmlFor="contact-email" style={labelStyle}>
-            Email
-          </label>
-          <input
-            id="contact-email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            className="tmpl-contact-field"
-            style={fieldStyle}
-          />
-        </div>
-
-        {/* Message field. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <label htmlFor="contact-message" style={labelStyle}>
-            Message
-          </label>
-          <textarea
-            id="contact-message"
-            name="message"
-            rows={5}
-            placeholder="Tell me what you're working on."
-            className="tmpl-contact-field"
-            style={{ ...fieldStyle, resize: 'vertical', minHeight: '120px' }}
-          />
-        </div>
-
-        {/* Reserved slot for the Turnstile widget (wired in P6 — NOT rendered/loaded
-            now; this is the visible placeholder for the challenge, no script, no
-            verify). A dashed hairline box clearly marks it as a reserved area. */}
+      {/* LIVE WIRING (06-02, CONT-01/03 / D-05): the inert shell is replaced by the
+          `<ContactForm>` client island when the portfolio id is present on the
+          section row (`public_sections.portfolio_id` — RESEARCH Open-Q1; the FROZEN
+          `SectionProps = { section }` is preserved, NO new prop). The island owns the
+          real `<form>` + Turnstile + submit + states, reusing the SAME
+          `.tmpl-contact-field` / `fieldStyle` / `labelStyle` so it is pixel-identical
+          to the locked 03 design. If the portfolio id is absent, render ONLY the
+          mailto fallback (never a dead form). */}
+      {present(section?.portfolio_id) ? (
+        <ContactForm portfolioId={section.portfolio_id} emailPublic={emailPublic} />
+      ) : emailPublic && mailtoHref ? (
         <div
-          aria-hidden="true"
           style={{
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '65px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px dashed var(--border-strong)',
-            background: 'var(--surface-muted)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '13px',
-            fontWeight: 500,
-            textTransform: 'uppercase',
-            letterSpacing: '0.12em',
-            color: 'var(--muted-fg)',
+            flexDirection: 'column',
+            gap: '24px',
+            maxWidth: '640px',
+            padding: '24px',
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
           }}
         >
-          Spam check
-        </div>
-
-        {/* The INERT "Send Message" button — magenta fill, dark-ink label var(--bg)
-            (NOT white). `type="button"` + no handler ⇒ a no-op; the design of the
-            primary submit, wired in P6. */}
-        <button
-          type="button"
-          aria-disabled="true"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            alignSelf: 'flex-start',
-            minHeight: '44px',
-            padding: '0 24px',
-            borderRadius: 'var(--radius-md)',
-            border: 'none',
-            cursor: 'default',
-            background: 'var(--accent)',
-            color: 'var(--bg)',
-            fontFamily: 'var(--font-body)',
-            fontWeight: 600,
-            fontSize: '16px',
-            boxShadow: '0 8px 28px -12px rgba(255,45,149,0.38)',
-          }}
-        >
-          Send Message
-        </button>
-
-        {/* Public-email fallback (render-if-present) — the ONE working interaction.
-            Sourced from settings.email_public through the seed (Option A). The error
-            copy authored for P6 also points here; in P3 it is the direct path. */}
-        {emailPublic && mailtoHref ? (
+          {/* Mailto-only fallback (no portfolio id ⇒ no live form, never a dead one). */}
           <p
             style={{
               fontFamily: 'var(--font-body)',
@@ -298,8 +180,8 @@ export function Contact({ section }: SectionProps) {
             </a>
             .
           </p>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
