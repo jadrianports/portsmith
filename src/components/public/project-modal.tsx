@@ -42,6 +42,7 @@ import Image from 'next/image';
 import { ArrowUpRight, X } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import {
+  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -543,18 +544,54 @@ function ProjectModal({ item, onClose }: ProjectModalProps) {
 
 /* ──────────────────────────────────────────────────────────────────────────── */
 
+/** The responsive card grid — shared by the live island AND the Suspense fallback. */
+function ProjectCardGrid({
+  items,
+  onOpen,
+  triggerRef,
+}: {
+  items: ProjectItem[];
+  onOpen: (slug: string) => void;
+  triggerRef?: (slug: string, el: HTMLElement | null) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+        gap: '24px',
+      }}
+    >
+      {items.map((item, i) => (
+        <ProjectCardTrigger
+          key={present(item.id) ? item.id : `${item.title}-${i}`}
+          item={item}
+          onOpen={() => onOpen(item.slug)}
+          triggerRef={triggerRef ? (el) => triggerRef(item.slug, el) : undefined}
+        />
+      ))}
+    </div>
+  );
+}
+
 export interface ProjectsWithModalProps {
   /** The validated, server-read project items (already in the page payload). */
   items: ProjectItem[];
 }
 
 /**
- * The `'use client'` island: owns open state + the `useSearchParams()` initial read
- * + the `window.history.pushState` URL sync. Renders the clickable card grid and,
- * when an item is open, the focus-trapped modal. NEVER reads `searchParams`
+ * The inner `'use client'` island: owns open state + the `useSearchParams()` initial
+ * read + the `window.history.pushState` URL sync. Renders the clickable card grid
+ * and, when an item is open, the focus-trapped modal. NEVER reads `searchParams`
  * server-side (the page stays SSG/ISR — D-22).
+ *
+ * `useSearchParams()` opts this subtree into client-side rendering; Next 16 requires
+ * it to sit under a `<Suspense>` boundary so the rest of `/[username]` can still be
+ * statically prerendered (the missing-suspense-with-csr-bailout build error). The
+ * boundary is added by the exported `ProjectsWithModal` wrapper below — keeping the
+ * page SSG (the param is read on the client only, exactly as D-18/D-22 require).
  */
-export function ProjectsWithModal({ items }: ProjectsWithModalProps) {
+function ProjectsWithModalInner({ items }: ProjectsWithModalProps) {
   const searchParams = useSearchParams();
   // Initial deep-link read: if `?project=<slug>` matches an item, open it on mount.
   const [openSlug, setOpenSlug] = useState<string | null>(() => searchParams.get('project'));
@@ -589,27 +626,32 @@ export function ProjectsWithModal({ items }: ProjectsWithModalProps) {
 
   return (
     <>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: '24px',
+      <ProjectCardGrid
+        items={items}
+        onOpen={open}
+        triggerRef={(slug, el) => {
+          if (el) triggerRefs.current.set(slug, el);
+          else triggerRefs.current.delete(slug);
         }}
-      >
-        {items.map((item, i) => (
-          <ProjectCardTrigger
-            key={present(item.id) ? item.id : `${item.title}-${i}`}
-            item={item}
-            onOpen={() => open(item.slug)}
-            triggerRef={(el) => {
-              if (el) triggerRefs.current.set(item.slug, el);
-              else triggerRefs.current.delete(item.slug);
-            }}
-          />
-        ))}
-      </div>
+      />
 
       {openItem ? <ProjectModal item={openItem} onClose={close} /> : null}
     </>
+  );
+}
+
+/**
+ * The exported island. Wraps the `useSearchParams()`-using inner island in a
+ * `<Suspense>` boundary (Next 16 `missing-suspense-with-csr-bailout` requirement) so
+ * `/[username]` stays statically prerenderable (● SSG/ISR — D-22). The fallback
+ * renders the SAME card grid (so the cards are present in the prerendered static
+ * shell and during hydration); React swaps in the fully-interactive inner island
+ * once `useSearchParams()` resolves on the client.
+ */
+export function ProjectsWithModal({ items }: ProjectsWithModalProps) {
+  return (
+    <Suspense fallback={<ProjectCardGrid items={items} onOpen={() => {}} />}>
+      <ProjectsWithModalInner items={items} />
+    </Suspense>
   );
 }
