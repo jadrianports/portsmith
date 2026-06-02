@@ -24,7 +24,16 @@
  * COLOR: no hardcoded hex for UI — every color via `var(--token)` (SHARED-D); the
  * only literal color is inside the documented decorative grid-horizon echo
  * gradient (the footer's faint sunset mirror of the hero).
+ *
+ * SAFETY AFFORDANCE (D-15 / SAFE-03 / TMPL-07): the footer carries ONE muted "Report
+ * this page" `<button>` (the `<ReportDialog>` island) — the single sanctioned safety
+ * element on the chrome-free public page. It is a real `<button>` (the dialog is
+ * client-side, NOT an `<a href>`), styled quieter than the social links so it never
+ * competes with the portfolio. It renders only when a target portfolio id is present
+ * on the public settings row (`data.settings.portfolio_id`).
  */
+import { ReportDialog } from '@/components/public/report-dialog';
+
 import type { FooterProps } from './types';
 import { siteUrl } from '@/lib/url';
 import { safeHref } from '@/lib/safe-url';
@@ -40,6 +49,11 @@ export function Footer({ data }: FooterProps) {
   // Name/handle (null-guarded view columns).
   const name = present(profile.display_name) ? profile.display_name : null;
   const handle = present(profile.username) ? profile.username : null;
+
+  // The target for the report dialog — the portfolio id on the public settings row
+  // (`portfolio_id` is `string | null` on the view, so null-guard). Absent → omit the
+  // affordance rather than render a dead button (never a report path to nowhere).
+  const portfolioId = present(settings.portfolio_id) ? settings.portfolio_id : null;
 
   // The social links that exist, in a stable order. NO platform link. CR-01: each
   // URL passes through `safeHref` (http(s) only) — a dangerous/unparseable scheme
@@ -179,24 +193,38 @@ export function Footer({ data }: FooterProps) {
         ) : null}
       </div>
 
-      {/* Copyright line — the owner's name only; NO platform attribution. Shelled
-          (same centered max-width + gutter) so it aligns under the content row. */}
-      <p
+      {/* Copyright line — the owner's name only; NO platform attribution. The ONE
+          sanctioned safety affordance (the muted "Report this page" button, D-15)
+          rides this row, kept visually quieter than the social links. Shelled (same
+          centered max-width + gutter) so it aligns under the content row. */}
+      <div
         className="tmpl-shell"
         style={{
           position: 'relative',
           zIndex: 1,
           marginTop: '32px',
-          marginBottom: 0,
-          fontFamily: 'var(--font-mono)',
-          fontSize: '13px',
-          letterSpacing: '0.04em',
-          color: 'var(--muted-fg)',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
         }}
       >
-        © {year}
-        {name ? ` ${name}` : ''}
-      </p>
+        <p
+          style={{
+            margin: 0,
+            fontFamily: 'var(--font-mono)',
+            fontSize: '13px',
+            letterSpacing: '0.04em',
+            color: 'var(--muted-fg)',
+          }}
+        >
+          © {year}
+          {name ? ` ${name}` : ''}
+        </p>
+
+        {portfolioId ? <ReportDialog portfolioId={portfolioId} /> : null}
+      </div>
     </footer>
   );
 }
