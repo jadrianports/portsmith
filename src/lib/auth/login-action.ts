@@ -38,8 +38,20 @@
  * (or a validated internal `redirectedFrom`). Returning rather than calling
  * `redirect()` keeps the success path symmetric with `signupAction` and avoids
  * throwing a redirect through the client island's try/catch.
+ *
+ * D-14 (locked-account block, 06-07): AFTER a successful credential check, the
+ * action reads the now-authenticated caller's OWN `profiles.locked`. A suspended
+ * account CAN authenticate (its credentials are valid) but MUST NOT establish a
+ * usable dashboard session — so when `locked === true` the action signs the
+ * just-created session back out and returns the GENERIC suspended result. This is
+ * NOT an enumeration leak: `locked` is a real, KNOWN state readable by the
+ * account's OWN authenticated user under `profiles own select`, so it is surfaced
+ * only to that very user — never as a differential signal about another account.
+ * The enumeration-safe credential/unconfirmed/operational branches are untouched.
  */
-import { createClient } from '@/lib/supabase/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 import { loginSchema } from '@/lib/validations';
 
 /** Per-field validation messages, keyed by the login field name. */
@@ -70,6 +82,53 @@ const UNCONFIRMED_MESSAGE =
   'Please confirm your email to log in. We can send the link again.';
 /** Last-resort message for an unexpected (non-credential) auth failure. */
 const GENERIC_ERROR = 'Something went wrong. Please try again.';
+/**
+ * D-14: the generic suspended-account message (decided copy, 06-UI-SPEC). Surfaced
+ * via the existing 02 auth banner — NO new component. Not enumeration: a locked
+ * account is a real known state for its OWN authenticated user.
+ */
+const SUSPENDED_MESSAGE =
+  'This account has been suspended. If you think this is a mistake, contact support.';
+
+/**
+ * D-14 enforcement helper: given a freshly-signed-in `supabase` client, read the
+ * caller's OWN `profiles.locked` (the verified `sub` from `getVerifiedClaims()`).
+ * If the account is locked, sign the just-created session back OUT (a suspended
+ * account must hold no usable session) and return the generic suspended
+ * `LoginResult`. Otherwise return `null` (login proceeds).
+ *
+ * Exported so the integration spec (locked-login.test.ts) can assert the
+ * enforcement contract directly. `locked` is readable by the owner under
+ * `profiles own select`, so this is a verified own-row read, never an
+ * enumeration probe of another account.
+ */
+export async function assertNotLocked(
+  supabase: SupabaseClient,
+): Promise<LoginResult | null> {
+  // The session cookies are set post-sign-in, so the verified identity resolves.
+  const claims = await getVerifiedClaims();
+  const sub = claims ? (claims as { sub?: string }).sub : undefined;
+  if (!sub) return null; // No verified subject ⇒ nothing to enforce; let login proceed.
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('locked')
+    .eq('id', sub)
+    .single();
+  // On a read error, do NOT block a legitimate login on an unrelated failure —
+  // fall through (the account is not provably locked). The own-row read is the
+  // signal; its absence is not "suspended".
+  if (error) return null;
+
+  if ((data as { locked?: boolean } | null)?.locked === true) {
+    // Tear down the just-created session — a locked account establishes NO usable
+    // session (D-14) — and return the generic suspended result.
+    await supabase.auth.signOut();
+    return { ok: false, error: SUSPENDED_MESSAGE };
+  }
+
+  return null;
+}
 
 export async function loginAction(input: unknown): Promise<LoginResult> {
   // 1) Zod re-parse (server gate). Malformed email / empty password → field errors.
@@ -92,6 +151,11 @@ export async function loginAction(input: unknown): Promise<LoginResult> {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (!error) {
+    // 3) D-14: a locked account authenticates but must NOT keep a session. Read
+    //    OWN `locked` (verified), and if suspended sign back out + return the
+    //    generic suspended result. Otherwise login proceeds.
+    const suspended = await assertNotLocked(supabase);
+    if (suspended) return suspended;
     return { ok: true };
   }
 

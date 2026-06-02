@@ -20,6 +20,15 @@
  *   - unconfirmed user → the distinct resend-prompt outcome (the D-07 exception)
  *   - success → ok:true (the form then navigates to the dashboard)
  *   - source discipline: 'use server' directive + no `.getSession(` (AUTH-05 guard)
+ *
+ * D-14 (06-07): after a successful sign-in the action calls `assertNotLocked`,
+ * which reads the caller's OWN `profiles.locked` via the AUTHENTICATED client and
+ * `getVerifiedClaims()`. The mock therefore also exposes `getVerifiedClaims` and a
+ * `.from('profiles').select().eq().single()` chain (default `locked:false` so the
+ * unchanged success path stays `ok:true`) + an `auth.signOut` spy. The D-14
+ * locked→suspended path is proven against the LIVE stack in
+ * tests/integration/auth/locked-login.test.ts; this unit suite proves the
+ * credential contract is NOT weakened.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,10 +36,25 @@ vi.mock('server-only', () => ({}));
 
 // --- Mock the supabase server client so signInWithPassword is a spy -----------
 const signInWithPassword = vi.fn();
+const signOut = vi.fn().mockResolvedValue({ error: null });
+const profileSingle = vi.fn();
 
 vi.mock('@/lib/supabase/server', () => ({
+  // D-14: the verified-identity read used by assertNotLocked (post-sign-in).
+  getVerifiedClaims: async () => ({ sub: 'u1' }),
   createClient: async () => ({
-    auth: { signInWithPassword: (...args: unknown[]) => signInWithPassword(...args) },
+    auth: {
+      signInWithPassword: (...args: unknown[]) => signInWithPassword(...args),
+      signOut: (...args: unknown[]) => signOut(...args),
+    },
+    // The own-`locked` read chain: .from('profiles').select('locked').eq('id', sub).single()
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          single: () => profileSingle(),
+        }),
+      }),
+    }),
   }),
 }));
 // next/headers is referenced transitively in some action setups; stub defensively.
@@ -81,6 +105,10 @@ beforeEach(() => {
     data: { session: { access_token: 'a' }, user: { id: 'u1' } },
     error: null,
   });
+  // D-14: default the own-`locked` read to NOT locked, so the unchanged success
+  // path stays ok:true. Locked cases override per-test.
+  profileSingle.mockReset().mockResolvedValue({ data: { locked: false }, error: null });
+  signOut.mockClear();
 });
 
 afterEach(() => {
@@ -178,6 +206,29 @@ describe('loginAction — success', () => {
     const arg = signInWithPassword.mock.calls[0][0] as { email: string; password: string };
     expect(arg.email).toBe(VALID.email);
     expect(arg.password).toBe(VALID.password);
+  });
+});
+
+describe('loginAction — D-14 locked-account block (does not weaken the contract)', () => {
+  it('a locked account is signed back out and gets the GENERIC suspended message', async () => {
+    // Valid credentials (signInWithPassword resolves ok via beforeEach), but the
+    // own-`locked` read reports the account is suspended.
+    profileSingle.mockResolvedValue({ data: { locked: true }, error: null });
+    const result = await loginAction(input());
+    const f = fail(result);
+    expect(f.error).toMatch(/account has been suspended/i);
+    // No usable session — the just-created session is torn down.
+    expect(signOut).toHaveBeenCalledTimes(1);
+    // Not enumeration: no credential/unconfirmed signal leaked.
+    expect(f.unconfirmed).toBeFalsy();
+    expect(f.email).toBeUndefined();
+  });
+
+  it('a non-locked account still logs in normally (success unchanged)', async () => {
+    // beforeEach defaults locked:false → ok:true, no sign-out.
+    const result = await loginAction(input());
+    expect(ok(result).ok).toBe(true);
+    expect(signOut).not.toHaveBeenCalled();
   });
 });
 
