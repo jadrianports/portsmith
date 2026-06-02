@@ -12,14 +12,20 @@
  * which the protected-columns trigger guards):
  *   - display_name (required, 1–100) — plain Input
  *   - headline     (optional, ≤500)  — plain Input (short tagline)
- *   - avatar_url   (optional http(s)) — UrlInput (scheme-gated, §8)
- *   - resume_url   (optional http(s)) — UrlInput (scheme-gated, §8)
+ *   - avatar_url   (optional http(s)) — ImageUploader (pick → crop → WebP, D-07)
+ *   - resume_url   (optional http(s)) — ResumeUploader (pick → PDF upload, D-07/D-11)
+ *
+ * Both media slots are upload-only (D-07): the avatar is the generic ratio-aware
+ * ImageUploader (Plan 02) and the résumé is the PDF-only ResumeUploader (Plan 04);
+ * each emits a host-locked Storage URL via onUploaded/onValueChange and the existing
+ * Save persists it. Replacing/clearing either deletes the prior Storage object in
+ * `saveProfileAction`'s delete-on-replace leg (D-11/D-12), not here.
  *
  * Mirrors `section-form.tsx` EXACTLY for the save lifecycle (SHARED-A consumer):
  * the save is NOT optimistic — the SaveButton holds "Saving…" until the action
  * resolves; on `{ ok:true }` the dirty flag clears and the saved-&-live beat fires.
- * Client validation (UrlInput's inline blur check) is UX only; the action's Zod
- * re-parse is the real gate.
+ * The uploaders' client checks are UX only; the action's Zod re-parse is the real
+ * gate.
  *
  * WR-01: registers its save via `useRegisterActiveSave` so the dirty guard's
  * "Save and continue" performs a REAL profile save (and only navigates on a
@@ -36,8 +42,8 @@ import { useUIStore } from '@/lib/stores/uiStore';
 
 import { FormPanelHeader } from './form-panel-header';
 import { ImageUploader } from './image-uploader';
+import { ResumeUploader } from './resume-uploader';
 import type { SaveState } from './save-button';
-import { UrlInput } from './url-input';
 import { useRegisterActiveSave } from './unsaved-guard';
 
 /** Zod `.max(...)` bounds, mirrored from profile.ts (no magic numbers). */
@@ -208,12 +214,14 @@ export function ProfileForm({ initial, username }: ProfileFormProps) {
         error={fieldErrors.avatar_url}
       />
 
-      <UrlInput
-        label="Résumé URL"
-        name="resume_url"
+      <ResumeUploader
         value={resumeUrl}
-        onValueChange={(v) => {
-          setResumeUrl(v);
+        onValueChange={(url) => {
+          setResumeUrl(url);
+          markDirty();
+        }}
+        onUploaded={(url) => {
+          setResumeUrl(url);
           markDirty();
         }}
         error={fieldErrors.resume_url}
