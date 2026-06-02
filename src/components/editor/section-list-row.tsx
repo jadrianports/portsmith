@@ -317,6 +317,13 @@ export function SectionList({ sections, portfolioId, username }: SectionListProp
     <div className="flex flex-col gap-2">
       {reorderError ? <Alert variant="error">{reorderError}</Alert> : null}
       <DndContext
+        // Stable explicit id: dnd-kit's useUniqueId('DndDescribedBy', id) returns
+        // this verbatim instead of a module-global counter value, so the generated
+        // aria-describedby is identical on the server render and on client hydration.
+        // Without it the counter desyncs (server 'DndDescribedBy-0' vs client '-1')
+        // and React reports a hydration mismatch on every drag handle. One rail per
+        // dashboard ⇒ a constant id is unique. (Fixes 05-05 UAT hydration warning.)
+        id="section-list-dnd"
         sensors={sensors}
         collisionDetection={closestCenter}
         accessibility={{ announcements }}

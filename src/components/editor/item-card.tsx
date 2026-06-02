@@ -72,6 +72,7 @@ import { CharCounter } from '@/components/ui/char-counter';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { saveSectionAction } from '@/lib/cms/save-section-action';
+import { validateSectionContent } from '@/lib/validations';
 
 import { ChipInput } from './chip-input';
 import { ImageUploader } from './image-uploader';
@@ -415,7 +416,6 @@ export function ItemCard({
                   label="Project image"
                   value={str(item.image)}
                   onValueChange={(url) => onPatch(item.id, { image: url })}
-                  onUploaded={(url) => onPatch(item.id, { image: url })}
                   alt={str(item.image_alt)}
                   onAltChange={(a) => onPatch(item.id, { image_alt: a })}
                 />
@@ -507,7 +507,6 @@ export function ItemCard({
                   label="Author photo"
                   value={str(item.avatar)}
                   onValueChange={(url) => onPatch(item.id, { avatar: url })}
-                  onUploaded={(url) => onPatch(item.id, { avatar: url })}
                   alt={str(item.avatar_alt)}
                   onAltChange={(a) => onPatch(item.id, { avatar_alt: a })}
                 />
@@ -618,10 +617,27 @@ export function ItemManager({
    */
   const persist = useCallback(
     async (prevItems: EditorItem[], nextItems: EditorItem[]): Promise<boolean> => {
+      const content = { ...initialContent, items: nextItems };
+      // Auto-save only when the WHOLE section currently validates. Item edits are
+      // debounce-free auto-saves (no per-item Save button), so a transient invalid
+      // state — an image set but its REQUIRED alt still empty (projectItem/
+      // testimonialItem alt refine), or a freshly-added blank item (title.min(1)) —
+      // would otherwise POST a payload the server rejects ({ok:false}) and surface a
+      // spurious "couldn’t save" toast the user never triggered (the storm of doomed
+      // saves seen in 05-05 UAT). Skip the network write while invalid and clear any
+      // stale error; the inline required fields (the ImageUploader alt Input, the
+      // Title field) guide the fix, and the save fires automatically on the next
+      // patch once the item validates. saveSectionAction's server-side re-parse stays
+      // the authoritative gate — this is only a client-side UX pre-check.
+      try {
+        validateSectionContent(type, content);
+      } catch {
+        setError(null);
+        return false;
+      }
       setSaving(true);
       setError(null);
       try {
-        const content = { ...initialContent, items: nextItems };
         const deleteUrls = droppedImageUrls(type, prevItems, nextItems);
         const result = await saveSectionAction({
           sectionId,
@@ -729,6 +745,11 @@ export function ItemManager({
         </p>
       ) : (
         <DndContext
+          // Stable explicit id (see section-list-row.tsx): bypasses dnd-kit's
+          // module-global useUniqueId counter so aria-describedby is hydration-stable.
+          // Scoped to sectionId — exactly one ItemManager mounts per selected
+          // item-section (SectionPanel keys by section id), so it is unique + stable.
+          id={`item-dnd-${sectionId}`}
           sensors={sensors}
           collisionDetection={closestCenter}
           accessibility={{ announcements }}

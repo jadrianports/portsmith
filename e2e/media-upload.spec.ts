@@ -67,6 +67,16 @@ test.describe('MEDIA — upload a project image → publish → the public page 
     // all run here; give generous headroom on Windows.
     test.setTimeout(180_000);
 
+    // REGRESSION GUARD (05-05 UAT, Bug 1 — hydration): capture any React
+    // hydration-mismatch console error across the whole run. The editor's dnd-kit
+    // DndContexts (section rail + item manager) now carry stable explicit ids, so the
+    // server and client aria-describedby ids match and zero mismatches are emitted.
+    const hydrationErrors: string[] = [];
+    page.on('console', (msg) => {
+      const t = msg.text();
+      if (/hydrat|did not match|server rendered HTML/i.test(t)) hydrationErrors.push(t);
+    });
+
     const projectTitle = `Media Project ${Date.now().toString(36)}`;
 
     // 1) Sign in → the editor mounts (populated, not blank).
@@ -111,6 +121,15 @@ test.describe('MEDIA — upload a project image → publish → the public page 
       timeout: 30_000,
     });
 
+    // REGRESSION GUARD (05-05 UAT, Bug 2 — spurious save error): the image is now set
+    // but its REQUIRED alt is still empty, so the project item is not yet valid.
+    // ItemManager.persist must SKIP the auto-save (no doomed {ok:false} POST) and must
+    // NOT raise the "couldn’t save" toast the user never triggered. The error Alert
+    // must be absent until alt is filled (when the save legitimately fires below).
+    await expect(
+      page.getByText('We couldn’t save your changes. Please try again.'),
+    ).toBeHidden();
+
     // 6) Fill the required alt text LAST. This onPatch triggers the section auto-save
     //    with title + image + alt all present → the server alt refine passes and the
     //    whole-section write + revalidate succeeds.
@@ -143,5 +162,9 @@ test.describe('MEDIA — upload a project image → publish → the public page 
     expect(renderedSrc, 'project img has a src').toBeTruthy();
     // D-08 proof: the rendered image origin is the Supabase Storage origin, nothing else.
     expect(new URL(renderedSrc!).origin).toBe(storageBase.origin);
+
+    // Bug 1 final assertion: no React hydration mismatch was logged at any point in
+    // the run (stable DndContext ids hold across SSR + client hydration).
+    expect(hydrationErrors, 'no React hydration mismatch on the dashboard').toEqual([]);
   });
 });
