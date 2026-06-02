@@ -318,6 +318,7 @@ export function ImageUploader({
       }
       onValueChange(url);
       onUploaded?.(url);
+      setRejectMsg(null); // WR-05: clear any prior error so it can't coexist with the success beat
       setStatus('uploaded');
       // The route's Storage write incremented usage — re-read the meter.
       refreshStorageMeter();

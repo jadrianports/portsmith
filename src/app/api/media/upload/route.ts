@@ -77,6 +77,16 @@ function isImageKind(kind: UploadKind): boolean {
   return kind !== 'resume';
 }
 
+/**
+ * CR-02 boundary guard: the object-path first segment is cast to `::uuid` by the
+ * sync_storage_usage trigger (migration 003). A verified Supabase claim's `sub` is
+ * always the user UUID today; asserting the shape here keeps a future non-UUID auth
+ * subject (custom JWT / third-party OIDC) from building a path that aborts the usage
+ * trigger AFTER the bytes land (returning a URL for an uncharged object).
+ */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function POST(req: Request): Promise<NextResponse> {
   // [A] Verified identity (AUTH-05 — never getSession). A null claim or a claim
   //     without a `sub` is a hard 401 — NEVER coerce `sub` to '' (WR-05: that would
@@ -84,7 +94,11 @@ export async function POST(req: Request): Promise<NextResponse> {
   const claims = await getVerifiedClaims();
   if (!claims) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const sub = (claims as { sub?: string }).sub;
-  if (!sub) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  // CR-02: assert the verified subject is a UUID before it becomes the object-path
+  // first segment (the usage trigger casts it to ::uuid). Never coerce sub to ''.
+  if (!sub || !UUID_RE.test(sub)) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
 
   // Parse multipart body: `kind` (one of UPLOAD_KINDS) + `file` (a Blob).
   let form: FormData;

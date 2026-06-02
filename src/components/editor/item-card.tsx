@@ -616,7 +616,10 @@ export function ItemManager({
    * Returns whether the save succeeded so the caller can roll back optimism.
    */
   const persist = useCallback(
-    async (prevItems: EditorItem[], nextItems: EditorItem[]): Promise<boolean> => {
+    async (
+      prevItems: EditorItem[],
+      nextItems: EditorItem[],
+    ): Promise<'saved' | 'skipped-invalid' | 'failed'> => {
       const content = { ...initialContent, items: nextItems };
       // Auto-save only when the WHOLE section currently validates. Item edits are
       // debounce-free auto-saves (no per-item Save button), so a transient invalid
@@ -632,8 +635,12 @@ export function ItemManager({
       try {
         validateSectionContent(type, content);
       } catch {
+        // Not yet valid (e.g. an item image awaiting its required alt, or a blank
+        // new item's title). Skip the doomed save WITHOUT raising an error — this is
+        // semantically DISTINCT from a real save failure (WR-04): callers that care
+        // (handleDragEnd) must not show the failure toast for a skip.
         setError(null);
-        return false;
+        return 'skipped-invalid';
       }
       setSaving(true);
       setError(null);
@@ -648,12 +655,12 @@ export function ItemManager({
         });
         if (!result.ok) {
           setError(result.error ?? SAVE_ERROR);
-          return false;
+          return 'failed';
         }
-        return true;
+        return 'saved';
       } catch {
         setError(SAVE_ERROR);
-        return false;
+        return 'failed';
       } finally {
         setSaving(false);
       }
@@ -706,11 +713,15 @@ export function ItemManager({
     setItems(next); // optimistic
     // Reorder preserves the SAME items (and image URLs) — the diff drops nothing,
     // so no delete fires (no false deletes on a reorder).
-    void persist(previous, next).then((ok) => {
-      if (!ok) {
+    void persist(previous, next).then((outcome) => {
+      if (outcome === 'failed') {
         setItems(previous); // roll back to the truth (optimistic UI honesty)
         setError(REORDER_ERROR);
       }
+      // 'skipped-invalid' (WR-04): the reorder itself is valid — only an unrelated
+      // field (e.g. an item image awaiting its alt) is invalid, so the whole-section
+      // save was skipped. Keep the optimistic order (it persists on the next valid
+      // save) and do NOT raise the misleading REORDER_ERROR. 'saved' → nothing to do.
     });
   }
 

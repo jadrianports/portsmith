@@ -90,5 +90,16 @@ export async function deleteStorageObject(
   // locate-SELECT succeeds — Finding 1) and the AFTER-DELETE trigger's
   // `storage_used_bytes` decrement runs under service_role (002:55 short-circuit —
   // Finding 2), so the usage counter syncs correctly.
-  await supabaseAdmin.storage.from(parsed.bucket).remove([parsed.path]);
+  // WR-01: capture + surface the remove result. A failed/no-match remove leaves the
+  // orphan AND skips the AFTER-DELETE usage decrement (over-counting quota). Do NOT
+  // throw — a failed delete-on-replace must not fail the user's save — but log it so
+  // the orphan is visible to the eventual sweep instead of silently swallowed.
+  const { error } = await supabaseAdmin.storage
+    .from(parsed.bucket)
+    .remove([parsed.path]);
+  if (error) {
+    console.error(
+      `[deleteStorageObject] failed to remove ${parsed.bucket}/${parsed.path}: ${error.message}`,
+    );
+  }
 }

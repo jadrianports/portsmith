@@ -162,19 +162,25 @@ export function meterFillRatio(used: number): number {
 
 /**
  * The truthful "X / 25 MB" readout (Copywriting Contract). Whole MB render as an
- * integer; a sub-MB upload rounds to ONE decimal so a tiny image is never shown
+ * integer; a sub-MB upload shows ONE decimal so a tiny image is never shown
  * misleadingly as "0 / 25 MB". The denominator is always the 25 MB cap.
+ *
+ * WR-06: the decimal is FLOORED, not rounded — rounding 24.96 MB up to "25 / 25 MB"
+ * read as "full" while `meterState` was still 'approaching' (an internally
+ * contradictory display). Flooring reserves the exact cap figure for genuinely
+ * at/over-cap usage; a real upload still floors to a visible 0.1 minimum.
  */
 export function formatStorageReadout(used: number): string {
   const capMb = Math.round(QUOTA_BYTES / (1024 * 1024)); // 25
   const safe = Number.isFinite(used) && used > 0 ? used : 0;
   const usedMbRaw = safe / (1024 * 1024);
-  // Whole MB → integer; otherwise one decimal (and never round a real upload to 0).
+  // Whole MB → integer; otherwise one FLOORED decimal (never rounds up to the cap;
+  // never floors a real upload to 0).
   let usedMb: string;
   if (Number.isInteger(usedMbRaw)) {
     usedMb = String(usedMbRaw);
   } else {
-    const oneDecimal = Math.round(usedMbRaw * 10) / 10;
+    const oneDecimal = Math.floor(usedMbRaw * 10) / 10;
     usedMb = oneDecimal === 0 && safe > 0 ? '0.1' : String(oneDecimal);
   }
   return `${usedMb} / ${capMb} MB`;

@@ -166,31 +166,9 @@ export async function saveProfileAction(input: SaveProfileInput): Promise<SavePr
     resume_url?: string | null;
   } | null) ?? null;
 
-  // 3b) DELETE-ON-REPLACE leg (D-11 / D-12 / MEDIA-04 — an ADDED leg, NOT a
-  //     replacement of the SHARED-A sequence). For BOTH avatar_url and resume_url:
-  //     when the parsed NEW value differs from the stored CURRENT value (a replace
-  //     OR a clear), the prior object is being dropped — delete it synchronously so
-  //     replacing/clearing either profile medium frees its Storage (no orphan). The
-  //     owner `sub` is the SERVER-VERIFIED subject (step 1), NEVER client input, and
-  //     `deleteStorageObject` re-asserts the own-folder guard on top of
-  //     urlToStoragePath's origin-lock — so a non-Storage / foreign / unchanged URL
-  //     is a safe no-op and a crafted cross-tenant URL is rejected (T-05-16/17). We
-  //     only ever delete the CURRENT object when it is genuinely being dropped
-  //     (`current !== next`), so the surviving (new) object is never deleted (no
-  //     TOCTOU): the delete targets the prior URL, the UPDATE writes the next URL.
-  if (prior) {
-    const drops: Array<[string | null | undefined, string | undefined]> = [
-      [prior.avatar_url, parsed.data.avatar_url],
-      [prior.resume_url, parsed.data.resume_url],
-    ];
-    for (const [current, next] of drops) {
-      const currentUrl = (current ?? '').trim();
-      const nextUrl = (next ?? '').trim();
-      if (currentUrl !== '' && currentUrl !== nextUrl) {
-        await deleteStorageObject(currentUrl, sub);
-      }
-    }
-  }
+  // 3b) DELETE-ON-REPLACE leg moved to AFTER the UPDATE succeeds (WR-02) — see below.
+  //     Deleting the prior object before the write would strand a broken reference if
+  //     the UPDATE then failed (the row still points at the now-deleted object).
 
   // 4) EXPLICIT 4-COLUMN ALLOWLIST (Pitfall 4 / T-04-04a). Build the update
   //    object by hand — NEVER spread parsed/input — and NEVER include `username`
@@ -210,6 +188,31 @@ export async function saveProfileAction(input: SaveProfileInput): Promise<SavePr
     .update(allowlist)
     .eq('id', sub);
   if (error) return { ok: false, error: SAVE_FAILED };
+
+  // 4b) DELETE-ON-REPLACE leg (D-11 / D-12 / MEDIA-04) — runs ONLY AFTER the row
+  //     UPDATE is confirmed (WR-02), so a failed save never deletes an object the
+  //     surviving row still references. For BOTH avatar_url and resume_url: when the
+  //     parsed NEW value differs from the stored CURRENT (a replace OR a clear), the
+  //     prior object is dropped — delete it so replacing/clearing either profile
+  //     medium frees its Storage. `sub` is the SERVER-VERIFIED subject (step 1),
+  //     never client input; deleteStorageObject re-asserts the own-folder guard +
+  //     origin-lock, so a non-Storage / foreign / unchanged URL is a safe no-op and a
+  //     crafted cross-tenant URL is rejected (T-05-16/17). Only the genuinely-dropped
+  //     CURRENT object is deleted (`current !== next`) — the surviving NEW object is
+  //     never targeted (no TOCTOU).
+  if (prior) {
+    const drops: Array<[string | null | undefined, string | undefined]> = [
+      [prior.avatar_url, parsed.data.avatar_url],
+      [prior.resume_url, parsed.data.resume_url],
+    ];
+    for (const [current, next] of drops) {
+      const currentUrl = (current ?? '').trim();
+      const nextUrl = (next ?? '').trim();
+      if (currentUrl !== '' && currentUrl !== nextUrl) {
+        await deleteStorageObject(currentUrl, sub);
+      }
+    }
+  }
 
   // 5) Resolve the owner username (prefer the dashboard-passed value; else the
   //    prior-row read above — NEVER the request host, PUB-03) and revalidate the

@@ -134,22 +134,9 @@ export async function saveSectionAction(input: SaveSectionInput): Promise<SaveSe
     return gateErrorToResult(e);
   }
 
-  // 2b) Orphan-delete leg (D-12 / MEDIA-04 — an ADDED leg, NOT a replacement of
-  //     the SHARED-A sequence). When an item with an image is REMOVED, or its
-  //     image is REPLACED/CLEARED, the editor diffs the old-vs-new item-image URLs
-  //     and passes the dropped ones here; we delete each prior Storage object
-  //     synchronously so it is freed as part of the removing mutation (no quota
-  //     leak). The owner `sub` is the SERVER-VERIFIED subject (step 1) — NEVER
-  //     client-supplied — and `deleteStorageObject` re-asserts the own-folder guard
-  //     on top of urlToStoragePath's origin-lock, so a crafted cross-tenant or
-  //     non-Storage URL is rejected / a safe no-op (T-05-11). The AFTER-DELETE
-  //     `sync_storage_usage` trigger then decrements `storage_used_bytes` under
-  //     service_role (Option B — see delete-object.ts).
-  if (input.deleteUrls?.length) {
-    for (const url of input.deleteUrls) {
-      await deleteStorageObject(url, sub);
-    }
-  }
+  // 2b) Orphan-delete leg moved to AFTER the UPDATE succeeds (WR-02) — see below.
+  //     Deleting the dropped objects before the write would strand a broken
+  //     reference if the section UPDATE then failed (the row still points at them).
 
   // 3) Write under RLS via the AUTHENTICATED client (never service-role). The
   //    sections.own_all policy + .eq('id', sectionId) scope the UPDATE to the
@@ -161,6 +148,22 @@ export async function saveSectionAction(input: SaveSectionInput): Promise<SaveSe
     .update({ content: parsed })
     .eq('id', input.sectionId);
   if (error) return { ok: false, error: SAVE_FAILED };
+
+  // 3b) Orphan-delete leg (D-12 / MEDIA-04) — runs ONLY AFTER the section UPDATE is
+  //     confirmed (WR-02), so a failed save never deletes an object the surviving row
+  //     still references. When an item image is removed/replaced/cleared, the editor
+  //     diffs old-vs-new item-image URLs and passes the dropped ones here; each prior
+  //     Storage object is freed. `sub` is the SERVER-VERIFIED subject (step 1), never
+  //     client-supplied; deleteStorageObject re-asserts the own-folder guard +
+  //     origin-lock so a crafted cross-tenant / non-Storage URL is rejected / a safe
+  //     no-op (T-05-11). The AFTER-DELETE trigger decrements storage_used_bytes under
+  //     service_role (Option B). (deleteUrls is still client-influenced — see WR-03,
+  //     tracked as a fast-follow: server should recompute the diff from prior content.)
+  if (input.deleteUrls?.length) {
+    for (const url of input.deleteUrls) {
+      await deleteStorageObject(url, sub);
+    }
+  }
 
   // 4) Resolve the owner username (prefer the one the dashboard passed; else read
   //    the verified profile row — NEVER the request host, PUB-03) and revalidate

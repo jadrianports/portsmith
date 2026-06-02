@@ -192,6 +192,7 @@ export function ResumeUploader({
         // delete-on-replace leg, Plan 04 Task 3 — not here) and fire the beat.
         onValueChange(url);
         onUploaded?.(url);
+        setRejectMsg(null); // WR-05: clear any prior error so it can't coexist with the success beat
         setStatus('uploaded');
         // The route's Storage write incremented usage — re-read the meter.
         refreshStorageMeter();
@@ -275,7 +276,7 @@ export function ResumeUploader({
             <a
               href={value}
               target="_blank"
-              rel="noopener"
+              rel="noopener noreferrer"
               aria-label="Open résumé in a new tab"
               className={
                 'inline-flex min-h-11 shrink-0 items-center gap-1 rounded-sm px-1 text-sm ' +
