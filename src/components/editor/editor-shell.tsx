@@ -39,7 +39,7 @@
  * the panel is never a cramped two-pane.
  */
 import Link from 'next/link';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Mail } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -111,6 +111,11 @@ export interface EditorShellProps {
    * StorageMeter. READ-ONLY: never written back from the client (T-05-22).
    */
   storageUsedBytes: number;
+  /**
+   * The owner's unread-message count (06-05 / CONT-02) — drives the scarce-accent
+   * inbox nav badge. RSC-loaded under RLS (owner-only). 0 → no badge.
+   */
+  unreadMessageCount?: number;
 }
 
 export function EditorShell({
@@ -118,6 +123,7 @@ export function EditorShell({
   portfolioId,
   ownerId,
   storageUsedBytes,
+  unreadMessageCount = 0,
 }: EditorShellProps) {
   const queryClient = useQueryClient();
 
@@ -240,6 +246,37 @@ export function EditorShell({
         </h1>
 
         <div className="ml-auto flex flex-wrap items-center gap-3">
+          {/* Messages → the /dashboard/inbox surface (06-05 / CONT-02), carrying
+              the scarce-accent unread badge (the one sanctioned "new" nav signal,
+              UI-SPEC Surface 3). The count + an accessible suffix keep the badge
+              color-independent. */}
+          <Link
+            href="/dashboard/inbox"
+            className={
+              'relative inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border px-4 ' +
+              'text-sm font-semibold text-foreground outline-none transition-colors ' +
+              'hover:border-border-strong hover:text-accent ' +
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+              'motion-reduce:transition-none'
+            }
+            aria-label={
+              unreadMessageCount > 0
+                ? `Messages, ${unreadMessageCount} unread`
+                : 'Messages'
+            }
+          >
+            <Mail aria-hidden="true" className="size-3.5" />
+            <span>Messages</span>
+            {unreadMessageCount > 0 ? (
+              <span
+                aria-hidden="true"
+                className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold tabular-nums text-accent-foreground"
+              >
+                {unreadMessageCount}
+              </span>
+            ) : null}
+          </Link>
+
           {/* Preview → the 04-07 enable route. prefetch={false} is MANDATORY:
               next/link prefetch can race/delete the draft cookie (RESEARCH
               Pattern 2 / 04-07 carry-forward). */}

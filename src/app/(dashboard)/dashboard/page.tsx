@@ -86,12 +86,23 @@ export default async function DashboardPage() {
   const data = await getPortfolioOwnerByUsername(username, { includeHidden: true });
   if (!data) redirect('/login');
 
+  // 5) Unread-message count for the inbox nav badge (06-05 / CONT-02). A cheap
+  //    head-count under RLS via the AUTHENTICATED client (NEVER supabaseAdmin) —
+  //    the `messages own select` policy scopes it to the owner's portfolio, so
+  //    `is_read=false` already means "unread, mine". The badge is the one
+  //    sanctioned scarce-accent "new" signal on the nav (UI-SPEC Surface 3).
+  const { count: unreadCount } = await supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_read', false);
+
   return (
     <EditorShell
       data={data}
       portfolioId={bootstrap.portfolioId}
       ownerId={sub}
       storageUsedBytes={storageUsedBytes}
+      unreadMessageCount={unreadCount ?? 0}
     />
   );
 }
