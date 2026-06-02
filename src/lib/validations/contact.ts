@@ -14,7 +14,11 @@
 import { z } from 'zod';
 
 export const contactFormSchema = z.object({
-  portfolio_id: z.uuid({ error: 'A valid portfolio id is required' }),
+  // A Postgres `uuid` column accepts ANY 8-4-4-4-12 GUID-format string — it does
+  // NOT enforce the RFC 4122 version/variant bits that Zod's stricter `z.uuid()`
+  // requires. Use `z.guid()` so the boundary validator matches what the DB accepts
+  // (a portfolio_id that Postgres stores must never be rejected here).
+  portfolio_id: z.guid({ error: 'A valid portfolio id is required' }),
   sender_name: z
     .string()
     .min(1, { error: 'Your name is required' })
