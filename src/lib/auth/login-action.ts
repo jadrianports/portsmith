@@ -122,8 +122,15 @@ export async function assertNotLocked(
 
   if ((data as { locked?: boolean } | null)?.locked === true) {
     // Tear down the just-created session — a locked account establishes NO usable
-    // session (D-14) — and return the generic suspended result.
-    await supabase.auth.signOut();
+    // session (D-14). signOut is BEST-EFFORT: if it fails transiently the session
+    // cookie could linger, so the /dashboard gate ALSO re-checks `locked` server-side
+    // (defense-in-depth, WR-02) — a suspended account can never load an authed
+    // surface even if this teardown fails. Surface the failure rather than silently
+    // discarding the result.
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError) {
+      console.error('[login] signOut after locked-account detection failed:', signOutError);
+    }
     return { ok: false, error: SUSPENDED_MESSAGE };
   }
 

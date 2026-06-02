@@ -67,9 +67,17 @@ export default async function DashboardPage() {
   //    read-only StorageMeter and NEVER written from the client (T-05-22).
   const { data: profileRow } = await supabase
     .from('profiles')
-    .select('username, storage_used_bytes')
+    .select('username, storage_used_bytes, locked')
     .eq('id', sub)
     .maybeSingle();
+  // WR-02 (D-14 defense-in-depth): a suspended account must never load an authed
+  // surface even if the login-action signOut that should have torn down its session
+  // failed transiently. Re-check `locked` on the verified own-row read and bounce a
+  // locked account to /login (a fresh login there returns the generic suspended copy).
+  // `locked` is readable by the owner for their own row under `profiles own select`.
+  if ((profileRow as { locked?: boolean } | null)?.locked === true) {
+    redirect('/login');
+  }
   const username = (profileRow as { username?: string } | null)?.username ?? '';
   const storageUsedBytes =
     (profileRow as { storage_used_bytes?: number } | null)?.storage_used_bytes ?? 0;
