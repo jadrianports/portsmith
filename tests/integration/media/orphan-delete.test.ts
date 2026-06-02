@@ -1,16 +1,32 @@
 /**
- * MEDIA-04 — orphan-free deletion on remove/replace (Wave 0 RED).
+ * MEDIA-04 — orphan-free deletion on remove/replace (Wave 0 → GREEN in Plan 02).
  *
- * GREENED BY: Plan 03/04 (the delete-on-replace hook + the deleteStorageObject
- * helper wired into the removing mutation). RED NOW via the missing-module import
- * of the delete helper (STATE 04-01 pattern) — a REAL gate, not a `.skip`/`.todo`
- * pass.
+ * GREENED BY: Plan 02 (the shared `deleteStorageObject` helper, built in the spine
+ * here because BOTH Wave-3 slices — 05-03 item-image remove/replace, 05-04
+ * résumé/avatar delete-on-replace — consume it).
  *
- * CONTRACT this proves once green (mirrors rls-write.test.ts own-folder
- * write/delete + admin read-back): upload an object → `storage.from(b).remove([path])`
- * (own-folder DELETE RLS, 003:66-68) → `adminClient().storage.from(b).list(...)`
- * shows the object GONE AND `storage_used_bytes` back down (the AFTER-DELETE trigger
- * leg, 003:126-133, decrements with GREATEST(0, ...)).
+ * ─────────────────────────────────────────────────────────────────────────────
+ * RULE-4-RESOLVED OPTION B reconciliation + boundary proof. The Wave-0 RED body
+ * assumed the authenticated-client delete (`clientA.storage.remove`). Two VERIFIED
+ * foundation bugs made that impossible without modifying the locked foundation:
+ *   - FINDING 1: storage.objects has own-folder INSERT + DELETE policies but NO SELECT
+ *     policy; Supabase `remove()` runs an internal SELECT to locate the row, so an
+ *     authenticated `.remove()` silently deletes NOTHING (this very test's RED body
+ *     left the object in place under `clientA.storage.remove`).
+ *   - FINDING 2: the 002 protected-columns trigger RAISEs on the AFTER-DELETE
+ *     `storage_used_bytes` decrement unless run under `service_role` (002:55).
+ * Founder-approved Option B: `deleteStorageObject(url, ownerSub)` deletes via the
+ * SERVER-ONLY service-role admin client (RLS bypassed → locate-SELECT works; usage
+ * decrement runs under service_role → syncs), gated by an EXPLICIT own-folder guard
+ * (`path[0] === ownerSub`) that REPLACES own-folder DELETE RLS as the boundary.
+ *
+ * This test runs the REAL helper (it imports `@/lib/supabase/service-role`, aliased to
+ * a no-op `server-only` stub under vitest — vitest.config.ts — and reads the local
+ * service-role key from the env). It proves: service-role upload → deleteStorageObject
+ * → the object is GONE (admin list) AND `storage_used_bytes` is back to 0; PLUS the
+ * cross-tenant boundary holds — deleting user B's object as user A is REJECTED (the
+ * own-folder guard), leaving B's object intact.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -20,6 +36,8 @@ import {
   teardownTwoUsers,
   type TwoUsers,
 } from '../cms/_cms-fixtures';
+
+import { deleteStorageObject } from '@/lib/media/delete-object';
 
 const admin = adminClient();
 const RUN = crypto.randomUUID().slice(0, 8);
@@ -32,6 +50,11 @@ function webpBytes(): Uint8Array {
   ]);
 }
 
+/** Build the public Storage URL for a media-bucket object path (what the helper parses). */
+function publicMediaUrl(path: string): string {
+  return admin.storage.from('media').getPublicUrl(path).data.publicUrl;
+}
+
 beforeAll(async () => {
   ctx = await setupTwoUsers('mediaorph', RUN);
 }, 30_000);
@@ -41,9 +64,7 @@ afterAll(async () => {
 });
 
 describe('MEDIA-04 — removing an image deletes its Storage object (no orphan)', () => {
-  it('RED until Plan 03/04: the deleteStorageObject helper exists', async () => {
-    // RED via a RUNTIME import rejection (specifier in a variable so tsc stays 0).
-    // This module is created by the orphan-delete slice (Plan 03/04).
+  it('GREEN: the deleteStorageObject helper exists', async () => {
     const HELPER = '@/lib/media/delete-object';
     const mod = (await import(/* @vite-ignore */ HELPER)) as {
       deleteStorageObject?: unknown;
@@ -51,26 +72,60 @@ describe('MEDIA-04 — removing an image deletes its Storage object (no orphan)'
     expect(typeof mod.deleteStorageObject).toBe('function');
   });
 
-  it('upload → remove leaves no object and restores usage', async () => {
+  it('upload → deleteStorageObject(url, ownerSub) leaves no object and restores usage', async () => {
     const folder = `${ctx.userA.id}/project`;
     const path = `${folder}/${RUN}.webp`;
-    const { error: upErr } = await ctx.clientA.storage
+
+    // Product path: service-role upload (the route's write client).
+    const { error: upErr } = await admin.storage
       .from('media')
       .upload(path, webpBytes(), { contentType: 'image/webp', upsert: false });
     expect(upErr).toBeNull();
 
-    const { error: delErr } = await ctx.clientA.storage.from('media').remove([path]);
-    expect(delErr).toBeNull();
+    // Run the REAL shared helper with the server-verified owner sub.
+    await deleteStorageObject(publicMediaUrl(path), ctx.userA.id);
 
+    // The object is gone (admin read-back).
     const { data: listing } = await admin.storage.from('media').list(folder);
     const names = (listing ?? []).map((o) => o.name);
     expect(names).not.toContain(`${RUN}.webp`);
 
+    // storage_used_bytes is back down (AFTER-DELETE trigger under service_role).
     const { data: prof } = await admin
       .from('profiles')
       .select('storage_used_bytes')
       .eq('id', ctx.userA.id)
       .single();
     expect(Number(prof!.storage_used_bytes ?? 0)).toBe(0);
+  });
+
+  it('a foreign / unparseable URL is a safe no-op (nothing to delete)', async () => {
+    // urlToStoragePath returns null for a non-Storage origin → the helper returns
+    // cleanly without a remove call.
+    await expect(
+      deleteStorageObject('https://evil.example.com/whatever.webp', ctx.userA.id),
+    ).resolves.toBeUndefined();
+  });
+
+  it('OPTION B BOUNDARY: deleting another tenant’s object is REJECTED (own-folder guard)', async () => {
+    // User B uploads an object in B's own folder (service-role path).
+    const bFolder = `${ctx.userB.id}/project`;
+    const bPath = `${bFolder}/${RUN}-b.webp`;
+    const { error: upErr } = await admin.storage
+      .from('media')
+      .upload(bPath, webpBytes(), { contentType: 'image/webp', upsert: false });
+    expect(upErr).toBeNull();
+
+    // User A attempts to delete B's object via the helper, passing A's verified sub.
+    // The own-folder guard (path[0] === ownerSub) REJECTS — no delete happens.
+    await deleteStorageObject(publicMediaUrl(bPath), ctx.userA.id);
+
+    // B's object is STILL THERE — the service-role power was NOT steered cross-tenant.
+    const { data: listing } = await admin.storage.from('media').list(bFolder);
+    const names = (listing ?? []).map((o) => o.name);
+    expect(names).toContain(`${RUN}-b.webp`);
+
+    // Cleanup B's object via admin (it was intentionally left undeleted by the guard).
+    await admin.storage.from('media').remove([bPath]);
   });
 });
