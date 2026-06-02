@@ -39,7 +39,7 @@ import { PreviewBanner } from '@/components/editor/preview-banner';
 import { TemplateRenderer } from '@/components/templates/template-renderer';
 import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
 import { getPortfolioOwnerByUsername } from '@/lib/portfolio/get-portfolio-owner';
-import { siteUrl } from '@/lib/url';
+import { buildPublicMetadata } from '@/lib/seo/public-metadata';
 
 /** D-21 ISR backstop — 1 hour. On-demand revalidatePath on publish is Phase 4. */
 export const revalidate = 3600;
@@ -96,17 +96,14 @@ export async function generateMetadata({
     return { title: 'Not found', robots: { index: false, follow: false } };
   }
 
-  const displayName = data.profile.display_name ?? username;
-  const title = data.settings.page_title ?? `${displayName} — Portfolio`;
-  const description = data.settings.meta_description ?? data.profile.headline ?? undefined;
-
-  return {
-    title,
-    description,
-    // PUB-03: canonical derived from NEXT_PUBLIC_SITE_URL via siteUrl(), never the
-    // request host (keeps the route ISR-cacheable + blocks host-header injection).
-    alternates: { canonical: siteUrl(`/${username}`) },
-  };
+  // SEO-01 / SAFE-04 / D-10: per-portfolio title/description, the siteUrl canonical,
+  // the noindex-until-complete robots gate, and the static OG default are all built
+  // by the pure `buildPublicMetadata` helper. It reads ONLY the already-loaded
+  // `data` + env-driven `siteUrl()` — it introduces no request-time dynamic read,
+  // so this branch stays cookie-less + ISR-cacheable (the load-bearing D-22
+  // invariant). The gate keeps an incomplete page noindex BUT reachable (a title is
+  // still returned; the page is never notFound()-ed for incompleteness).
+  return buildPublicMetadata(data, username);
 }
 
 export default async function PortfolioPage({

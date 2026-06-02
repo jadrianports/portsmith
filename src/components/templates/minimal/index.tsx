@@ -41,6 +41,7 @@ import { Hero } from './sections/hero';
 import { Projects } from './sections/projects';
 import { Skills } from './sections/skills';
 import { Testimonials } from './sections/testimonials';
+import { buildPersonLd } from '@/lib/seo/person-jsonld';
 import type { PortfolioData, PublicSection } from '../types';
 
 /**
@@ -54,13 +55,19 @@ function sectionOfType(sections: PublicSection[], type: string): PublicSection |
 }
 
 export default function MinimalTemplate({ data }: { data: PortfolioData }) {
-  const { settings, sections } = data;
+  const { profile, settings, sections } = data;
 
   // Null-guarded view values (every public-view column is nullable).
   const defaultMode = settings.theme_mode === 'light' ? 'light' : 'dark';
   const showToggle = settings.visitor_theme_toggle ?? true;
 
   const fontVars = `${clashDisplay.variable} ${generalSans.variable} ${jetbrainsMono.variable}`;
+
+  // SEO-01 (D-08): the data-driven Person JSON-LD, rendered server-side below. The
+  // username is sourced from the public profile row (never a request host — PUB-03);
+  // `buildPersonLd` derives the `url` via siteUrl(). `?? ''` null-guards the nullable
+  // view column — an empty username only yields an origin-root url, never a throw.
+  const personLd = buildPersonLd(data, profile.username ?? '');
 
   return (
     <div
@@ -75,6 +82,18 @@ export default function MinimalTemplate({ data }: { data: PortfolioData }) {
       */}
       <script
         dangerouslySetInnerHTML={{ __html: themeInitScript(defaultMode) }}
+      />
+
+      {/*
+        SEO-01 (D-08): the per-portfolio Person JSON-LD, server-rendered (never a
+        client island). SECURITY (T-06-09 / XSS): the ONLY value interpolated is the
+        `JSON.stringify`-serialized `buildPersonLd` object — schema-shaped,
+        server-controlled primitives that JSON.stringify escapes. NO free-form /
+        user-controlled HTML is injected, mirroring the FOUC-script discipline above.
+      */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(personLd) }}
       />
 
       {/* The 7 sections IN THE D-05 ORDER. ScrollReveal (a 03-10 island) is wired
