@@ -35,6 +35,7 @@ import { saveProfileAction } from '@/lib/cms/save-profile-action';
 import { useUIStore } from '@/lib/stores/uiStore';
 
 import { FormPanelHeader } from './form-panel-header';
+import { ImageUploader } from './image-uploader';
 import type { SaveState } from './save-button';
 import { UrlInput } from './url-input';
 import { useRegisterActiveSave } from './unsaved-guard';
@@ -65,6 +66,12 @@ export function ProfileForm({ initial, username }: ProfileFormProps) {
   const [displayName, setDisplayName] = useState(initial.display_name ?? '');
   const [headline, setHeadline] = useState(initial.headline ?? '');
   const [avatarUrl, setAvatarUrl] = useState(initial.avatar_url ?? '');
+  // Avatar alt text — collected by the uploader for accessibility, but NOT persisted
+  // here: `profiles.avatar_url` is a plain URL column with no alt column (the
+  // about-section `about.avatar` JSONB slot, which DOES carry an alt refine, is a
+  // separate slot edited elsewhere). Local-only so the uploader's required-alt UX
+  // works; the field is not part of buildInput / saveProfileAction.
+  const [avatarAlt, setAvatarAlt] = useState('');
   const [resumeUrl, setResumeUrl] = useState(initial.resume_url ?? '');
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -184,14 +191,20 @@ export function ProfileForm({ initial, username }: ProfileFormProps) {
         </div>
       </div>
 
-      <UrlInput
-        label="Avatar URL"
-        name="avatar_url"
+      <ImageUploader
+        kind="avatar"
+        label="Avatar"
         value={avatarUrl}
-        onValueChange={(v) => {
-          setAvatarUrl(v);
+        onValueChange={(url) => {
+          setAvatarUrl(url);
           markDirty();
         }}
+        onUploaded={(url) => {
+          setAvatarUrl(url);
+          markDirty();
+        }}
+        alt={avatarAlt}
+        onAltChange={setAvatarAlt}
         error={fieldErrors.avatar_url}
       />
 
