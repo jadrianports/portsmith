@@ -5,12 +5,25 @@
  * before WR-02; EditorShell now renders a "Profile" rail entry that routes the
  * panel to the ProfileForm.
  *
+ * PHASE-5 UI CONTRACT UPDATE (D-07, Plan 05-02): the avatar + résumé URL TEXT
+ * fields were REPLACED by upload-only surfaces — the avatar is now the
+ * `ImageUploader` (pick → crop → WebP) and the résumé is the `ResumeUploader`
+ * (PDF upload). There is no longer an "Avatar URL" / "Résumé URL" text input to
+ * paste into. This spec was updated by Plan 05-05 (the phase gate) to assert the
+ * CURRENT upload-only contract instead of the removed URL fields — the stale URL
+ * assertions were a cross-plan integration break the gate surfaced.
+ *
  * What this spec asserts against the REAL editor (a fresh confirmed owner):
  *   - the "Profile" rail entry exists and selecting it opens the profile panel with
- *     the four editable fields (Display name / Headline / Avatar URL / Résumé URL);
+ *     the editable text fields (Display name / Headline) AND the upload surfaces
+ *     (the Avatar image dropzone + the Résumé PDF dropzone — no URL paste field);
  *   - editing a field marks the panel dirty and Save persists it (the action runs —
  *     the saved-&-live beat fires), proving CMS-02 is reachable end-to-end;
- *   - the saved value survives a reload (it was actually written to the DB).
+ *   - the saved value survives a reload (it was actually written to the DB);
+ *   - the dangerous-scheme paste vector is STRUCTURALLY ELIMINATED — there is no
+ *     avatar/résumé URL text input to paste a `javascript:`-scheme string into
+ *     (D-07 upload-only; the server Zod scheme gate remains covered by the
+ *     profile-write integration test as defense-in-depth).
  *
  * Run command: `npx playwright test e2e/profile-editor.spec.ts`.
  */
@@ -43,13 +56,20 @@ test.describe('WR-02 — profile editor reachable + wired to saveProfileAction',
     await expect(profileEntry).toBeVisible();
     await profileEntry.click();
 
-    // The profile panel opens with the four editable fields.
+    // The profile panel opens with the editable text fields + the upload surfaces.
     const displayName = page.getByLabel('Display name', { exact: true });
     const headline = page.getByLabel('Headline', { exact: true });
     await expect(displayName).toBeVisible();
     await expect(headline).toBeVisible();
-    await expect(page.getByLabel('Avatar URL', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('Résumé URL', { exact: true })).toBeVisible();
+    // D-07 (Plan 05-02): avatar + résumé are now upload-only surfaces, NOT URL text
+    // fields. Assert the upload dropzones are present (the empty-state CTAs).
+    await expect(page.getByRole('button', { name: 'Upload a photo' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Upload your résumé (PDF)' }),
+    ).toBeVisible();
+    // And the removed URL paste fields are GONE (the structural security improvement).
+    await expect(page.getByLabel('Avatar URL', { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Résumé URL', { exact: true })).toHaveCount(0);
 
     // Edit display name + headline → the panel goes dirty.
     const newName = `Profile Name ${Date.now().toString(36)}`;
@@ -74,7 +94,7 @@ test.describe('WR-02 — profile editor reachable + wired to saveProfileAction',
     await expect(page.getByLabel('Headline', { exact: true })).toHaveValue(newHeadline);
   });
 
-  test('a javascript:-scheme avatar URL is rejected at the server gate (no save)', async ({
+  test('the dangerous-scheme avatar-URL paste vector is structurally eliminated (D-07)', async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -85,19 +105,21 @@ test.describe('WR-02 — profile editor reachable + wired to saveProfileAction',
 
     const displayName = page.getByLabel('Display name', { exact: true });
     await expect(displayName).toBeVisible();
-    // Keep a valid display name (required) so only the avatar scheme is the failure.
-    await displayName.fill('Valid Name');
-    const avatar = page.getByLabel('Avatar URL', { exact: true });
-    await avatar.fill('javascript:alert(1)');
-    // Blur to trigger the inline client check + mark dirty.
-    await avatar.blur();
-    await expect(page.getByText('Unsaved changes')).toBeVisible();
 
-    // Attempt to save → the saved-&-live beat must NOT appear (the server Zod gate
-    // rejects the dangerous scheme; the field shows an error and stays dirty).
-    await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByText('Saved — your page is live')).toBeHidden();
-    // Still dirty (the save did not succeed).
+    // D-07 (Plan 05-02): there is NO avatar/résumé URL text input anymore — the
+    // avatar is upload-only via the ImageUploader. So a `javascript:`-scheme string
+    // can no longer be PASTED in at all: the vector this test once exercised is
+    // structurally gone. Assert there is no avatar-URL textbox to type a scheme into.
+    await expect(page.getByLabel('Avatar URL', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Upload a photo' })).toBeVisible();
+
+    // The form is still fully functional without the URL field: a plain display-name
+    // edit marks dirty and saves (proves the upload-only ProfileForm still persists,
+    // and the server Zod scheme gate on avatar_url is covered by the
+    // profile-write integration test as defense-in-depth).
+    await displayName.fill('Valid Name');
     await expect(page.getByText('Unsaved changes')).toBeVisible();
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByText('Saved — your page is live')).toBeVisible({ timeout: 30_000 });
   });
 });

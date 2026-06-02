@@ -1,16 +1,33 @@
 /**
- * MEDIA slice (full upload → render loop) — Wave 0 RED.
+ * MEDIA slice (full upload → render loop) — GREEN as of Plan 05.
  *
- * GREENED BY: Plan 05 (the e2e slice — the image uploader wired into the editor,
- * upload → Save → Publish → the public page renders the Storage image). RED NOW
- * because the uploader UI does not yet exist on the dashboard: the
- * `getByTestId('avatar-uploader')` locator below never resolves, so the spec FAILS
- * (a real failing assertion, NOT `test.skip`/`.fixme`). This is the Phase-4 RED
- * idiom (a committed failing gate the downstream slice turns green).
+ * The whole Phase-5 promise end-to-end: a signed-in owner opens the Projects section,
+ * adds a project, and uploads its image through the REAL ImageUploader (pick a real
+ * PNG → the fixed-ratio CropModal → "Use photo" → client WebP encode → POST
+ * /api/media/upload → the thumbnail lands), fills the required alt text, then
+ * Publishes — and the PUBLIC `/[username]` page renders that project image as a
+ * Supabase-Storage-origin image, proving the D-08 host-lock (only Storage URLs
+ * render) AND the full upload → persist → revalidate → render loop.
+ *
+ * WHY THE PROJECT-IMAGE SLOT (not the profile avatar): the profile avatar
+ * (`profiles.avatar_url`) is NOT rendered by the public `minimal` template — the
+ * public page only renders image slots that live in section content (the About
+ * avatar and the project / testimonial item images). The project image is the
+ * fully-wired, publicly-rendered slot, so it is the only honest way to assert the
+ * plan's "the public page renders the Storage image" + "rendered src origin equals
+ * NEXT_PUBLIC_SUPABASE_URL" must-have. It exercises the IDENTICAL ImageUploader,
+ * the IDENTICAL /api/media/upload route, and the IDENTICAL D-08 host-lock. (Rule-1/2
+ * deviation from the plan's literal "avatar" wording — documented for the founder
+ * checkpoint; the avatar slot cannot satisfy its own public-render acceptance.)
  *
  * AUTH: a CONFIRMED owner created via the admin API + the real initialize_portfolio
  * RPC, signed into the browser via the deterministic @supabase/ssr cookie injection
  * (e2e/helpers/cms-auth.ts) — the same model cms-loop.spec.ts uses.
+ *
+ * REAL FIXTURE: `e2e/fixtures/avatar.png` is a real, decodable 256×256 PNG (NOT a
+ * 1-byte stub): the client decodes it (`Image.decode()`), react-cropper renders it,
+ * and `getCroppedCanvas().toBlob('image/webp')` produces the uploaded bytes — so the
+ * route's magic-byte sniff sees a genuine `image/webp`.
  *
  * Run command: `npx playwright test e2e/media-upload.spec.ts`.
  */
@@ -29,7 +46,10 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-test.describe('MEDIA — upload an avatar → Save → Publish → public page renders the Storage image', () => {
+/** The Storage public-object path prefix for a project image (proves D-08 origin + bucket). */
+const PROJECT_STORAGE_PREFIX = '/storage/v1/object/public/media/';
+
+test.describe('MEDIA — upload a project image → publish → the public page renders the Storage image', () => {
   let owner: TestOwner;
 
   test.beforeAll(async () => {
@@ -40,28 +60,88 @@ test.describe('MEDIA — upload an avatar → Save → Publish → public page r
     await deleteOwner(owner);
   });
 
-  test('avatar upload appears as a Storage-origin image on the published page', async ({
+  test('an uploaded image appears as a Storage-origin <img> on the published page', async ({
     page,
   }) => {
+    // Cold Next 16 dev compiles + the real auth + upload + write + revalidate paths
+    // all run here; give generous headroom on Windows.
+    test.setTimeout(180_000);
+
+    const projectTitle = `Media Project ${Date.now().toString(36)}`;
+
+    // 1) Sign in → the editor mounts (populated, not blank).
     await signInAsOwner(page, owner);
 
-    // RED GATE (greened by Plan 05): the avatar image uploader is wired into the
-    // Profile editor. Until then this locator never resolves and the spec fails.
-    const uploader = page.getByTestId('avatar-uploader');
-    await expect(uploader).toBeVisible({ timeout: 15_000 });
+    // 2) Open the Projects section — its ItemManager owns the project ImageUploader.
+    await page.getByRole('button', { name: 'Projects', exact: true }).click();
 
-    // Once green, Plan 05 fills in: pick a file → crop → upload → fill alt → Save →
-    // Publish, then assert the public page renders an <img> whose src is on the
-    // Storage origin (the D-08 host-lock only renders Storage URLs).
+    // 3) Add a project — the new card opens expanded, ready to fill.
+    await page.getByRole('button', { name: 'Add project' }).click();
+
+    // Fill the title FIRST so the section's auto-save (on the final patch) has all
+    // required fields (title min 1) + the image + its required alt → a clean save.
+    // Use the textbox role (the card's Reorder/Remove buttons also carry "...Title"
+    // in their accessible names, so a bare getByLabel('Title') is ambiguous).
+    await page.getByRole('textbox', { name: 'Title' }).fill(projectTitle);
+
+    // 4) Drive the REAL uploader: set the project file input. The hidden input carries
+    //    data-testid="project-uploader"; setInputFiles fires its onChange → the client
+    //    decodes the PNG and opens the fixed-ratio CropModal ("Position your photo").
     const fixture = path.join(__dirname, 'fixtures', 'avatar.png');
-    await uploader.setInputFiles(fixture);
+    await page.getByTestId('project-uploader').setInputFiles(fixture);
 
-    await page.getByRole('button', { name: /save/i }).click();
-    await page.getByRole('button', { name: /^publish$/i }).click();
+    const cropDialog = page.getByRole('dialog', { name: 'Position your photo' });
+    await expect(cropDialog).toBeVisible({ timeout: 30_000 });
 
-    await waitForPublicState(page, `/${owner.username}`, { status: 200 });
-    const res = await page.context().request.get(`/${owner.username}`);
-    const body = await res.text();
-    expect(body).toContain('/storage/v1/object/public/avatars/');
+    // 5) "Use photo" → client WebP encode → POST /api/media/upload. Assert the route
+    //    returns 200 with a Storage media URL (the network proof of the upload).
+    const uploadResponse = page.waitForResponse(
+      (res) => res.url().includes('/api/media/upload') && res.request().method() === 'POST',
+      { timeout: 60_000 },
+    );
+    await cropDialog.getByRole('button', { name: 'Use photo' }).click();
+    const res = await uploadResponse;
+    expect(res.status()).toBe(200);
+    const payload = (await res.json()) as { url?: string };
+    expect(payload.url, 'upload route returned a url').toBeTruthy();
+    expect(payload.url).toContain(PROJECT_STORAGE_PREFIX);
+
+    // The success beat confirms the thumbnail landed + the value swapped.
+    await expect(page.getByText('Photo added — it’s on your page')).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // 6) Fill the required alt text LAST. This onPatch triggers the section auto-save
+    //    with title + image + alt all present → the server alt refine passes and the
+    //    whole-section write + revalidate succeeds.
+    await page.getByRole('textbox', { name: 'Alt text' }).fill('A landscape project screenshot');
+
+    // 7) Publish (frictionless, no confirm) → the status flips to Live. Allow a brief
+    //    settle so the section auto-save lands before publish revalidates.
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(page.getByText('Live', { exact: true })).toBeVisible({ timeout: 30_000 });
+
+    // 8) The PUBLIC page goes live (200) and renders the uploaded image as a
+    //    Storage-origin image (the D-08 host-lock renders ONLY Storage URLs). Poll
+    //    until the body carries the Storage media path, then assert the rendered
+    //    <img> src ORIGIN equals NEXT_PUBLIC_SUPABASE_URL's origin.
+    await waitForPublicState(page, `/${owner.username}`, {
+      status: 200,
+      expectText: PROJECT_STORAGE_PREFIX,
+      timeoutMs: 40_000,
+    });
+
+    await page.goto(`/${owner.username}`);
+    const storageBase = new URL(
+      process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '',
+    );
+    // The minimal template renders the project image via next/image (unoptimized) —
+    // the rendered <img> src is the raw Storage URL. Find it by its Storage path.
+    const projectImg = page.locator(`img[src*="${PROJECT_STORAGE_PREFIX}"]`).first();
+    await expect(projectImg).toBeVisible({ timeout: 30_000 });
+    const renderedSrc = await projectImg.getAttribute('src');
+    expect(renderedSrc, 'project img has a src').toBeTruthy();
+    // D-08 proof: the rendered image origin is the Supabase Storage origin, nothing else.
+    expect(new URL(renderedSrc!).origin).toBe(storageBase.origin);
   });
 });

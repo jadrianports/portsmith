@@ -360,11 +360,14 @@ export function ImageUploader({
     <div className="flex flex-col gap-2">
       <span className="text-sm font-semibold text-foreground">{label}</span>
 
-      {/* Hidden native file input — labeled by the dropzone button's accessible name. */}
+      {/* Hidden native file input — labeled by the dropzone button's accessible name.
+          `data-testid="{kind}-uploader"` lets the e2e drive the real pick→crop→upload
+          slice via Playwright `setInputFiles` (e2e/media-upload.spec.ts). */}
       <input
         ref={fileInputRef}
         type="file"
         accept="image/png,image/jpeg,image/webp"
+        data-testid={`${kind}-uploader`}
         className="sr-only"
         onChange={(e) => {
           void handleFile(e.target.files?.[0]);
