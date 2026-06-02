@@ -60,11 +60,16 @@ export default defineConfig({
     projects: [
       {
         // --- Unit: fast, no I/O (Zod schemas, pure helpers) ---
+        // Also runs the `tests/build/**` SSG build-route assertion (D-22): a
+        // node-env, no-network test that reads the production `.next` prerender
+        // manifest (06-01, Task 3). It lives under tests/build for discoverability
+        // (mirrors the 04-01 e2e-in-./e2e decision) and shares the unit project's
+        // fast node env + the @/* alias.
         resolve,
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['tests/unit/**/*.test.ts'],
+          include: ['tests/unit/**/*.test.ts', 'tests/build/**/*.test.ts'],
         },
       },
       {
