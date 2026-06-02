@@ -54,6 +54,7 @@ import { ProfileForm } from './profile-form';
 import { PublishToggle } from './publish-toggle';
 import { SectionForm, type SimpleSectionType } from './section-form';
 import { SectionList, type EditorSection } from './section-list-row';
+import { StorageMeter } from './storage-meter';
 import { UnsavedChangesGuard, useGuardedNavigate } from './unsaved-guard';
 
 /**
@@ -103,9 +104,21 @@ export interface EditorShellProps {
   data: OwnerPortfolioData;
   /** The owner's portfolio id (scopes the TanStack section-list cache key). */
   portfolioId: string;
+  /** The owner's user id (scopes the read-only StorageMeter's owner-only read). */
+  ownerId: string;
+  /**
+   * The owner's RSC-loaded `storage_used_bytes` (D-09) — seeds the display-only
+   * StorageMeter. READ-ONLY: never written back from the client (T-05-22).
+   */
+  storageUsedBytes: number;
 }
 
-export function EditorShell({ data, portfolioId }: EditorShellProps) {
+export function EditorShell({
+  data,
+  portfolioId,
+  ownerId,
+  storageUsedBytes,
+}: EditorShellProps) {
   const queryClient = useQueryClient();
 
   const activeSectionId = useUIStore((s) => s.activeSectionId);
@@ -280,6 +293,11 @@ export function EditorShell({ data, portfolioId }: EditorShellProps) {
 
             {/* Advisory completeness — docked at the rail bottom (never a gate). */}
             <CompletenessChecklist items={checklistItems} />
+
+            {/* Read-only storage usage meter (D-09) — rail bottom, with the
+                checklist. Reads the protected `storage_used_bytes` (seeded from the
+                RSC owner read), NEVER writes it (T-05-22). */}
+            <StorageMeter ownerId={ownerId} initialUsedBytes={storageUsedBytes} />
           </div>
         </aside>
 

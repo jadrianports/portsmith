@@ -120,3 +120,62 @@ export const MAX_IMAGE_DIMENSION = 12_000;
 export function exceedsPixelCap(width: number, height: number): boolean {
   return width * height > MAX_IMAGE_DIMENSION * MAX_IMAGE_DIMENSION;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────── *
+ * StorageMeter pure math (D-09 / B-10 / B-11)
+ *
+ * The display-only `storage-meter.tsx` component reads the protected, trigger-
+ * maintained `storage_used_bytes` (NEVER writes it) and renders "X / 25 MB". Its
+ * DECISION math lives here — pure, `node`-unit-testable, and the single source of
+ * truth for the three threshold boundaries — so the component is a thin renderer.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** The three meter threshold states (B-10 / B-11). NEVER an accent state. */
+export type MeterState = 'under' | 'approaching' | 'over';
+
+/** The "approaching the cap" boundary — the last ~15% of headroom (B-10). */
+export const METER_APPROACHING_RATIO = 0.85;
+
+/**
+ * The threshold STATE for `used` bytes against `QUOTA_BYTES` (B-10):
+ *   - under       < 85%
+ *   - approaching 85% .. < 100%
+ *   - over        ≥ 100% (at/over the cap)
+ * Color is assigned per-state by the component (brand / warning / destructive —
+ * never accent, B-11) and is ALWAYS paired with the numeric readout + a label.
+ */
+export function meterState(used: number): MeterState {
+  if (used >= QUOTA_BYTES) return 'over';
+  if (used >= QUOTA_BYTES * METER_APPROACHING_RATIO) return 'approaching';
+  return 'under';
+}
+
+/**
+ * The fill ratio (0..1) for the meter track width. Clamped so a garbage/negative
+ * value reads 0 and an over-cap value never overflows the track (caps at 1).
+ */
+export function meterFillRatio(used: number): number {
+  if (!Number.isFinite(used) || used <= 0) return 0;
+  const ratio = used / QUOTA_BYTES;
+  return ratio > 1 ? 1 : ratio;
+}
+
+/**
+ * The truthful "X / 25 MB" readout (Copywriting Contract). Whole MB render as an
+ * integer; a sub-MB upload rounds to ONE decimal so a tiny image is never shown
+ * misleadingly as "0 / 25 MB". The denominator is always the 25 MB cap.
+ */
+export function formatStorageReadout(used: number): string {
+  const capMb = Math.round(QUOTA_BYTES / (1024 * 1024)); // 25
+  const safe = Number.isFinite(used) && used > 0 ? used : 0;
+  const usedMbRaw = safe / (1024 * 1024);
+  // Whole MB → integer; otherwise one decimal (and never round a real upload to 0).
+  let usedMb: string;
+  if (Number.isInteger(usedMbRaw)) {
+    usedMb = String(usedMbRaw);
+  } else {
+    const oneDecimal = Math.round(usedMbRaw * 10) / 10;
+    usedMb = oneDecimal === 0 && safe > 0 ? '0.1' : String(oneDecimal);
+  }
+  return `${usedMb} / ${capMb} MB`;
+}

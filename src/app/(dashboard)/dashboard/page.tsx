@@ -62,12 +62,17 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const sub = (claims as { sub?: string }).sub;
   if (!sub) redirect('/login');
+  //    The select also reads `storage_used_bytes` (D-09) — a PROTECTED column the
+  //    owner may READ for their own row under RLS; it is threaded into the
+  //    read-only StorageMeter and NEVER written from the client (T-05-22).
   const { data: profileRow } = await supabase
     .from('profiles')
-    .select('username')
+    .select('username, storage_used_bytes')
     .eq('id', sub)
     .maybeSingle();
   const username = (profileRow as { username?: string } | null)?.username ?? '';
+  const storageUsedBytes =
+    (profileRow as { storage_used_bytes?: number } | null)?.storage_used_bytes ?? 0;
   if (!username) {
     // A verified session with no profile row should not happen post-bootstrap, but
     // degrade safely rather than render a broken editor.
@@ -81,5 +86,12 @@ export default async function DashboardPage() {
   const data = await getPortfolioOwnerByUsername(username, { includeHidden: true });
   if (!data) redirect('/login');
 
-  return <EditorShell data={data} portfolioId={bootstrap.portfolioId} />;
+  return (
+    <EditorShell
+      data={data}
+      portfolioId={bootstrap.portfolioId}
+      ownerId={sub}
+      storageUsedBytes={storageUsedBytes}
+    />
+  );
 }

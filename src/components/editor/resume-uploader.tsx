@@ -38,9 +38,11 @@ import {
   Upload,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { cmsKeys } from '@/lib/query/cms-keys';
 import { UPLOAD_KINDS, type FileSlotConfig } from '@/lib/media/upload-config';
 
 /** Résumé byte ceiling in whole MB, for the truthful "{N} MB" copy. */
@@ -107,6 +109,22 @@ export function ResumeUploader({
 }: ResumeUploaderProps) {
   const cfg = UPLOAD_KINDS.resume as FileSlotConfig;
   const ceiling = ceilingMb(cfg);
+  const queryClient = useQueryClient();
+
+  /**
+   * Invalidate the read-only StorageMeter's query so it RE-READS the trigger-
+   * maintained `storage_used_bytes` after this upload changed usage (a READ
+   * refresh, never a write of the protected column — T-05-22). Matches the
+   * `cmsKeys.storageUsed(...)` key by its stable `'storage-used'` segment.
+   */
+  const refreshStorageMeter = useCallback(() => {
+    void queryClient.invalidateQueries({
+      predicate: (q) =>
+        Array.isArray(q.queryKey) &&
+        q.queryKey[0] === cmsKeys.all[0] &&
+        q.queryKey[1] === 'storage-used',
+    });
+  }, [queryClient]);
 
   const [status, setStatus] = useState<Status>('idle');
   const [rejectMsg, setRejectMsg] = useState<RejectMessage | null>(null);
@@ -175,13 +193,15 @@ export function ResumeUploader({
         onValueChange(url);
         onUploaded?.(url);
         setStatus('uploaded');
+        // The route's Storage write incremented usage — re-read the meter.
+        refreshStorageMeter();
       } catch {
         if (myReq !== reqId.current) return;
         setStatus('error');
         setRejectMsg('We couldn’t upload your résumé. Please try again.');
       }
     },
-    [cfg.ceiling, ceiling, onUploaded, onValueChange],
+    [cfg.ceiling, ceiling, onUploaded, onValueChange, refreshStorageMeter],
   );
 
   const doRemove = useCallback(() => {

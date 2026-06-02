@@ -53,11 +53,13 @@ import {
   useState,
 } from 'react';
 import { Cropper as ReactCropper, type ReactCropperElement } from 'react-cropper';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { FieldError } from '@/components/ui/field-error';
 import { Input } from '@/components/ui/input';
+import { cmsKeys } from '@/lib/query/cms-keys';
 import {
   exceedsPixelCap,
   UPLOAD_KINDS,
@@ -144,6 +146,24 @@ export function ImageUploader({
 }: ImageUploaderProps) {
   const cfg = UPLOAD_KINDS[kind] as ImageSlotConfig;
   const ceiling = ceilingMb(cfg);
+  const queryClient = useQueryClient();
+
+  /**
+   * Invalidate the read-only StorageMeter's owner-scoped query so it RE-READS the
+   * trigger-maintained `storage_used_bytes` after this upload/remove changed usage.
+   * This is a READ refresh, never a write of the protected column (T-05-22): we
+   * match the `cmsKeys.storageUsed(...)` key by its stable `'storage-used'` segment
+   * (the owner id is not known here — the predicate matches any owner's meter key,
+   * and only the mounted owner's query exists in this client's cache).
+   */
+  const refreshStorageMeter = useCallback(() => {
+    void queryClient.invalidateQueries({
+      predicate: (q) =>
+        Array.isArray(q.queryKey) &&
+        q.queryKey[0] === cmsKeys.all[0] &&
+        q.queryKey[1] === 'storage-used',
+    });
+  }, [queryClient]);
 
   const [status, setStatus] = useState<Status>('idle');
   const [rejectMsg, setRejectMsg] = useState<RejectMessage | null>(null);
@@ -299,12 +319,23 @@ export function ImageUploader({
       onValueChange(url);
       onUploaded?.(url);
       setStatus('uploaded');
+      // The route's Storage write incremented usage — re-read the meter.
+      refreshStorageMeter();
     } catch {
       if (myReq !== reqId.current) return;
       setStatus('error');
       setRejectMsg('We couldn’t upload your photo. Please try again.');
     }
-  }, [cfg.target.height, cfg.target.width, cropSrc, kind, ceiling, onUploaded, onValueChange]);
+  }, [
+    cfg.target.height,
+    cfg.target.width,
+    cropSrc,
+    kind,
+    ceiling,
+    onUploaded,
+    onValueChange,
+    refreshStorageMeter,
+  ]);
 
   const cancelCrop = useCallback(() => {
     if (cropSrc) {

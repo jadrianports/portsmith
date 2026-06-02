@@ -29,4 +29,12 @@ export const cmsKeys = {
   /** One section by its id (a content/item edit invalidates this). */
   section: (sectionId: string) =>
     [...cmsKeys.all, 'section', sectionId] as const,
+  /**
+   * The owner's storage usage (`profiles.storage_used_bytes`) — the read-only
+   * StorageMeter's key (D-09). An upload/remove invalidates this so the meter
+   * re-reads the trigger-maintained usage. The meter NEVER writes this column
+   * (protected, T-05-22) — invalidate to re-READ, never `setQueryData` the value.
+   */
+  storageUsed: (ownerId: string) =>
+    [...cmsKeys.all, 'storage-used', ownerId] as const,
 };
