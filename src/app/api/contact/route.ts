@@ -62,19 +62,10 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'verification_failed' }, { status: 400 });
   }
 
-  // 3) Rate-limit via the ledger (count THEN insert — D-06). Over cap → a GENERIC
-  //    429 (D-04 — the body must never leak the cap, a wait time, or "per hour").
-  const allowed = await countAndRecord(
-    'contact',
-    data.portfolio_id,
-    CONTACT_WINDOW_MS,
-    CONTACT_CAP,
-  );
-  if (!allowed) {
-    return NextResponse.json({ error: 'try_later' }, { status: 429 });
-  }
-
-  // 4) Pre-insert guard: the target portfolio must be public. `public_portfolios`
+  // 3) Pre-insert guard FIRST (WR-03): the target portfolio must be public BEFORE we
+  //    touch the rate-limit ledger. Recording a ledger event before validating the
+  //    target lets a known/guessable portfolio_id burn a victim's quota (accrue
+  //    events) for an invalid or non-public target. `public_portfolios`
   //    (security_invoker) already encodes published AND non-deleted AND non-locked
   //    (portfolio_is_public) — a row present means publishable. A missing/non-public
   //    target returns a GENERIC failure (no info leak about which condition failed).
@@ -85,6 +76,19 @@ export async function POST(req: Request): Promise<NextResponse> {
     .single();
   if (guardError || !target) {
     return NextResponse.json({ error: 'unavailable' }, { status: 404 });
+  }
+
+  // 4) Rate-limit via the ledger (count THEN insert — D-06), only for a CONFIRMED
+  //    public target. Over cap → a GENERIC 429 (D-04 — the body must never leak the
+  //    cap, a wait time, or "per hour").
+  const allowed = await countAndRecord(
+    'contact',
+    data.portfolio_id,
+    CONTACT_WINDOW_MS,
+    CONTACT_CAP,
+  );
+  if (!allowed) {
+    return NextResponse.json({ error: 'try_later' }, { status: 429 });
   }
 
   // 5) Insert into `messages` via the service-role client (RLS bypassed). NOTE:
