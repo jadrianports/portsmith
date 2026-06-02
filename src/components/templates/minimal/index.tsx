@@ -41,7 +41,7 @@ import { Hero } from './sections/hero';
 import { Projects } from './sections/projects';
 import { Skills } from './sections/skills';
 import { Testimonials } from './sections/testimonials';
-import { buildPersonLd } from '@/lib/seo/person-jsonld';
+import { personLdScriptHtml } from '@/lib/seo/person-jsonld';
 import type { PortfolioData, PublicSection } from '../types';
 
 /**
@@ -67,7 +67,9 @@ export default function MinimalTemplate({ data }: { data: PortfolioData }) {
   // username is sourced from the public profile row (never a request host — PUB-03);
   // `buildPersonLd` derives the `url` via siteUrl(). `?? ''` null-guards the nullable
   // view column — an empty username only yields an origin-root url, never a throw.
-  const personLd = buildPersonLd(data, profile.username ?? '');
+  // CR-01: `personLdScriptHtml` serializes via the XSS-safe `<script>` serializer
+  // (escapes `<`/`>`/`&` + U+2028/U+2029), NOT raw `JSON.stringify`.
+  const personLdHtml = personLdScriptHtml(data, profile.username ?? '');
 
   return (
     <div
@@ -86,14 +88,18 @@ export default function MinimalTemplate({ data }: { data: PortfolioData }) {
 
       {/*
         SEO-01 (D-08): the per-portfolio Person JSON-LD, server-rendered (never a
-        client island). SECURITY (T-06-09 / XSS): the ONLY value interpolated is the
-        `JSON.stringify`-serialized `buildPersonLd` object — schema-shaped,
-        server-controlled primitives that JSON.stringify escapes. NO free-form /
-        user-controlled HTML is injected, mirroring the FOUC-script discipline above.
+        client island). SECURITY (T-06-09 / CR-01 / XSS): the interpolated value is
+        the JSON-LD object serialized by `personLdScriptHtml`, which is NOT raw
+        `JSON.stringify` — it ESCAPES the HTML/JS breakout characters (`<`/`>`/`&` +
+        U+2028/U+2029). This matters because `personLd` carries USER-CONTROLLED
+        free-text (`name` ← display_name, `jobTitle` ← headline) with no character
+        allowlist; a value containing `</script>` would otherwise break out of the
+        element and inject HTML (stored XSS). The escaped output still `JSON.parse`s
+        back to the identical object, so structured data stays valid.
       */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(personLd) }}
+        dangerouslySetInnerHTML={{ __html: personLdHtml }}
       />
 
       {/* The 7 sections IN THE D-05 ORDER. ScrollReveal (a 03-10 island) is wired
