@@ -1,7 +1,7 @@
 import 'server-only';
 
 /**
- * Rate-limit ledger (CONT-03 / SAFE-03 cross-cutting) — the insert-then-count cap
+ * Rate-limit ledger (CONT-03 / SAFE-03 cross-cutting) — the count-then-insert cap
  * primitive over the dedicated `rate_limit_events` table.
  *
  * `import 'server-only'` (FIRST line) keeps this off any client bundle — it imports
