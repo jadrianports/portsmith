@@ -305,6 +305,94 @@
   }
 }
 
+/* ----------------------------------------------------------------------------
+ * Work-item modal (06-04, TMPL-06 / UI-SPEC Surface 5 — THE HERO SURFACE).
+ * The deep-link modal's atmospheric entrance: the backdrop fades in, the dialog
+ * scales + translates + fades, the magenta/violet edge-glow blooms, and a thin
+ * sunset-gradient hairline sweeps along the dialog's top edge (the signature
+ * "wow" detail — the modal rises out of the same synthwave horizon as the hero).
+ *
+ * BOTH entrance keyframes are gated under `prefers-reduced-motion: no-preference`
+ * (the blanket `.tmpl-minimal *` reset below ALSO zeroes them under reduce —
+ * defence in depth). The modal renders its FINAL visible state without these
+ * classes, so under reduced-motion it simply appears in place (content fully
+ * visible immediately — the dialog never starts at opacity:0 from a stylesheet).
+ * The static sunset top-hairline (`.tmpl-modal-hairline`, an inline style) stays
+ * visible under reduced-motion (decorative, not motion).
+ * -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  /* Backdrop fade-in (~140ms). */
+  .tmpl-minimal .tmpl-modal-backdrop-enter {
+    animation: tmpl-modal-backdrop-in 140ms ease-out 1;
+  }
+  /* Dialog: scale 0.96→1 + translateY 8px→0 + fade (~200ms, decelerate). */
+  .tmpl-minimal .tmpl-project-modal-enter {
+    animation: tmpl-project-modal-in 200ms cubic-bezier(0.2, 0, 0, 1) 1;
+  }
+  /* The sunset top-hairline sweep + edge-glow bloom (~240ms). */
+  .tmpl-minimal .tmpl-project-modal-enter .tmpl-modal-hairline {
+    animation: tmpl-modal-hairline-sweep 240ms cubic-bezier(0.2, 0, 0, 1) 1;
+  }
+}
+
+@keyframes tmpl-modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tmpl-project-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* The hairline sweeps in from the left as the dialog rises (a single horizon line
+   echoing the hero's retro-sun). Static (full width) at its final state. */
+@keyframes tmpl-modal-hairline-sweep {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+/* Glowing tech chips on the dialog — a restrained cyan tint (low alpha). NOT
+   motion (a static glow), so it is reduced-motion-exempt like the card glow-lift.
+   Scoped to the modal so the card chips stay flat. */
+.tmpl-minimal .tmpl-modal-chip {
+  box-shadow: 0 0 12px -6px rgba(45, 226, 230, 0.4);
+}
+
+/* The 44px close button — magenta `:focus-visible` ring + a hover tint. The ring
+   matches the contact-field treatment (UI-SPEC §A11y). */
+.tmpl-minimal .tmpl-modal-close {
+  transition:
+    color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.tmpl-minimal .tmpl-modal-close:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.tmpl-minimal .tmpl-modal-close:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ring);
+}
+
 /* ============================================================================
  * Reduced-motion contract (hard requirement — UI-SPEC §Motion).
  * Under `prefers-reduced-motion: reduce`, ALL animation/transition inside the
