@@ -20,7 +20,20 @@
  *      allowlist as every other URL field, so a `javascript:` / `data:` avatar
  *      or resume URL is rejected HERE, before any DB touch. A ZodError maps to
  *      per-field errors (the verbatim signup-action loop).
- *   3. EXPLICIT 4-COLUMN ALLOWLIST write (RESEARCH Pitfall 4 / T-04-04a) — the
+ *   3. READ the prior row (username + avatar_url + resume_url) BEFORE the write —
+ *      one read serving both the revalidate username (PUB-03) and the prior media
+ *      URLs the delete-on-replace leg needs.
+ *   3b. DELETE-ON-REPLACE leg (D-11 / D-12 / MEDIA-04 — an ADDED leg, NOT a
+ *      replacement of the sequence). For BOTH avatar_url and resume_url: when the
+ *      parsed NEW value differs from the stored CURRENT value (a replace OR a
+ *      clear), the prior Storage object is being dropped — `deleteStorageObject`
+ *      frees it synchronously (no orphan), gated by the SERVER-VERIFIED `sub`
+ *      (never client input) + the helper's own-folder guard + origin-lock (a
+ *      non-Storage / foreign / unchanged URL is a safe no-op; a cross-tenant URL is
+ *      rejected — T-05-16/17). We delete the CURRENT object ONLY when it is
+ *      genuinely dropped (`current !== next`), so the surviving new object is never
+ *      deleted (no TOCTOU). This closes the avatar-replace orphan 05-02 deferred.
+ *   4. EXPLICIT 4-COLUMN ALLOWLIST write (RESEARCH Pitfall 4 / T-04-04a) — the
  *      LOAD-BEARING line. The update object is built EXPLICITLY as
  *      `{ display_name, headline, resume_url, avatar_url }`. We NEVER spread the
  *      parsed or input object into the update, and we EXPLICITLY EXCLUDE
@@ -32,21 +45,29 @@
  *      trigger while this allowlist succeeds. The write runs under RLS via the
  *      AUTHENTICATED client (never service-role); the profiles own-update policy
  *      + `.eq('id', claims.sub)` scope the UPDATE to the caller's own row.
- *   4. revalidatePath('/' + username) — on-demand ISR purge so the PUBLISHED
+ *   5. revalidatePath('/' + username) — on-demand ISR purge so the PUBLISHED
  *      public page reflects the new name/headline/avatar within seconds
  *      (D-P4-01). LITERAL path, NO second arg (RESEARCH Pitfall 1, the one
  *      CLAUDE.md correction — the 'max' / { expire: 0 } profile belongs to
- *      revalidateTag, a DIFFERENT function). Username from the verified profile
- *      row or `input.username`, NEVER the request host.
- *   5. Return { ok: true }.
+ *      revalidateTag, a DIFFERENT function). Username from the prior profile row
+ *      or `input.username`, NEVER the request host.
+ *   6. Return { ok: true }.
  *
- * Source: the SHARED-A skeleton from `save-section-action.ts`; the Zod-issues
- * loop from `signup-action.ts`; `profileSchema` from
- * `@/lib/validations/profile.ts`; the verified-claims guard from
- * `@/lib/supabase/server.ts`.
+ * Storage deletes go through the SERVER-SIDE service-role `deleteStorageObject`
+ * (founder-approved Option B), NOT the authenticated client — the locked foundation
+ * (no SELECT policy on storage.objects; the 002 trigger RAISEs on an authenticated
+ * `storage_used_bytes` change) makes the authenticated delete impossible. Carried
+ * for /gsd-secure-phase (see delete-object.ts).
+ *
+ * Source: the SHARED-A skeleton from `save-section-action.ts` (incl. its `deleteUrls`
+ * orphan-delete leg, 05-03); the Zod-issues loop from `signup-action.ts`;
+ * `profileSchema` from `@/lib/validations/profile.ts`; the verified-claims guard
+ * from `@/lib/supabase/server.ts`; `deleteStorageObject` from
+ * `@/lib/media/delete-object.ts`.
  */
 import { revalidatePath } from 'next/cache';
 
+import { deleteStorageObject } from '@/lib/media/delete-object';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 import { profileSchema } from '@/lib/validations';
 
@@ -128,7 +149,50 @@ export async function saveProfileAction(input: SaveProfileInput): Promise<SavePr
     return { ok: false, fieldErrors };
   }
 
-  // 3) EXPLICIT 4-COLUMN ALLOWLIST (Pitfall 4 / T-04-04a). Build the update
+  // 3) Read the owner's CURRENT row BEFORE the write — the username for the
+  //    revalidate (PUB-03, never the request host) AND the prior avatar_url /
+  //    resume_url so the delete-on-replace leg knows which Storage objects are
+  //    being dropped. One read serves both (no extra round-trip). Scoped to the
+  //    verified `sub` (WR-05: guaranteed present by the guard above — no `?? ''`).
+  const supabase = await createClient();
+  const { data: priorRow } = await supabase
+    .from('profiles')
+    .select('username, avatar_url, resume_url')
+    .eq('id', sub)
+    .single();
+  const prior = (priorRow as {
+    username?: string;
+    avatar_url?: string | null;
+    resume_url?: string | null;
+  } | null) ?? null;
+
+  // 3b) DELETE-ON-REPLACE leg (D-11 / D-12 / MEDIA-04 — an ADDED leg, NOT a
+  //     replacement of the SHARED-A sequence). For BOTH avatar_url and resume_url:
+  //     when the parsed NEW value differs from the stored CURRENT value (a replace
+  //     OR a clear), the prior object is being dropped — delete it synchronously so
+  //     replacing/clearing either profile medium frees its Storage (no orphan). The
+  //     owner `sub` is the SERVER-VERIFIED subject (step 1), NEVER client input, and
+  //     `deleteStorageObject` re-asserts the own-folder guard on top of
+  //     urlToStoragePath's origin-lock — so a non-Storage / foreign / unchanged URL
+  //     is a safe no-op and a crafted cross-tenant URL is rejected (T-05-16/17). We
+  //     only ever delete the CURRENT object when it is genuinely being dropped
+  //     (`current !== next`), so the surviving (new) object is never deleted (no
+  //     TOCTOU): the delete targets the prior URL, the UPDATE writes the next URL.
+  if (prior) {
+    const drops: Array<[string | null | undefined, string | undefined]> = [
+      [prior.avatar_url, parsed.data.avatar_url],
+      [prior.resume_url, parsed.data.resume_url],
+    ];
+    for (const [current, next] of drops) {
+      const currentUrl = (current ?? '').trim();
+      const nextUrl = (next ?? '').trim();
+      if (currentUrl !== '' && currentUrl !== nextUrl) {
+        await deleteStorageObject(currentUrl, sub);
+      }
+    }
+  }
+
+  // 4) EXPLICIT 4-COLUMN ALLOWLIST (Pitfall 4 / T-04-04a). Build the update
   //    object by hand — NEVER spread parsed/input — and NEVER include `username`
   //    (a protected column the trigger blocks). This is the LOAD-BEARING line.
   const allowlist = {
@@ -141,30 +205,21 @@ export async function saveProfileAction(input: SaveProfileInput): Promise<SavePr
   // Write under RLS via the AUTHENTICATED client (never service-role). The
   // profiles own-update policy + .eq('id', sub) scope the UPDATE to the owner's
   // own row (WR-05: `sub` is guaranteed present by the guard above — no `?? ''`).
-  const supabase = await createClient();
   const { error } = await supabase
     .from('profiles')
     .update(allowlist)
     .eq('id', sub);
   if (error) return { ok: false, error: SAVE_FAILED };
 
-  // 4) Resolve the owner username (prefer the dashboard-passed value; else read
-  //    the verified profile row — NEVER the request host, PUB-03) and revalidate
-  //    the public page so the change is live within seconds (D-P4-01).
-  let username = input.username;
-  if (!username) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('id', sub) // WR-05: `sub` is guaranteed present (no `?? ''`).
-      .single();
-    username = (data as { username?: string } | null)?.username ?? undefined;
-  }
+  // 5) Resolve the owner username (prefer the dashboard-passed value; else the
+  //    prior-row read above — NEVER the request host, PUB-03) and revalidate the
+  //    public page so the change is live within seconds (D-P4-01).
+  const username = input.username ?? prior?.username ?? undefined;
   if (username) {
     // LITERAL path, NO second arg (RESEARCH Pitfall 1 / CLAUDE.md correction).
     revalidatePath('/' + username);
   }
 
-  // 5) Success — the dashboard clears the dirty flag.
+  // 6) Success — the dashboard clears the dirty flag.
   return { ok: true };
 }
