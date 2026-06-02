@@ -74,6 +74,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { saveSectionAction } from '@/lib/cms/save-section-action';
 
 import { ChipInput } from './chip-input';
+import { ImageUploader } from './image-uploader';
 import { UrlInput } from './url-input';
 
 // ---------------------------------------------------------------------------
@@ -363,6 +364,20 @@ export function ItemCard({
                     <CharCounter value={str(item.description)} max={DESCRIPTION_MAX} />
                   }
                 />
+                {/* Project image (16:9) via the generic ImageUploader (D-01). It
+                    co-locates the REQUIRED alt Input; both the URL and alt route
+                    through onPatch so they land in the SAME whole-section
+                    saveSectionAction write (Pitfall 7). The server alt refine
+                    (projectItemSchema.image_alt, sections.ts:86-89) is the real gate. */}
+                <ImageUploader
+                  kind="project"
+                  label="Project image"
+                  value={str(item.image)}
+                  onValueChange={(url) => onPatch(item.id, { image: url })}
+                  onUploaded={(url) => onPatch(item.id, { image: url })}
+                  alt={str(item.image_alt)}
+                  onAltChange={(a) => onPatch(item.id, { image_alt: a })}
+                />
                 {/* Dev field — OPTIONAL (the schema allows an empty tech_stack). */}
                 <ChipInput
                   label="Tech stack"
@@ -439,6 +454,21 @@ export function ItemCard({
                   label="Quote"
                   value={str(item.quote)}
                   onChange={(e) => onPatch(item.id, { quote: e.target.value })}
+                />
+                {/* Author photo (1:1) via the SAME generic ImageUploader (D-01/D-02).
+                    Wired even though Testimonials is hidden-by-default in the founder
+                    seed (D-02, ~zero marginal cost). URL + co-located required alt
+                    both route through onPatch into the whole-section write; the server
+                    alt refine (testimonialItemSchema.avatar_alt, sections.ts:102-105)
+                    is the real gate. */}
+                <ImageUploader
+                  kind="testimonial"
+                  label="Author photo"
+                  value={str(item.avatar)}
+                  onValueChange={(url) => onPatch(item.id, { avatar: url })}
+                  onUploaded={(url) => onPatch(item.id, { avatar: url })}
+                  alt={str(item.avatar_alt)}
+                  onAltChange={(a) => onPatch(item.id, { avatar_alt: a })}
                 />
               </>
             ) : null}
