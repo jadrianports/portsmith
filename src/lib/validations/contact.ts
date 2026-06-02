@@ -33,3 +33,38 @@ export const contactFormSchema = z.object({
 });
 
 export type ContactForm = z.infer<typeof contactFormSchema>;
+
+/**
+ * Report validation (SAFE-03) — the sibling of `contactFormSchema`.
+ *
+ * The request body for POST /api/report (the second service-role sole-writer, a
+ * mirror of /api/contact — D-16). `reports` has NO public INSERT policy, so the
+ * route is the only writer; it re-parses this schema server-side before the
+ * service-role insert. Client-side parse is UX; the server-boundary parse is the
+ * real gate (CLAUDE.md).
+ *
+ * Shape: `{ portfolio_id, reason, details?, turnstile_token }`. The
+ * `turnstile_token` is required and verified server-side; it is NOT stored.
+ *
+ * The `reason` is the HUMAN-reportable subset of the `reports.reason` CHECK enum
+ * (migration 001:235 — `'auto_flagged','hate_speech','illegal_content','spam',
+ * 'harassment','other'`). `auto_flagged` is RESERVED for a future automated signal
+ * and is deliberately NOT offered to humans (D-17): a user-submitted `auto_flagged`
+ * (or any value outside this enum) is rejected at this boundary, so the route
+ * returns 400 before any write.
+ */
+export const reportSchema = z.object({
+  // Same `z.guid()` posture as `contactFormSchema.portfolio_id` above: a Postgres
+  // `uuid` column accepts ANY 8-4-4-4-12 GUID-format string and does NOT enforce the
+  // RFC 4122 version/variant bits that the stricter `z.uuid()` requires — so a
+  // portfolio_id Postgres stores must never be over-rejected here.
+  portfolio_id: z.guid({ error: 'A valid portfolio id is required' }),
+  // HUMAN subset of the reports CHECK enum — NO `auto_flagged` (reserved, D-17).
+  reason: z.enum(['spam', 'harassment', 'hate_speech', 'illegal_content', 'other'], {
+    error: 'Please choose a reason',
+  }),
+  details: z.string().max(2000, { error: 'Details must be at most 2000 characters' }).optional(),
+  turnstile_token: z.string().min(1, { error: 'Turnstile verification is required' }),
+});
+
+export type ReportForm = z.infer<typeof reportSchema>;
