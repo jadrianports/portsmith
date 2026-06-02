@@ -44,25 +44,35 @@ export interface CompletenessInput {
 }
 
 /**
+ * Find a section's content by type. Cast to a loose record so we can read the
+ * schema-named fields without dragging the full content union in here (this file
+ * must stay dependency-light and pure). Shared verbatim by `deriveCompleteness`
+ * and `isPublishReady` — lifted to module scope so the SAFE-04 gate reuses the
+ * exact same content lookup the advisory checklist uses.
+ */
+function find(
+  sections: { type: string; content: unknown }[],
+  t: string,
+): Record<string, unknown> | undefined {
+  return sections.find((s) => s.type === t)?.content as
+    | Record<string, unknown>
+    | undefined;
+}
+
+/** True only for a present, non-blank string. Shared by both predicates. */
+function nonEmptyString(v: unknown): boolean {
+  return typeof v === 'string' && v.trim().length > 0;
+}
+
+/**
  * Derive the five advisory completeness items from already-loaded rows. PURE —
  * no I/O, no DB, no new table. Returns the list only; it never implies a publish
  * block (D-P4-08).
  */
 export function deriveCompleteness(data: CompletenessInput): ChecklistItem[] {
-  // Find a section's content by type. Cast to a loose record so we can read the
-  // schema-named fields without dragging the full content union in here (this
-  // file must stay dependency-light and pure).
-  const find = (t: string): Record<string, unknown> | undefined =>
-    data.sections.find((s) => s.type === t)?.content as
-      | Record<string, unknown>
-      | undefined;
-
-  const nonEmptyString = (v: unknown): boolean =>
-    typeof v === 'string' && v.trim().length > 0;
-
-  const about = find('about');
-  const projects = find('projects');
-  const contact = find('contact');
+  const about = find(data.sections, 'about');
+  const projects = find(data.sections, 'projects');
+  const contact = find(data.sections, 'contact');
 
   const projectItems = projects?.items;
   const projectCount = Array.isArray(projectItems) ? projectItems.length : 0;
@@ -89,4 +99,53 @@ export function deriveCompleteness(data: CompletenessInput): ChecklistItem[] {
     },
     { id: 'avatar', label: 'Set an avatar', done: nonEmptyString(data.avatarUrl) },
   ]; // advisory ONLY — never disables Publish (D-P4-08; the hard gate is P6 SAFE-04).
+}
+
+/**
+ * isPublishReady — the SAFE-04 noindex GATE PREDICATE (R-4 / D-11).
+ *
+ * A SEPARATE predicate from the advisory `deriveCompleteness` (D-P4-08): the
+ * advisory list must NEVER block publish and includes "Add a contact email", which
+ * this gate does NOT require (the contact form exists precisely so a user need not
+ * expose an email — D-11). Public email is therefore NOT part of the gate.
+ *
+ * This predicate decides only whether a published page is INDEXABLE — never whether
+ * it is reachable. The public `generateMetadata` (via `buildPublicMetadata`) emits
+ * `robots:{index:false}` when this returns false; the page stays public/reachable,
+ * it is simply withheld from search indexes (protecting the shared domain's
+ * reputation — T-06-07).
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ PITFALL 6 / R-4 (LOAD-BEARING): the placeholder is the literal `[Your Name]`   │
+ * │ token in `hero.heading`, NOT in `display_name`. At signup `display_name` is    │
+ * │ set to the username (signup-action.ts), so it is ALWAYS non-empty and CANNOT   │
+ * │ be the gate. A freshly-bootstrapped page (migration 006 seeds                  │
+ * │ `hero.heading = "Hi, I'm [Your Name]"`) must therefore read as INCOMPLETE so a  │
+ * │ placeholder page is never indexed. The name check is: hero.heading does NOT    │
+ * │ contain `[Your Name]` (case-insensitive) AND display_name is non-empty.        │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * Ready ⇔ ALL of: name-token-changed + about.bio written + ≥1 project item +
+ * avatar set. PURE — reuses the same `find`/`nonEmptyString` helpers as the
+ * advisory checklist; no DB/RPC import.
+ */
+export function isPublishReady(input: CompletenessInput): boolean {
+  const hero = find(input.sections, 'hero');
+  const about = find(input.sections, 'about');
+  const projects = find(input.sections, 'projects');
+
+  // The unmodified bootstrap placeholder token (migration 006). Case-insensitive so
+  // "[your name]" / "[Your Name]" both count as still-placeholder.
+  const heading = typeof hero?.heading === 'string' ? hero.heading : '';
+  const nameDone =
+    !heading.toLowerCase().includes('[your name]') && nonEmptyString(input.displayName);
+
+  const aboutDone = nonEmptyString(about?.bio);
+
+  const projectItems = projects?.items;
+  const projectDone = Array.isArray(projectItems) && projectItems.length > 0;
+
+  const avatarDone = nonEmptyString(input.avatarUrl);
+
+  return nameDone && aboutDone && projectDone && avatarDone;
 }
