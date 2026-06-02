@@ -99,6 +99,38 @@ describe('MEDIA-04 — removing an image deletes its Storage object (no orphan)'
     expect(Number(prof!.storage_used_bytes ?? 0)).toBe(0);
   });
 
+  it('REPLACE: deleting the OLD item-image object leaves the NEW object intact (no orphan)', async () => {
+    // Simulate an item-image REPLACE: an old object exists, a new object is
+    // uploaded, then the section save's diff-and-delete leg deletes ONLY the old
+    // URL (the prior `item.image`). This is the contract 05-03's `deleteUrls` leg
+    // drives: prior-array URLs absent from the next array are passed to
+    // deleteStorageObject; the new URL (still present) is NOT.
+    const folder = `${ctx.userA.id}/project`;
+    const oldPath = `${folder}/${RUN}-old.webp`;
+    const newPath = `${folder}/${RUN}-new.webp`;
+
+    const { error: oldErr } = await admin.storage
+      .from('media')
+      .upload(oldPath, webpBytes(), { contentType: 'image/webp', upsert: false });
+    expect(oldErr).toBeNull();
+    const { error: newErr } = await admin.storage
+      .from('media')
+      .upload(newPath, webpBytes(), { contentType: 'image/webp', upsert: false });
+    expect(newErr).toBeNull();
+
+    // Delete ONLY the old URL (the diff leg never includes the surviving new URL).
+    await deleteStorageObject(publicMediaUrl(oldPath), ctx.userA.id);
+
+    const { data: listing } = await admin.storage.from('media').list(folder);
+    const names = (listing ?? []).map((o) => o.name);
+    // The OLD object is gone; the NEW object remains (the replacement is intact).
+    expect(names).not.toContain(`${RUN}-old.webp`);
+    expect(names).toContain(`${RUN}-new.webp`);
+
+    // Cleanup the surviving new object.
+    await admin.storage.from('media').remove([newPath]);
+  });
+
   it('a foreign / unparseable URL is a safe no-op (nothing to delete)', async () => {
     // urlToStoragePath returns null for a non-Storage origin → the helper returns
     // cleanly without a remove call.

@@ -46,6 +46,7 @@
  */
 import { revalidatePath } from 'next/cache';
 
+import { deleteStorageObject } from '@/lib/media/delete-object';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 import { validateSectionContent } from '@/lib/validations';
 
@@ -73,6 +74,16 @@ export interface SaveSectionInput {
    * reads it from the verified profile row — NEVER from the request host.
    */
   username?: string;
+  /**
+   * Prior Storage object URLs that are being removed or replaced by this save
+   * (D-12 / MEDIA-04 orphan-delete leg). The item editor (ItemManager) diffs the
+   * old-vs-new `content.items[]` image/avatar URLs and passes the ones absent from
+   * the next array. Each is deleted SYNCHRONOUSLY via the shared
+   * `deleteStorageObject` helper, gated by the SERVER-VERIFIED owner `sub` (never
+   * client-supplied) and the helper's own-folder guard — so a crafted cross-tenant
+   * URL is rejected, and a non-Storage / unparseable URL is a safe no-op.
+   */
+  deleteUrls?: string[];
 }
 
 const NOT_SIGNED_IN = 'Not signed in.';
@@ -121,6 +132,23 @@ export async function saveSectionAction(input: SaveSectionInput): Promise<SaveSe
     parsed = validateSectionContent(input.type, input.content);
   } catch (e) {
     return gateErrorToResult(e);
+  }
+
+  // 2b) Orphan-delete leg (D-12 / MEDIA-04 — an ADDED leg, NOT a replacement of
+  //     the SHARED-A sequence). When an item with an image is REMOVED, or its
+  //     image is REPLACED/CLEARED, the editor diffs the old-vs-new item-image URLs
+  //     and passes the dropped ones here; we delete each prior Storage object
+  //     synchronously so it is freed as part of the removing mutation (no quota
+  //     leak). The owner `sub` is the SERVER-VERIFIED subject (step 1) — NEVER
+  //     client-supplied — and `deleteStorageObject` re-asserts the own-folder guard
+  //     on top of urlToStoragePath's origin-lock, so a crafted cross-tenant or
+  //     non-Storage URL is rejected / a safe no-op (T-05-11). The AFTER-DELETE
+  //     `sync_storage_usage` trigger then decrements `storage_used_bytes` under
+  //     service_role (Option B — see delete-object.ts).
+  if (input.deleteUrls?.length) {
+    for (const url of input.deleteUrls) {
+      await deleteStorageObject(url, sub);
+    }
   }
 
   // 3) Write under RLS via the AUTHENTICATED client (never service-role). The
