@@ -21,19 +21,21 @@
  * THEME TOGGLE: `index.tsx` already mounts `ThemeToggle` (gated on
  * `visitor_theme_toggle`) — the footer does NOT double-mount it.
  *
- * REPORT AFFORDANCE (intentionally OMITTED this phase): `minimal`'s footer mounts the
- * shared `<ReportDialog>` (SAFE-03), but that island is minimal-COUPLED — it hardcodes
- * minimal's synthwave hexes + reads `var(--sunset-gradient)` (a token `.tmpl-editorial`
- * does not define) + the `.tmpl-modal-*` keyframes scoped to `.tmpl-minimal`. Wiring it
- * as-is would bleed minimal tokens and render a broken (missing-gradient) dialog on the
- * Newsprint page (a D-17 / aesthetic-contract violation). The 07-03 plan's footer
- * action scopes this footer to "name/handle + socials + colophon, NO platform branding"
- * and does NOT include the report dialog. Editorial is not yet a public render target
- * (that lands in 07-04); a Newsprint-scoped report affordance is a follow-up for when
- * it becomes publicly renderable. Tracked as a deferred item.
+ * SAFETY AFFORDANCE (D-15 / SAFE-03 / TMPL-07 — DEF-07-03-01 resolved 07-04): the
+ * footer carries the ONE muted "Report this page" `<button>` (the shared
+ * `<ReportDialog>` island) — the single sanctioned safety element on the chrome-free
+ * public page, identical to minimal's footer. The island was made TOKEN-ONLY in
+ * 07-04 (it reads the per-template `--tmpl-modal-hairline`/`--tmpl-modal-glow`/
+ * `--tmpl-modal-shadow` tokens this template defines, and editorial supplies its own
+ * scoped `.tmpl-modal-*` keyframes), so it renders the Newsprint way here — a solid
+ * vermilion hairline + a clean, glow-free paper dialog (A.5) — with NO minimal-token
+ * bleed (D-17 intact). It renders only when a target portfolio id is present on the
+ * public settings row (`data.settings.portfolio_id`).
  *
  * COLOR: no hardcoded hex — every value reads a scoped `var(--token)` from theme.css.
  */
+import { ReportDialog } from '@/components/public/report-dialog';
+
 import type { FooterProps } from './types';
 import { siteUrl } from '@/lib/url';
 import { safeHref } from '@/lib/safe-url';
@@ -49,6 +51,12 @@ export function Footer({ data }: FooterProps) {
   // Name/handle (null-guarded view columns).
   const name = present(profile.display_name) ? profile.display_name : null;
   const handle = present(profile.username) ? profile.username : null;
+
+  // The target for the report dialog — the portfolio id on the public settings row
+  // (`portfolio_id` is `string | null` on the view, so null-guard). Absent → omit the
+  // affordance rather than render a dead button (never a report path to nowhere).
+  // Identical contract to minimal's footer (DEF-07-03-01).
+  const portfolioId = present(settings.portfolio_id) ? settings.portfolio_id : null;
 
   // The social links that exist, in a stable order. NO platform link. CR-01: each URL
   // passes through `safeHref` (http(s) only) — a dangerous/unparseable scheme drops
@@ -164,11 +172,19 @@ export function Footer({ data }: FooterProps) {
         ) : null}
       </div>
 
-      {/* Copyright line — the owner's name only; NO platform attribution. */}
+      {/* Copyright line — the owner's name only; NO platform attribution. The ONE
+          sanctioned safety affordance (the muted "Report this page" button, D-15)
+          rides this row, kept visually quieter than the social links (mirrors
+          minimal's footer layout). Shelled so it aligns under the colophon. */}
       <div
         className="tmpl-shell"
         style={{
           marginTop: '32px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
         }}
       >
         <p
@@ -183,6 +199,8 @@ export function Footer({ data }: FooterProps) {
           © {year}
           {name ? ` ${name}` : ''}
         </p>
+
+        {portfolioId ? <ReportDialog portfolioId={portfolioId} /> : null}
       </div>
     </footer>
   );

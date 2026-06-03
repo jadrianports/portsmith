@@ -73,6 +73,22 @@
                              A deeper, browner red than the vermilion accent so
                              "error" reads distinct from "accent" (A.4). */
 
+  /* Shared report-dialog COMPLETE-VALUE tokens (DEF-07-03-01 — the SAME `<ReportDialog>`
+     island mounts under editorial AND minimal and reads THESE per-template tokens; the
+     island carries NO hardcoded hex). Each token is the WHOLE CSS value for one dialog
+     property. Editorial = the ANTI-MINIMAL discipline (A.5: NO gradient, NO glow, NO
+     neon): a SOLID vermilion ink hairline (not a gradient), a clean `--bg` paper scrim
+     backdrop (no radial bloom), and a flat 1px ink ring + neutral paper drop for the
+     dialog/CTA (no glow) — matching the editorial card treatment. minimal defines the
+     same NAMES with the synthwave gradient/glow; D-17 two-layer isolation stays intact. */
+  --tmpl-modal-hairline: var(--accent); /* solid vermilion ink rule (no gradient — A.5) */
+  /* Backdrop: a clean dimmed paper scrim — NO radial bloom (anti-minimal). */
+  --tmpl-modal-backdrop: color-mix(in srgb, var(--bg) 82%, transparent);
+  /* Dialog box-shadow: a 1px vermilion ink ring + a neutral paper drop — NO glow. */
+  --tmpl-modal-shadow: 0 0 0 1px var(--accent), 0 18px 44px -22px rgba(26, 25, 22, 0.45);
+  /* Submit-CTA drop: a flat neutral ink drop (no magenta glow). */
+  --tmpl-modal-cta-shadow: 0 8px 24px -14px rgba(26, 25, 22, 0.5);
+
   /* Radius — the template's OWN scale (deliberately TIGHTER than minimal's 8/10/14:
      editorial = near-square, not pill). A.5. */
   --radius-sm: 2px; /* tech-tags, inputs, tier markers (near-square) */
@@ -111,6 +127,13 @@
 
   --success: #5bb374; /* 7.08:1 on bg */
   --destructive: #f08a80; /* 6.86:1 on surface */
+
+  /* Report-dialog tokens in DARK ("Ink") (DEF-07-03-01): the hairline + the 1px ring
+     auto-inherit the lightened vermilion `--accent`; the backdrop scrim auto-uses the
+     dark `--bg`; only the neutral paper DROP deepens for the dark ink ground. Still NO
+     glow, NO gradient (A.5). */
+  --tmpl-modal-shadow: 0 0 0 1px var(--accent), 0 18px 44px -22px rgba(0, 0, 0, 0.55);
+  --tmpl-modal-cta-shadow: 0 8px 24px -14px rgba(0, 0, 0, 0.6);
 }
 
 /* ============================================================================
@@ -257,6 +280,89 @@
   100% {
     box-shadow: 0 0 0 1px var(--success);
   }
+}
+
+/* ============================================================================
+ * Report dialog (DEF-07-03-01) — the shared `<ReportDialog>` island (SAFE-03)
+ * mounts in the editorial FOOTER too, under the `.tmpl-editorial` root, so it
+ * needs THESE scoped `.tmpl-modal-*` / `.tmpl-project-modal-*` hooks (the island
+ * references them by name; minimal defines its own under `.tmpl-minimal`). The
+ * entrance keyframes mirror minimal's STRUCTURE (backdrop fade + dialog
+ * scale/translate + the top-hairline clip-reveal), but the editorial treatment is
+ * the ANTI-MINIMAL discipline (A.5): the hairline is a SOLID vermilion ink rule
+ * (`--tmpl-modal-hairline = var(--accent)`, NOT a gradient) and there is NO glow —
+ * the dialog's edge tokens (`--tmpl-modal-glow`/`--tmpl-modal-bloom`) are
+ * `transparent` here, so the island renders a clean, flat paper dialog. The clip
+ * reveal is MOTION, not glow, so it is allowed (and is zeroed under reduced-motion
+ * by the blanket reset below — the dialog then simply appears in place, content
+ * fully visible). D-17 two-layer isolation: editorial paints from its OWN tokens.
+ * ========================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+  /* Backdrop fade-in (~140ms). */
+  .tmpl-editorial .tmpl-modal-backdrop-enter {
+    animation: tmpl-ed-modal-backdrop-in 140ms ease-out 1;
+  }
+  /* Dialog: scale 0.98→1 + translateY 8px→0 + fade (~200ms, decelerate). A subtler
+     scale than minimal's 0.96 (editorial motion is restrained — A.5). */
+  .tmpl-editorial .tmpl-project-modal-enter {
+    animation: tmpl-ed-project-modal-in 200ms cubic-bezier(0.2, 0, 0, 1) 1;
+  }
+  /* The vermilion top-hairline sweeps in (clip reveal — a ruled line, no gradient). */
+  .tmpl-editorial .tmpl-project-modal-enter .tmpl-modal-hairline {
+    animation: tmpl-ed-modal-hairline-sweep 240ms cubic-bezier(0.2, 0, 0, 1) 1;
+  }
+}
+
+@keyframes tmpl-ed-modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tmpl-ed-project-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* The ruled vermilion hairline sweeps in from the left (a clean clip reveal, the
+   editorial echo of minimal's sunset sweep — but a SOLID ink rule, no gradient). */
+@keyframes tmpl-ed-modal-hairline-sweep {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+/* The 44px close button (+ the footer trigger uses this class too) — vermilion
+   `:focus-visible` ring + a hover tint, mirroring the editorial contact-field ring.
+   NO glow — a clean ring (A.5). */
+.tmpl-editorial .tmpl-modal-close {
+  transition:
+    color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.tmpl-editorial .tmpl-modal-close:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.tmpl-editorial .tmpl-modal-close:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ring);
 }
 
 /* ============================================================================

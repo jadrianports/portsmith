@@ -13,8 +13,22 @@
  * DISCLOSURE = a focus-trapped MODAL, not an inline panel (UI-SPEC Surface 2
  * decision): it reuses the EXACT dialog a11y + motion contract the work-item modal
  * (`project-modal.tsx`, 06-04) already needs — one pattern, not two. It is a LIGHTER
- * dialog (no hero image, smaller surface, a restrained magenta/violet edge-glow) but
- * shares the shell + the shipped `.tmpl-*` scoped keyframes (reduced-motion-safe).
+ * dialog (no hero image, smaller surface) that shares the shell + the `.tmpl-*`
+ * scoped keyframes (reduced-motion-safe).
+ *
+ * TEMPLATE-AGNOSTIC / TOKEN-ONLY (DEF-07-03-01 — resolved 07-04): this island mounts
+ * under EITHER template root and renders correctly via that template's OWN scoped
+ * tokens — NO hardcoded template hexes. Each visually-template-specific property is a
+ * single COMPLETE-VALUE token every theme.css defines, so minimal reproduces its
+ * ORIGINAL look byte-for-byte (zero visual regression) while editorial supplies its
+ * own anti-glow treatment (A.5): `--tmpl-modal-hairline` (minimal: the sunset
+ * gradient; editorial: a solid vermilion ink rule — no gradient), `--tmpl-modal-backdrop`
+ * (minimal: the magenta/violet radial bloom; editorial: a clean `--bg` paper scrim),
+ * `--tmpl-modal-shadow` (the full dialog box-shadow — minimal: the magenta/violet
+ * edge-glow; editorial: a 1px ink ring + neutral paper drop, no glow), and
+ * `--tmpl-modal-cta-shadow` (the submit-button drop). Each template ALSO defines the
+ * `.tmpl-modal-*` / `.tmpl-project-modal-*` keyframes scoped to its own root, so the
+ * dialog never depends on `.tmpl-minimal`. D-17 two-layer isolation stays intact.
  *
  * TURNSTILE / SUBMIT idiom mirrors `contact-form.tsx` (06-02): the reused
  * `TurnstileWidget` mounts into the reserved 65px slot; submit is disabled until a
@@ -203,9 +217,12 @@ function ReportFormDialog({ portfolioId, onClose }: ReportFormDialogProps) {
         alignItems: 'center',
         justifyContent: 'center',
         padding: '16px',
-        // Same backdrop language as the work-item modal, dialed down.
-        background:
-          'radial-gradient(120% 80% at 50% 120%, rgba(255, 45, 149, 0.08) 0%, rgba(140, 30, 255, 0.05) 35%, transparent 70%), color-mix(in srgb, var(--bg) 82%, transparent)',
+        // TOKEN-ONLY backdrop (DEF-07-03-01): the WHOLE backdrop value is the
+        // per-template `--tmpl-modal-backdrop` token. minimal supplies its EXACT
+        // original synthwave bloom (byte-identical → zero visual regression);
+        // editorial supplies a clean `--bg` paper scrim (no bloom — A.5). The island
+        // is hex-free; each template paints from its OWN token (D-17).
+        background: 'var(--tmpl-modal-backdrop)',
         backdropFilter: 'blur(6px)',
         WebkitBackdropFilter: 'blur(6px)',
       }}
@@ -230,15 +247,20 @@ function ReportFormDialog({ portfolioId, onClose }: ReportFormDialogProps) {
           borderRadius: 'var(--radius-lg)',
           background: 'var(--surface)',
           border: '1px solid var(--border)',
-          // Restrained magenta/violet edge-glow (lighter than the work-item modal —
-          // it is a utility, not the hero).
-          boxShadow:
-            '0 0 0 1px var(--accent), 0 18px 44px -22px rgba(255, 45, 149, 0.35), 0 0 60px -34px rgba(157, 92, 255, 0.45)',
+          // TOKEN-ONLY edge treatment (DEF-07-03-01): the WHOLE box-shadow is the
+          // per-template `--tmpl-modal-shadow` token. minimal supplies its EXACT
+          // original magenta/violet edge-glow (byte-identical → zero visual
+          // regression); editorial supplies a clean 1px ink ring + a neutral paper
+          // drop (NO glow — A.5). Hex-free island; each template paints its OWN edge.
+          boxShadow: 'var(--tmpl-modal-shadow)',
           outline: 'none',
         }}
       >
-        {/* The static sunset top-hairline (decorative; survives reduced-motion — the
-            sweep is gated under no-preference in theme.css). */}
+        {/* The static top-hairline (decorative; survives reduced-motion — the sweep is
+            gated under no-preference in each theme.css). TOKEN-ONLY (DEF-07-03-01):
+            reads the per-template `--tmpl-modal-hairline` — minimal's sunset gradient
+            under `.tmpl-minimal`, a solid vermilion ink rule under `.tmpl-editorial`
+            (no gradient — A.5). Each template defines the token in its own theme.css. */}
         <span
           aria-hidden="true"
           className="tmpl-modal-hairline"
@@ -250,7 +272,7 @@ function ReportFormDialog({ portfolioId, onClose }: ReportFormDialogProps) {
             height: '2px',
             borderTopLeftRadius: 'var(--radius-lg)',
             borderTopRightRadius: 'var(--radius-lg)',
-            background: 'var(--sunset-gradient)',
+            background: 'var(--tmpl-modal-hairline)',
           }}
         />
 
@@ -460,7 +482,10 @@ function ReportFormDialog({ portfolioId, onClose }: ReportFormDialogProps) {
                   fontFamily: 'var(--font-body)',
                   fontWeight: 600,
                   fontSize: '16px',
-                  boxShadow: '0 8px 28px -12px rgba(255,45,149,0.38)',
+                  // TOKEN-ONLY (DEF-07-03-01): the WHOLE CTA drop is the per-template
+                  // `--tmpl-modal-cta-shadow` token — minimal's exact magenta drop
+                  // (byte-identical); a flat ink drop under editorial (no glow — A.5).
+                  boxShadow: 'var(--tmpl-modal-cta-shadow)',
                 }}
               >
                 {submitting ? (
@@ -526,8 +551,9 @@ export interface ReportDialogProps {
 /**
  * The exported island: renders the muted footer "Report this page" trigger AND owns
  * the dialog open/close + focus-return. Rendered inside the footer subtree (under the
- * `.tmpl-minimal` root) so the scoped template classes/keyframes apply — the same
- * inline (non-portal) approach as `project-modal.tsx`.
+ * active template root — `.tmpl-minimal` OR `.tmpl-editorial`) so THAT template's
+ * scoped classes/keyframes/complete-value tokens apply — the same inline (non-portal)
+ * approach as `project-modal.tsx`. Token-only (DEF-07-03-01) → template-agnostic.
  *
  * The trigger is a real `<button>` (the dialog is client-side — D-15), deliberately
  * quieter than the social links (mono 13px, `--muted-fg`, 44px hit area, cyan

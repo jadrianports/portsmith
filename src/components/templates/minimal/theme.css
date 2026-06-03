@@ -61,6 +61,28 @@
     #8c1eff 100%
   );
 
+  /* Shared report-dialog COMPLETE-VALUE tokens (DEF-07-03-01 — the SAME `<ReportDialog>`
+     island mounts under minimal AND editorial and reads THESE per-template tokens; the
+     island carries NO hardcoded hex). Each token is the WHOLE CSS value for one dialog
+     property, so minimal reproduces its ORIGINAL synthwave dialog BYTE-FOR-BYTE (the
+     values below are the exact literals the island previously inlined — zero visual
+     regression). editorial defines the same token NAMES with its anti-glow Newsprint
+     values (A.5), keeping D-17 two-layer isolation intact. */
+  --tmpl-modal-hairline: var(--sunset-gradient); /* the signature sunset top-hairline */
+  /* The backdrop: magenta→violet radial bloom over the dimmed `--bg` scrim (verbatim). */
+  --tmpl-modal-backdrop: radial-gradient(
+      120% 80% at 50% 120%,
+      rgba(255, 45, 149, 0.08) 0%,
+      rgba(140, 30, 255, 0.05) 35%,
+      transparent 70%
+    ),
+    color-mix(in srgb, var(--bg) 82%, transparent);
+  /* The dialog box-shadow: the 1px magenta ring + the magenta/violet edge-glow (verbatim). */
+  --tmpl-modal-shadow: 0 0 0 1px var(--accent),
+    0 18px 44px -22px rgba(255, 45, 149, 0.35), 0 0 60px -34px rgba(157, 92, 255, 0.45);
+  /* The submit-CTA drop: the magenta glow drop (verbatim). */
+  --tmpl-modal-cta-shadow: 0 8px 28px -12px rgba(255, 45, 149, 0.38);
+
   /* Radius — the template's OWN scale (distinct from chrome). */
   --radius-sm: 8px; /* tech-chips, small inputs, tier pills */
   --radius-md: 10px; /* buttons, form fields */
@@ -107,6 +129,13 @@
     #ff8fb1 50%,
     #b98fe6 100%
   );
+
+  /* Report-dialog tokens in LIGHT (DEF-07-03-01): the hairline auto-inherits the light
+     pastel `--sunset-gradient`; the backdrop/box-shadow/CTA tokens are deliberately NOT
+     overridden so the dialog's magenta/violet bloom + edge-glow stay IDENTICAL to the
+     pre-refactor inline values (which were fixed literals, never light-conditional) —
+     the only piece that swaps is the 1px `var(--accent)` ring inside the box-shadow,
+     exactly as the original inline style already did. Zero visual regression. */
 }
 
 /* ============================================================================
