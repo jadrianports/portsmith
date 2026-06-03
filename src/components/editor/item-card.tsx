@@ -175,46 +175,13 @@ function summaryOf(type: ItemSectionType, item: EditorItem): string {
   }
 }
 
-/**
- * The image-bearing fields per item-section type (D-12 orphan diff). Projects
- * carry `image`; testimonials carry `avatar`; experience has none. Used to collect
- * the Storage URLs an items array references so we can diff old-vs-new and delete
- * the dropped objects on save.
- */
-const IMAGE_FIELDS: Record<ItemSectionType, readonly string[]> = {
-  projects: ['image'],
-  testimonials: ['avatar'],
-  experience: [],
-};
-
-/** Collect the non-empty image/avatar URLs referenced by an items array. */
-function imageUrlsOf(type: ItemSectionType, items: EditorItem[]): Set<string> {
-  const fields = IMAGE_FIELDS[type];
-  const urls = new Set<string>();
-  for (const item of items) {
-    for (const f of fields) {
-      const v = item[f];
-      if (typeof v === 'string' && v.trim() !== '') urls.add(v);
-    }
-  }
-  return urls;
-}
-
-/**
- * The prior image URLs that the NEXT items array no longer references (D-12). An
- * item removed with an image, an image replaced (new URL ≠ old), or an image
- * cleared all surface here. These are passed to `saveSectionAction({ deleteUrls })`
- * so the prior Storage objects are deleted synchronously (no orphan / quota leak).
- */
-function droppedImageUrls(
-  type: ItemSectionType,
-  prevItems: EditorItem[],
-  nextItems: EditorItem[],
-): string[] {
-  const before = imageUrlsOf(type, prevItems);
-  const after = imageUrlsOf(type, nextItems);
-  return [...before].filter((url) => !after.has(url));
-}
+// WR-03: the per-type image-field map + the old-vs-new URL diff
+// (`IMAGE_FIELDS` / `imageUrlsOf` / `droppedImageUrls`) used to live HERE and fed
+// `saveSectionAction({ deleteUrls })`. The delete set is now recomputed ENTIRELY
+// on the server (`@/lib/cms/section-media-diff` → `serverDroppedItemImageUrls`,
+// called inside `saveSectionAction`) from the prior persisted content, so the
+// client no longer computes or passes any delete hint. The diff functions had no
+// other UX use, so they were removed to make the trust model unambiguous.
 
 const SAVE_ERROR =
   'We couldn’t save your changes. Please try again.';
@@ -607,17 +574,18 @@ export function ItemManager({
    * WHOLE content with the mutated items array, then `saveSectionAction` re-parses
    * it via `validateSectionContent` server-side and revalidates the public page.
    *
-   * D-12 orphan delete: it also diffs the PRIOR items' image/avatar URLs against
-   * the NEXT array and passes the dropped ones as `deleteUrls`, so an item removed
-   * with an image, an image replaced, or an image cleared synchronously frees its
-   * prior Storage object (the server resolves the verified owner + calls the shared
-   * `deleteStorageObject`). A reorder/no-op image change drops nothing → no delete.
+   * WR-03 orphan delete: the server recomputes the dropped item-image URLs by
+   * diffing the prior persisted `content.items` against the validated next content
+   * (`serverDroppedItemImageUrls`, inside `saveSectionAction`) and frees the prior
+   * Storage objects. So an item removed/replaced/cleared with an image still frees
+   * it (no orphan), and a reorder/no-op image change drops nothing — WITHOUT the
+   * client computing or passing any delete hint (the client `deleteUrls` plumbing
+   * was removed). The client only sends the new content.
    *
    * Returns whether the save succeeded so the caller can roll back optimism.
    */
   const persist = useCallback(
     async (
-      prevItems: EditorItem[],
       nextItems: EditorItem[],
     ): Promise<'saved' | 'skipped-invalid' | 'failed'> => {
       const content = { ...initialContent, items: nextItems };
@@ -645,13 +613,13 @@ export function ItemManager({
       setSaving(true);
       setError(null);
       try {
-        const deleteUrls = droppedImageUrls(type, prevItems, nextItems);
+        // WR-03: the server recomputes the delete set from the prior persisted
+        // content — the client no longer computes or passes a `deleteUrls` list.
         const result = await saveSectionAction({
           sectionId,
           type,
           content,
           username,
-          deleteUrls: deleteUrls.length ? deleteUrls : undefined,
         });
         if (!result.ok) {
           setError(result.error ?? SAVE_ERROR);
@@ -672,31 +640,28 @@ export function ItemManager({
   async function add() {
     if (items.length >= ITEMS_MAX) return;
     const blank = cfg.blank();
-    const prev = items;
     const next = [...items, blank];
     setItems(next);
     setNewItemId(blank.id);
-    await persist(prev, next);
+    await persist(next);
   }
 
   /** Apply a partial field change to one item, then persist (debounce-free; the
    *  parent SectionForm Save is the batch path — this keeps each card honest).
-   *  A REPLACED or CLEARED image is diffed inside `persist` → its prior Storage
-   *  object is deleted on save (D-12). */
+   *  A REPLACED or CLEARED image is freed server-side on save (the server diff in
+   *  `saveSectionAction` — WR-03). */
   async function patch(id: string, p: Partial<EditorItem>) {
-    const prev = items;
     const next = items.map((it) => (it.id === id ? { ...it, ...p } : it));
     setItems(next);
-    await persist(prev, next);
+    await persist(next);
   }
 
   /** Remove an item, then persist. If the removed item had an image, its prior
-   *  Storage object is deleted on save (the diff in `persist` — D-12). */
+   *  Storage object is freed server-side on save (the server diff — WR-03). */
   async function remove(id: string) {
-    const prev = items;
     const next = items.filter((it) => it.id !== id);
     setItems(next);
-    await persist(prev, next);
+    await persist(next);
   }
 
   // Reorder is OPTIMISTIC (SHARED-C, the only optimistic item op): flip the local
@@ -711,9 +676,9 @@ export function ItemManager({
     );
     const previous = items;
     setItems(next); // optimistic
-    // Reorder preserves the SAME items (and image URLs) — the diff drops nothing,
-    // so no delete fires (no false deletes on a reorder).
-    void persist(previous, next).then((outcome) => {
+    // Reorder preserves the SAME items (and image URLs) — the server diff drops
+    // nothing, so no delete fires (no false deletes on a reorder).
+    void persist(next).then((outcome) => {
       if (outcome === 'failed') {
         setItems(previous); // roll back to the truth (optimistic UI honesty)
         setError(REORDER_ERROR);

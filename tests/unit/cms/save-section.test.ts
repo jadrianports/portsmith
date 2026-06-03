@@ -23,13 +23,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 // Verified identity succeeds (a fake authenticated claim); the section UPDATE is a
-// chainable stub that resolves with no error; the profile fallback read returns a
-// username. None of this touches a real DB — the gate runs before the write.
+// chainable stub that resolves with no error. The action now ALSO reads the prior
+// section `content` BEFORE the UPDATE (WR-03 server-recompute) — the `sections`
+// branch exposes a `select` returning a prior-content row; the `profiles` fallback
+// branch returns a username. None of this touches a real DB — the gate runs first.
 const update = vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) }));
-const single = vi.fn(async () => ({ data: { username: 'tester' }, error: null }));
-const select = vi.fn(() => ({ eq: vi.fn(() => ({ single })) }));
+// profiles.select(...).eq(...).single() → the username fallback row.
+const profileSingle = vi.fn(async () => ({ data: { username: 'tester' }, error: null }));
+const profileSelect = vi.fn(() => ({ eq: vi.fn(() => ({ single: profileSingle })) }));
+// sections.select('content').eq('id', ...).single() → the prior persisted content
+// (WR-03 read). For the gate cases this is a hero section (no item images), so the
+// server delete-set diff resolves to [] and no delete fires.
+const sectionSingle = vi.fn(async () => ({
+  data: { content: { heading: 'prior' } },
+  error: null,
+}));
+const sectionSelect = vi.fn(() => ({ eq: vi.fn(() => ({ single: sectionSingle })) }));
 const from = vi.fn((table: string) =>
-  table === 'sections' ? { update } : { select },
+  table === 'sections' ? { update, select: sectionSelect } : { select: profileSelect },
 );
 
 vi.mock('@/lib/supabase/server', () => ({

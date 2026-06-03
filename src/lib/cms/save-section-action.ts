@@ -21,12 +21,21 @@
  *      client parse is UX only; this re-parse is the real boundary (T-04-03a/c).
  *      A ZodError maps to per-field errors (the verbatim signup-action loop); a
  *      non-Zod throw (unregistered type) maps to a generic error.
- *   3. createClient() write      — authenticated, under RLS. The owner's
+ *   3. createClient() read + write — authenticated, under RLS. FIRST read the
+ *      prior persisted `content` (scoped to the owner by RLS) — the server-trusted
+ *      prior state the delete-set diff needs. THEN UPDATE: the owner's
  *      `sections.own_all` policy + `.eq('id', sectionId)` scope the UPDATE to the
  *      caller's own row; a cross-tenant target silently affects 0 rows (proven by
  *      tests/integration/cms/rls-write.test.ts — T-04-03b). Touch ONLY `content`
  *      (the save_section_history + update_updated_at triggers fire automatically).
  *      NEVER the service-role client for a user edit.
+ *   3b. WR-03 SERVER-RECOMPUTED delete set — AFTER the UPDATE succeeds (WR-02),
+ *      `serverDroppedItemImageUrls(type, priorContent, parsed)` diffs the prior
+ *      item-image URLs against the VALIDATED next content and deletes ONLY the
+ *      genuinely-dropped objects via `deleteStorageObject(url, sub)` with the
+ *      SERVER-VERIFIED `sub`. The client cannot influence this set (there is no
+ *      `deleteUrls` field); the helper's own-folder guard + origin-lock are
+ *      retained as defense-in-depth (D-10). WR-03 is closed.
  *   4. revalidatePath('/' + username) — on-demand ISR purge so the PUBLISHED
  *      public page is fresh within seconds (D-P4-01). LITERAL path, NO second
  *      arg: per the live Next 16 docs the optional second arg only takes
@@ -46,6 +55,7 @@
  */
 import { revalidatePath } from 'next/cache';
 
+import { serverDroppedItemImageUrls } from '@/lib/cms/section-media-diff';
 import { deleteStorageObject } from '@/lib/media/delete-object';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 import { validateSectionContent } from '@/lib/validations';
@@ -74,16 +84,16 @@ export interface SaveSectionInput {
    * reads it from the verified profile row — NEVER from the request host.
    */
   username?: string;
-  /**
-   * Prior Storage object URLs that are being removed or replaced by this save
-   * (D-12 / MEDIA-04 orphan-delete leg). The item editor (ItemManager) diffs the
-   * old-vs-new `content.items[]` image/avatar URLs and passes the ones absent from
-   * the next array. Each is deleted SYNCHRONOUSLY via the shared
-   * `deleteStorageObject` helper, gated by the SERVER-VERIFIED owner `sub` (never
-   * client-supplied) and the helper's own-folder guard — so a crafted cross-tenant
-   * URL is rejected, and a non-Storage / unparseable URL is a safe no-op.
+  /*
+   * WR-03 CLOSED — there is intentionally NO `deleteUrls` field. The set of
+   * Storage objects to delete on a media replace/remove is recomputed ENTIRELY
+   * on the server (`serverDroppedItemImageUrls`, below) by diffing the prior
+   * persisted `content.items` against the VALIDATED incoming content. The client
+   * can no longer influence which objects are deleted — a forged client list has
+   * no effect because there is no field to forge. (Prior to WR-03 a client
+   * `deleteUrls` was trusted; that leg + the client `droppedImageUrls` plumbing
+   * in `item-card.tsx` were removed.)
    */
-  deleteUrls?: string[];
 }
 
 const NOT_SIGNED_IN = 'Not signed in.';
@@ -134,35 +144,44 @@ export async function saveSectionAction(input: SaveSectionInput): Promise<SaveSe
     return gateErrorToResult(e);
   }
 
-  // 2b) Orphan-delete leg moved to AFTER the UPDATE succeeds (WR-02) — see below.
-  //     Deleting the dropped objects before the write would strand a broken
-  //     reference if the section UPDATE then failed (the row still points at them).
-
-  // 3) Write under RLS via the AUTHENTICATED client (never service-role). The
-  //    sections.own_all policy + .eq('id', sectionId) scope the UPDATE to the
-  //    owner; a cross-tenant target silently changes 0 rows (T-04-03b). Touch
-  //    ONLY content — the history + updated_at triggers fire automatically.
+  // 3) Read the prior persisted content BEFORE the write, then UPDATE — both under
+  //    RLS via the AUTHENTICATED client (never service-role).
   const supabase = await createClient();
+
+  // 3a) READ the owner's CURRENT content BEFORE the UPDATE (WR-03). RLS scopes this
+  //     read to the owner via the sections.own_all policy + .eq('id', sectionId), so
+  //     it is the SERVER-TRUSTED prior state the delete-set diff needs — the client
+  //     never supplies it. A missing row / null content is null-safe (no dropped set).
+  const { data: priorRow } = await supabase
+    .from('sections')
+    .select('content')
+    .eq('id', input.sectionId)
+    .single();
+  const priorContent = (priorRow as { content?: unknown } | null)?.content ?? null;
+
+  // 3b) UPDATE under RLS. The sections.own_all policy + .eq('id', sectionId) scope the
+  //     UPDATE to the owner; a cross-tenant target silently changes 0 rows (T-04-03b).
+  //     Touch ONLY content — the history + updated_at triggers fire automatically.
   const { error } = await supabase
     .from('sections')
     .update({ content: parsed })
     .eq('id', input.sectionId);
   if (error) return { ok: false, error: SAVE_FAILED };
 
-  // 3b) Orphan-delete leg (D-12 / MEDIA-04) — runs ONLY AFTER the section UPDATE is
-  //     confirmed (WR-02), so a failed save never deletes an object the surviving row
-  //     still references. When an item image is removed/replaced/cleared, the editor
-  //     diffs old-vs-new item-image URLs and passes the dropped ones here; each prior
-  //     Storage object is freed. `sub` is the SERVER-VERIFIED subject (step 1), never
-  //     client-supplied; deleteStorageObject re-asserts the own-folder guard +
-  //     origin-lock so a crafted cross-tenant / non-Storage URL is rejected / a safe
-  //     no-op (T-05-11). The AFTER-DELETE trigger decrements storage_used_bytes under
-  //     service_role (Option B). (deleteUrls is still client-influenced — see WR-03,
-  //     tracked as a fast-follow: server should recompute the diff from prior content.)
-  if (input.deleteUrls?.length) {
-    for (const url of input.deleteUrls) {
-      await deleteStorageObject(url, sub);
-    }
+  // 3c) WR-03 SERVER-RECOMPUTED orphan-delete leg (D-09 / D-10 / MEDIA-04) — runs ONLY
+  //     AFTER the section UPDATE is confirmed (WR-02), so a failed save never deletes an
+  //     object the surviving row still references. The delete set is recomputed ENTIRELY
+  //     on the server: `serverDroppedItemImageUrls` diffs the prior persisted item-image
+  //     URLs (step 3a) against the VALIDATED next content (`parsed`) and returns only the
+  //     genuinely-dropped ones (an item removed/replaced/cleared). The CLIENT cannot
+  //     influence this set — there is no `deleteUrls` field to forge (WR-03 closed). `sub`
+  //     is the SERVER-VERIFIED subject (step 1), never client-supplied; deleteStorageObject
+  //     re-asserts the own-folder guard + origin-lock as defense-in-depth (D-10), so a
+  //     crafted cross-tenant / non-Storage URL is rejected / a safe no-op (T-05-11). The
+  //     AFTER-DELETE trigger decrements storage_used_bytes under service_role (Option B).
+  const dropped = serverDroppedItemImageUrls(input.type, priorContent, parsed);
+  for (const url of dropped) {
+    await deleteStorageObject(url, sub);
   }
 
   // 4) Resolve the owner username (prefer the one the dashboard passed; else read
