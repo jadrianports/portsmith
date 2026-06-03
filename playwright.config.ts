@@ -30,6 +30,23 @@ export default defineConfig({
   // Single-origin consistency with the email link (config.toml site_url).
   use: {
     baseURL: 'http://127.0.0.1:3000',
+    // REDUCED-MOTION EMULATION (D-01 — load-bearing for the parity baselines).
+    // Both templates wrap every below-the-fold section in a `ScrollReveal`
+    // IntersectionObserver island (src/components/templates/{minimal,editorial}/
+    // scroll-reveal.tsx) that, when motion is ALLOWED, hydrates to `opacity:0;
+    // translateY(16px)` and only fades in on intersection. A `fullPage` capture
+    // renders the whole document height at once, so off-screen sections never
+    // intersect — they would freeze INVISIBLE and the baseline would show only the
+    // hero + footer. Emulating `prefers-reduced-motion: reduce` drives the island's
+    // `prefersReduced` branch (sections stay `revealed=true`) AND triggers the CSS
+    // belt-and-suspenders fallback `.tmpl-reveal { opacity:1 !important }` (theme.css),
+    // so ALL body sections render visible with ZERO entrance motion — the canonical
+    // reduced-motion render, identical before and after the Plan 02 chrome strip.
+    // (`reducedMotion` is a BrowserContext option in @playwright/test 1.60, so it is
+    // set via `contextOptions`, not as a top-level `use` key.)
+    contextOptions: {
+      reducedMotion: 'reduce',
+    },
   },
   // Deterministic visual-regression defaults (D-01 — Phase 08 parity harness).
   // The baseline AND the diff both run on the founder's Win11 local machine, so

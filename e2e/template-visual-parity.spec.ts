@@ -30,6 +30,30 @@
  * residual ambient animation ever surfaces in a diff, the config freeze already
  * covers it — do NOT add masking unless a genuinely dynamic element appears.
  *
+ * ── REDUCED-MOTION (D-01, the load-bearing capture fix) ───────────────────────
+ * The body sections of BOTH templates are wrapped in a `ScrollReveal`
+ * IntersectionObserver island (scroll-reveal.tsx) that, when motion is allowed,
+ * hydrates to `opacity:0` and only reveals on intersection. A `fullPage` capture
+ * renders the whole document at once, so off-screen sections never intersect and
+ * would freeze INVISIBLE — the baseline would show only the hero + footer. The
+ * harness emulates `prefers-reduced-motion: reduce` (playwright.config.ts `use`)
+ * which (a) drives the island's `prefersReduced` branch (sections stay revealed)
+ * and (b) triggers the CSS fallback `.tmpl-reveal { opacity:1 !important }`
+ * (theme.css), so the FULL body renders visible with zero entrance motion. This
+ * is the canonical reduced-motion render and is identical pre/post Plan 02.
+ *
+ * ── NEXT DEV OVERLAY EXCLUSION (D-01) ─────────────────────────────────────────
+ * `next dev` injects a top-level `<nextjs-portal>` custom element hosting the dev
+ * indicator / dev-tools button (confirmed via a live DOM probe: it is the only
+ * dev-chrome element with a visual footprint, it is NOT inside any template root,
+ * and the template theme-toggle — `aria-label="Switch to {light|dark} mode"` — is
+ * a SEPARATE element outside it). It is in-frame on a `fullPage` capture but is
+ * dev chrome, not template, so it must be excluded: Plan 02's chrome strip changes
+ * which dev warnings fire, which could perturb the indicator and false-fail the
+ * diff. Each test hides `nextjs-portal` via `addStyleTag` BEFORE capture (cleaner
+ * than a Playwright `mask` — the element is gone, no pink mask box in the image).
+ * This touches NO template element (the theme-toggle stays visible).
+ *
  * ── PRECONDITION (LOAD-BEARING) ───────────────────────────────────────────────
  * Runs against the LIVE dev server (playwright.config.ts `webServer: npm run dev`,
  * baseURL http://127.0.0.1:3000) + the LOCAL Supabase stack. The minimal test
@@ -57,6 +81,14 @@ import {
 /** The seeded founder public slug — minimal template (must match generateStaticParams). */
 const SEEDED = 'jadrianports';
 
+/**
+ * Hides the `next dev` overlay (`<nextjs-portal>` — the dev indicator / dev-tools
+ * button) before a full-page capture. Dev chrome, NOT a template element, so it is
+ * excluded from the baseline; touches no template element (the theme-toggle is a
+ * separate element outside the portal). Injected per-test right before `toHaveScreenshot`.
+ */
+const HIDE_NEXT_DEV_OVERLAY = 'nextjs-portal{display:none!important}';
+
 // `next dev` cold-compiles `/[username]` on first hit (Windows, Next 16); give
 // generous headroom so the first navigation's route compilation fits the budget.
 test.beforeEach(({}, info) => {
@@ -81,6 +113,10 @@ test('minimal template — full-page visual parity (founder seed)', async ({ pag
   // FONT-READINESS — Playwright does NOT auto-wait for `next/font`; without this
   // the first capture can land mid font-swap (`display:'swap'`).
   await page.evaluate(() => document.fonts.ready);
+
+  // Exclude the `next dev` overlay (dev chrome, not template) so the Plan 02 chrome
+  // strip — which changes which dev warnings fire — can't perturb the diff.
+  await page.addStyleTag({ content: HIDE_NEXT_DEV_OVERLAY });
 
   await expect(page).toHaveScreenshot('minimal-full.png', { fullPage: true });
 });
@@ -115,6 +151,9 @@ test.describe('editorial template — full-page visual parity (fresh owner)', ()
 
     // FONT-READINESS — same as the minimal test (self-hosted `next/font` faces).
     await page.evaluate(() => document.fonts.ready);
+
+    // Exclude the `next dev` overlay (dev chrome, not template) — same as the minimal test.
+    await page.addStyleTag({ content: HIDE_NEXT_DEV_OVERLAY });
 
     await expect(page).toHaveScreenshot('editorial-full.png', { fullPage: true });
   });
