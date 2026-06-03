@@ -1,41 +1,37 @@
+import './portfolio.css';
+
 /**
- * (portfolio) route-group layout — paints the template canvas, no chrome gutter.
+ * (portfolio) root layout — the LEAN PUBLIC ROOT (D-03).
  *
- * CHROME-GUTTER FIX (RESEARCH Pitfall 4 / Threat T-03-13b, verified live):
- * `src/app/globals.css` paints the document `body` with platform-CHROME colors
- * (light `#FBFAF8` / dark `#0B0C0E`). The portfolio template (`.tmpl-minimal`)
- * paints its OWN scoped canvas (`#0C0B1E` dark / `#F6F3FB` light). Without
- * intervention the chrome body color shows as an off-color band around the single
- * scroll (and during overscroll). This layout neutralizes the chrome body/html
- * background to `transparent` so ONLY the template canvas is visible.
+ * Since the top-level `app/layout.tsx` was deleted (Plan 08-02 Task 1), every
+ * route-group layout is now a Next 16 root layout. This is the public portfolio
+ * root: it owns its OWN `<html>`/`<body>` and ships NONE of the platform chrome.
  *
- * Why this is safe and scoped (D-17 two-layer isolation):
- *   - A route-group layout mounts ONLY for routes inside `(portfolio)`. The
- *     <style> below therefore ships exclusively on the public portfolio route —
- *     it cannot affect `(auth)`, `(dashboard)`, `(admin)`, or any other group.
- *   - It imports NO chrome design token. It only RESETS the chrome body/html
- *     background to `transparent` (removing the band); it does not read or reuse
- *     any `color-` prefixed chrome custom property. The template owns the color.
- *   - The template root additionally sets `background: var(--bg)` +
- *     `min-height: 100vh` (theme.css), so the canvas is full-bleed.
+ * Deliberately absent (the whole point of the chrome-free strip):
+ *   - NO Inter web font — the public render must not pull the chrome UI font.
+ *   - NO client provider tree (TanStack Query + devtools) — keeps that off the
+ *     public first-load JS (Success Criterion 2). The public page is a cookie-less
+ *     anon ISR read; it needs no client query cache.
+ *   - NO chrome `globals.css` — `import './portfolio.css'` ships Tailwind preflight
+ *     ONLY (D-02), with none of the chrome design tokens.
  *
- * The public page (03-05 `[username]/page.tsx`) renders inside this layout, so the
- * gutter fix lands before any visible portfolio render.
+ * D-05 — the old body-gutter inline-style hack (which forced the html/body
+ * background to be see-through) is REMOVED. Its sole purpose was to neutralize the
+ * chrome `body { background: var(--color-background) }` rule that leaked from the shared
+ * `globals.css`. That chrome `body` rule no longer loads on this route (the lean
+ * root imports `portfolio.css`, not `globals.css`), so the leak's root cause is
+ * gone. Tailwind preflight supplies `body { margin: 0 }`, and the template's
+ * `.tmpl-*` root paints `background: var(--bg)` + `min-height: 100vh` (theme.css),
+ * so the full-bleed template canvas is the only thing visible.
  */
-export default function PortfolioLayout({
+export default function PortfolioRootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <>
-      {/*
-       * Scoped to this route group only (route-group layouts do not mount for
-       * sibling groups). Neutralizes the chrome body/html background band; the
-       * .tmpl-minimal canvas supplies the actual color. No chrome token referenced.
-       */}
-      <style>{`html, body { background: transparent; }`}</style>
-      {children}
-    </>
+    <html lang="en">
+      <body>{children}</body>
+    </html>
   );
 }

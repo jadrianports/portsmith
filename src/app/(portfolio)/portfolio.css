@@ -1,0 +1,20 @@
+/*
+ * Chrome-token-free CSS entry for the LEAN public (portfolio) root layout (D-02).
+ *
+ * D-02 VERDICT (08-RESEARCH.md): the public portfolio templates use ZERO Tailwind
+ * utility classes but DO depend on Tailwind PREFLIGHT — `*, ::before, ::after {
+ * box-sizing: border-box }`, `body { margin: 0 }`, and the heading/button/img
+ * normalizations. So this entry keeps `@import "tailwindcss";` (preflight + the
+ * tree-shaken-to-nothing utilities layer) while shipping ZERO platform-chrome:
+ *
+ *   - NONE of the chrome design tokens (Evergreen/Copper — CMS-only, two-layer
+ *     isolation): no at-theme block, no `--color-*` custom properties.
+ *   - NO chrome `body { background/color/font-family/font-feature-settings }` rules.
+ *   - NONE of the chrome preview-banner / crop-modal keyframes.
+ *
+ * Templates paint their OWN scoped, full-bleed canvas via `theme.css` (`.tmpl-*`
+ * sets `background: var(--bg)` + `min-height: 100vh`), so the lean root needs no
+ * body background. This is the entire chrome-free public-root strip — Plan 03's
+ * pixel-diff against Plan 01's pre-refactor baselines is the proof this call held.
+ */
+@import "tailwindcss";
