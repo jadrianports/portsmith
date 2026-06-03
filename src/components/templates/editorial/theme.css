@@ -1,0 +1,289 @@
+/*
+ * Scoped theme tokens for the `editorial` / "Newsprint" template (Surface A,
+ * 07-UI-SPEC A.4/A.6; the LOCKED editorial/Swiss aesthetic, D-P7-04 superseded by
+ * the approved 07-UI-SPEC Surface A).
+ *
+ * TWO-LAYER UI ISOLATION (D-17, SHARED-5, Threat T-07-07):
+ * This file declares the template's OWN tokens scoped to the `.tmpl-editorial`
+ * root. It shares NOTHING with the platform-chrome design tokens in
+ * `src/app/globals.css` (Evergreen/Copper, CMS-only) AND NOTHING with the
+ * `minimal` template's tokens (Midnight Outrun). There is deliberately:
+ *   - no Tailwind at-rule theme block here (chrome owns that; the template uses
+ *     plain scoped CSS custom properties instead).
+ *   - no reference to any chrome color custom property (the `color-` prefixed ones).
+ *   - no chrome UI font (Inter is forbidden inside any template, D-17).
+ *   - NO gradients, NO glow, NO neon anywhere (the explicit anti-`minimal`
+ *     discipline, A.5 — Newsprint's drama is type + grid + whitespace, not light).
+ *     This file defines no decorative-ramp token and uses no gradient CSS function.
+ * Every other editorial file reads `var(--token)` — this file is the SOLE token
+ * source, so it is the ONLY place hardcoded hex values live in the template.
+ *
+ * Token values are the approved 07-UI-SPEC A.6 contract ("Newsprint" LIGHT /
+ * "Ink" DARK — both WCAG-AA-verified 2026-06-03; the exact sRGB ratios are recorded
+ * in-line below). LIGHT is the DEFAULT set (D-P7-06: editorial → light-first,
+ * inverting `minimal`'s default-dark); the DARK set activates via the
+ * `[data-template-theme='dark']` attribute ("load both, switch via CSS — never a
+ * conditional import" — handoff 05).
+ *
+ * AA NUDGE (07-UI-SPEC A.6 executor note — "nudge the hex, not the role"): the
+ * UI-SPEC LIGHT vermilion `#D6402A` computes 4.13:1 on the ivory `--bg` (BELOW the
+ * 4.5:1 body threshold for accent-as-ink TEXT, e.g. a vermilion link/hover label on
+ * the canvas). It was darkened to `#C8381F` (4.73:1 on `--bg`, 5.20:1 on
+ * `--surface`, white-on-accent 5.20:1 for the CTA label) — the role is preserved,
+ * the hue stays editorial vermilion, every text pairing now passes AA. The DARK
+ * vermilion `#FF6B4A` already passes (6.48:1 on `--bg`).
+ *
+ * CHROME-GUTTER FIX: the `.tmpl-editorial` root sets `background: var(--bg)`
+ * + `min-height: 100vh` so the template paints its OWN full-bleed canvas; the
+ * existing `(portfolio)` route-group layout already neutralizes the chrome `body`
+ * background for that group only (no new layout work — same as `minimal`).
+ */
+
+/* ============================================================================
+ * LIGHT — "Newsprint" (primary / default). D-P7-06: editorial defaults light.
+ * WCAG-AA verified 2026-06-03 (sRGB ratios recorded per token at its role).
+ * ========================================================================== */
+.tmpl-editorial {
+  /* Surfaces — warm ivory paper (NOT pure white; distinct from chrome #FBFAF8
+     and from minimal's #F6F3FB). */
+  --bg: #f7f4ec; /* page canvas — warm ivory newsprint */
+  --surface: #ffffff; /* elevated card / contact panel ("pasted clipping") */
+  --surface-muted: #efeadd; /* inset fills, tech-tags, skill-group panels, zebra */
+
+  /* Foreground (warm ink). */
+  --fg: #1a1916; /* primary text — near-black warm ink (15.99:1 on bg) */
+  --muted-fg: #5c574c; /* lead/meta/dates/captions — warm grey ink (6.54:1 on bg) */
+
+  /* Borders. Two roles: decorative hairlines are low-contrast BY DESIGN (WCAG
+     2.2 SC 1.4.11 exempt); the SIGNATURE structural editorial RULES use `--fg`
+     (ink) at full contrast in the components, so no essential grouping depends on
+     a low-contrast border. */
+  --border: #d8d2c4; /* decorative hairline (1.4.11 exempt) */
+  --border-strong: #b8b0a0; /* hover/focus-adjacent on cards/inputs (decorative) */
+
+  /* Accent — the ONE editorial vermilion, used as INK (never decoration). Nudged
+     #D6402A -> #C8381F for AA (see header). 4.73:1 on bg, 5.20:1 on surface —
+     PASS body text on both; white-on-accent CTA label = 5.20:1 (PASS). */
+  --accent: #c8381f; /* the ONE vermilion — CTA fill, link-hover ink, Core marker */
+  --ring: #c8381f; /* focus ring = accent (PASS UI >=3:1 on every surface) */
+
+  /* Functional semantic colors (NOT part of the 10% accent). */
+  --success: #2e7d46; /* 5.07:1 on surface — success copy renders on the panel */
+  --destructive: #b3261e; /* 6.54:1 on surface — error copy on the white form panel.
+                             A deeper, browner red than the vermilion accent so
+                             "error" reads distinct from "accent" (A.4). */
+
+  /* Radius — the template's OWN scale (deliberately TIGHTER than minimal's 8/10/14:
+     editorial = near-square, not pill). A.5. */
+  --radius-sm: 2px; /* tech-tags, inputs, tier markers (near-square) */
+  --radius-md: 4px; /* buttons, form fields, cards */
+  --radius-lg: 6px; /* the contact panel, large cards */
+  --radius-full: 9999px; /* reserved (avatar only — most things are square) */
+
+  /* The template owns its full-bleed canvas (no chrome gutter behind the scroll). */
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+}
+
+/* ============================================================================
+ * DARK — "Ink" (first-class designed inversion, not a fallback). A near-black ink
+ * ground with warm paper-white type — an EDITORIAL dark (no purple, no neon) so
+ * the two templates' dark modes are clearly different. Activated by the
+ * `data-template-theme='dark'` attribute. Only color variables swap — radius,
+ * fonts, and layout do not change. WCAG-AA verified 2026-06-03.
+ * ========================================================================== */
+.tmpl-editorial[data-template-theme='dark'] {
+  --bg: #17150f; /* warm near-black ink ground */
+  --surface: #211e16; /* elevated card */
+  --surface-muted: #2a271d; /* inset fills, tags */
+
+  --fg: #f2eee3; /* warm paper-white type (15.74:1 on bg) */
+  --muted-fg: #b9b2a1; /* lead/meta (8.64:1 on bg) */
+
+  --border: #34301f; /* decorative hairline (1.4.11 exempt) */
+  --border-strong: #48432f; /* hover/focus-adjacent (decorative) */
+
+  /* Vermilion lightened for the dark ground so it stays AA. 6.48:1 on bg —
+     PASS body; text ON the accent fill = the dark `--bg` ink (6.48:1). */
+  --accent: #ff6b4a;
+  --ring: #ff6b4a;
+
+  --success: #5bb374; /* 7.08:1 on bg */
+  --destructive: #f08a80; /* 6.86:1 on surface */
+}
+
+/* ============================================================================
+ * CONTENT SHELL — ONE shared, responsive centered column applied to every
+ * section's content + the footer content (mirrors minimal's `.tmpl-shell`, but with
+ * the WIDER Swiss margin per A.2: 76rem track + a wider gutter). Decorative
+ * full-bleed layers, if any, stay OUTSIDE the shell. (Newsprint has no backdrop
+ * atmosphere, so the shell simply centers content.)
+ *   - max-width 76rem (1216px) — centered via `margin-inline: auto` (A.2).
+ *   - padding-inline clamp(1.5rem, 6vw, 5rem) — the Swiss margin (A.2): ≈24px
+ *     mobile gutter -> up to ~80px desktop gutter. Never x=0 on desktop.
+ *   - width 100% + box-sizing border-box so the gutter is padding (no overflow).
+ * ========================================================================== */
+.tmpl-editorial .tmpl-shell {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 76rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.5rem, 6vw, 5rem);
+}
+
+/* The editorial reading measure for prose (A.2 — ~68ch magazine readability). */
+.tmpl-editorial .tmpl-measure {
+  max-width: 36rem;
+}
+
+/* ============================================================================
+ * ABOVE-THE-FOLD HERO LOAD-REVEAL (TMPL-04 LCP <= 2.5s). The Hero NAME is the
+ * page's LCP element and is ALWAYS in view, so it must NOT be gated by the JS
+ * IntersectionObserver opacity:0 reveal (the "entrance animation on the LCP
+ * element" anti-pattern that defers measured LCP). The Hero wrapper
+ * (`.tmpl-load-reveal`, rendered STATIC server-side by ScrollReveal's `priority`
+ * branch) paints at its FINAL position from frame 1 — ZERO entrance motion, CLS = 0.
+ * (Identical contract to minimal/theme.css; Newsprint adds no entrance to the LCP
+ * element either — A.5 "the name is the LCP element -> ZERO entrance motion".)
+ * ========================================================================== */
+.tmpl-editorial .tmpl-load-reveal {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+/* ============================================================================
+ * Projects — card paper-lift + link underline-shift on hover (A.5 / A.7 §4).
+ * Inline styles cannot express `:hover`, and the section is a Server Component, so
+ * the interactive treatment lives here, scoped to `.tmpl-editorial` (D-17). All
+ * values read scoped tokens. NO GLOW (the anti-minimal discipline) — a clean paper
+ * lift: border -> strong + a VERY SOFT neutral drop shadow + translateY(-2px).
+ * ========================================================================== */
+.tmpl-editorial .tmpl-project-card {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.tmpl-editorial .tmpl-project-card:hover {
+  border-color: var(--border-strong);
+  /* A neutral paper drop-shadow (ink at low alpha) — NO accent glow at rest or
+     hover (A.5 — the accent is ink, not light). */
+  box-shadow: 0 10px 28px -18px rgba(26, 25, 22, 0.45);
+  transform: translateY(-2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* State/color still change; the lift transform does not (A.5 reduced-motion). */
+  .tmpl-editorial .tmpl-project-card:hover {
+    transform: none;
+  }
+}
+
+/* Project links — resting links are ink with an ink underline; the underline shifts
+   to vermilion on hover/focus (color only, A.5). */
+.tmpl-editorial .tmpl-project-link {
+  position: relative;
+  color: var(--fg);
+  text-decoration: none;
+  transition: color 140ms ease;
+}
+.tmpl-editorial .tmpl-project-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: var(--fg);
+  transition:
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+.tmpl-editorial .tmpl-project-link:hover {
+  color: var(--accent);
+}
+.tmpl-editorial .tmpl-project-link:hover::after {
+  background: var(--accent);
+}
+
+/* ============================================================================
+ * Contact — form-field focus ring + the live-submit spinner/success classes.
+ * The Contact section hosts the LIVE `<ContactForm>` island (Phase-6 complete,
+ * template-agnostic). That island reads scoped `var(--token)` and the SHARED class
+ * hooks below — so this template MUST define them scoped to `.tmpl-editorial`
+ * (identical names to minimal's, different — vermilion — values). All values read
+ * scoped tokens. The VERMILION focus-ring on `:focus-visible` is the A.7 §7
+ * requirement.
+ * ========================================================================== */
+.tmpl-editorial .tmpl-contact-field {
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.tmpl-editorial .tmpl-contact-field:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  /* Vermilion focus-ring (= --ring): 2px ring + 2px offset (the form sits on the
+     `--surface`/`--surface-muted` panel, so the inner offset uses `--surface`). */
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ring);
+}
+
+/* Live-submit motion — the submitting spinner + a one-shot success ring. Both are
+   gated under `prefers-reduced-motion: no-preference` (the blanket `.tmpl-editorial
+   *` reset below ALSO zeroes them under reduce — defence in depth). Content is never
+   hidden behind motion (the label reads "Sending…"; the success copy renders
+   immediately). NO glow — the success cue is a clean ink->success ring (anti-minimal). */
+@media (prefers-reduced-motion: no-preference) {
+  .tmpl-editorial .tmpl-contact-spinner {
+    animation: tmpl-ed-contact-spin 0.7s linear infinite;
+  }
+  .tmpl-editorial .tmpl-contact-success-pulse {
+    animation: tmpl-ed-contact-success 360ms cubic-bezier(0.2, 0, 0, 1) 1;
+  }
+}
+
+@keyframes tmpl-ed-contact-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A restrained ink-rule -> success ring (NO color glow — A.5 anti-minimal). */
+@keyframes tmpl-ed-contact-success {
+  0% {
+    box-shadow: 0 0 0 1px var(--border-strong);
+  }
+  100% {
+    box-shadow: 0 0 0 1px var(--success);
+  }
+}
+
+/* ============================================================================
+ * Reduced-motion contract (HARD requirement — A.5, mirrors minimal). Under
+ * `prefers-reduced-motion: reduce`, ALL animation/transition inside the template is
+ * zeroed; content is NEVER hidden behind motion (the scroll-reveal island also
+ * short-circuits to fully-visible, and the `.tmpl-reveal` CSS fallback below forces
+ * the revealed state). State/color still change. Scoped to `.tmpl-editorial *` so it
+ * never touches platform chrome.
+ * ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .tmpl-editorial *,
+  .tmpl-editorial *::before,
+  .tmpl-editorial *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* CSS-level visible-fallback GUARANTEE for the scroll-reveal (A.5: "content fully
+     visible without animation — never opacity:0 with no fallback"). The ScrollReveal
+     island already short-circuits to visible in JS, but its starting state is an
+     INLINE `opacity:0` — which a stylesheet rule cannot beat without `!important`.
+     This forces the revealed state at the CSS layer so the content is visible under
+     reduced-motion EVEN IF the JS effect is slow/blocked. */
+  .tmpl-editorial .tmpl-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
