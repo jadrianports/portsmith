@@ -30,6 +30,61 @@
  */
 import { useEffect, useRef, useState } from 'react';
 
+/* ──────────────────────────────────────────────────────────────────────────
+ * SHARED IntersectionObserver pool (perf 08-03, D-11 TBT lean-up). The page
+ * mounts ~6 below-the-fold `ScrollRevealOnScroll` islands; each previously spun
+ * up its OWN `new IntersectionObserver` in its effect at hydration. That
+ * per-island observer construction was the TBT cost. Instead, ALL `tmpl-reveal`
+ * nodes register against ONE module-level observer: each node still flips its
+ * OWN `revealed` state via the callback stored in this registry, so the reveal
+ * timing/stagger and one-shot behavior are byte-identical to before.
+ *
+ * SSR-safe: the observer is created LAZILY on first client registration — never
+ * on the server (where `IntersectionObserver` is undefined). The reduced-motion
+ * / no-IO early return in the effect below means we never even reach
+ * registration in those paths, so the load-bearing reduced-motion invariant is
+ * untouched. The observer options are the SAME `{ threshold, rootMargin }` as
+ * the original per-instance observers.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** element → its one-shot reveal callback (flips that island's own `revealed`). */
+const revealCallbacks = new Map<Element, () => void>();
+
+let sharedObserver: IntersectionObserver | null = null;
+
+function getSharedObserver(): IntersectionObserver {
+  if (!sharedObserver) {
+    sharedObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const reveal = revealCallbacks.get(entry.target);
+            if (reveal) reveal();
+            // One-shot: stop watching + drop the entry once it has revealed.
+            sharedObserver?.unobserve(entry.target);
+            revealCallbacks.delete(entry.target);
+          }
+        }
+      },
+      { threshold: 0.1, rootMargin: '0px 0px -10% 0px' },
+    );
+  }
+  return sharedObserver;
+}
+
+/** Register a node + its reveal callback against the shared observer. */
+function observeReveal(node: Element, reveal: () => void): void {
+  revealCallbacks.set(node, reveal);
+  getSharedObserver().observe(node);
+}
+
+/** Unregister a node (cleanup / pre-reveal unmount). */
+function unobserveReveal(node: Element): void {
+  if (revealCallbacks.delete(node)) {
+    sharedObserver?.unobserve(node);
+  }
+}
+
 export function ScrollReveal({
   children,
   /** Stagger within an orchestrated group (ms). */
@@ -96,21 +151,13 @@ function ScrollRevealOnScroll({
     const node = ref.current;
     if (!node) return;
 
-    // Motion is allowed — start hidden, then reveal on intersection.
+    // Motion is allowed — start hidden, then reveal on intersection. Register
+    // against the SHARED module-level observer (no per-island observer
+    // construction): the callback flips THIS island's own `revealed` and the
+    // shared observer one-shot-unobserves the node on intersect (see registry).
     setRevealed(false);
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setRevealed(true);
-            observer.disconnect();
-          }
-        }
-      },
-      { threshold: 0.1, rootMargin: '0px 0px -10% 0px' },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
+    observeReveal(node, () => setRevealed(true));
+    return () => unobserveReveal(node);
   }, []);
 
   return (
