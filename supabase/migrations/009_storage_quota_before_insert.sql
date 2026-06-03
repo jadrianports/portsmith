@@ -48,9 +48,21 @@ BEGIN
   -- Owner is the first path segment; cast-safety mirrors 003 (only reached for the
   -- user buckets, whose objects always live under `{user_id}/...`).
   owner_id := ((storage.foldername(NEW.name))[1])::uuid;
-  -- metadata.size is populated on the row at BEFORE INSERT time (003 reads the same
-  -- field in its AFTER trigger); ::bigint matches the storage_used_bytes column math.
-  obj_size := COALESCE((NEW.metadata->>'size')::bigint, 0);
+
+  -- Read the RAW metadata.size (do NOT COALESCE-to-0 here). Supabase storage-api fires
+  -- this BEFORE INSERT twice — a placeholder fire (no metadata.size) then the sized
+  -- fire. The cap is authoritatively enforced on the SIZED fire; the NULL placeholder is
+  -- skipped (it charges 0 and is superseded). A strict RAISE-on-NULL here would reject
+  -- 100% of uploads (verified). [code-review WR-01: premise of a NULL-size bypass refuted
+  -- by the two-fire behavior — the 003 AFTER trigger + this sized-fire gate together
+  -- enforce the cap.]
+  obj_size := (NEW.metadata->>'size')::bigint;
+  IF obj_size IS NULL THEN
+    -- Placeholder fire (no size yet): SKIP the cap gate. The sized fire that follows is
+    -- the one that persists + is charged by the 003 AFTER trigger; gating this fire would
+    -- reject every upload.
+    RETURN NEW;
+  END IF;
 
   -- Row-lock the owner's profile. This serializes concurrent uploads by the SAME owner
   -- and locks the EXACT row 003's AFTER trigger UPDATEs — so the lock scope matches the
@@ -62,9 +74,20 @@ BEGIN
     WHERE id = owner_id
     FOR UPDATE;
 
-  -- Re-check the cap inside the lock. Exactly-at-cap is allowed (mirrors
+  -- WR-02: fail closed if the owner has no profile row. Without this, FOR UPDATE takes no
+  -- lock (nothing to lock), `used` is NULL, two concurrent uploads for that owner do not
+  -- serialize, and the 003 AFTER trigger's `WHERE id = owner_id` matches 0 rows so the
+  -- objects land uncharged and unbounded. A missing owner row is a hard reject. [code-
+  -- review WR-02: serialization + charge both require the owner row to exist.]
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'storage quota: owner profile not found'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Re-check the cap inside the lock on the SIZED fire. Exactly-at-cap is allowed (mirrors
   -- wouldExceedQuota: `used + incoming > QUOTA_BYTES` is the reject condition; strictly
-  -- greater-than rejects).
+  -- greater-than rejects). No COALESCE masking on obj_size — a present-but-over size is
+  -- enforced, never silently zeroed.
   IF COALESCE(used, 0) + obj_size > quota THEN
     RAISE EXCEPTION 'storage quota exceeded: % + % > %', COALESCE(used, 0), obj_size, quota
       USING ERRCODE = 'check_violation';
