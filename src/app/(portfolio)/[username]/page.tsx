@@ -31,12 +31,19 @@
  * OG / Person JSON-LD is Phase 6; the MINIMAL metadata (title + description +
  * canonical) is authored now, not stubbed empty.
  */
-import { draftMode } from 'next/headers';
+import { cookies, draftMode } from 'next/headers';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { PreviewBanner } from '@/components/editor/preview-banner';
+import { PREVIEW_TEMPLATE_COOKIE } from '@/lib/preview/cookie';
 import { TemplateRenderer } from '@/components/templates/template-renderer';
+import {
+  resolveSpec,
+  resolveTemplateMeta,
+  templateSlugSchema,
+} from '@/components/templates/registry';
+import { filledVisibleSectionTypes } from '@/lib/templates/filled-sections';
 import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
 import { getPortfolioOwnerByUsername } from '@/lib/portfolio/get-portfolio-owner';
 import { buildPublicMetadata } from '@/lib/seo/public-metadata';
@@ -133,12 +140,59 @@ export default async function PortfolioPage({
     // hidden sections). This keeps preview ≡ public.
     const ownerData = await getPortfolioOwnerByUsername(username);
     if (!ownerData) notFound(); // no verified owner / not the caller's own slug.
+
+    // ┌─────────────────────────────────────────────────────────────────────────┐
+    // │ CANDIDATE-TEMPLATE PREVIEW (07-05 / D-P7-08 / T-07-14):                   │
+    // │ The enable route may have set a vetted `preview-template` cookie (the     │
+    // │ template the owner is previewing — NOT yet persisted). RE-VALIDATE it     │
+    // │ here via `templateSlugSchema` (defense-in-depth — never trust a cookie    │
+    // │ value into a render path); a missing/unknown value falls back to the      │
+    // │ owner's PERSISTED slug. This cookie read is fine: it lives ONLY inside    │
+    // │ this draft branch, which is ALREADY the single sanctioned dynamic path    │
+    // │ (gated by __prerender_bypass) — the PUBLIC branch below stays cookie-less │
+    // │ so `/[username]` stays ● SSG for anonymous visitors (T-07-15).            │
+    // └─────────────────────────────────────────────────────────────────────────┘
+    const cookieStore = await cookies();
+    const candidateParse = templateSlugSchema.safeParse(
+      cookieStore.get(PREVIEW_TEMPLATE_COOKIE)?.value,
+    );
+    const candidateSlug = candidateParse.success ? candidateParse.data : null;
+    // The slug actually RENDERED in the preview: the vetted candidate when present,
+    // else the owner's persisted slug (the lossless fallback).
+    const renderedSlug = candidateSlug ?? ownerData.templateSlug;
+
+    // Confirm-bar / mismatch context for the reused PreviewBanner (07-05). The
+    // mismatch warning compares the owner's FILLED + VISIBLE section types against
+    // the CANDIDATE template's spec (warn-but-allow, D-P7-11) — it returns [] in v1
+    // (both templates cover all 7 produced types) but is wired for future templates.
+    const filledTypes = filledVisibleSectionTypes(ownerData.sections);
+    const candidateMeta = candidateSlug ? resolveTemplateMeta(candidateSlug) : null;
+    const candidateSpec = candidateSlug ? resolveSpec(candidateSlug) : null;
+
     return (
       <>
-        <PreviewBanner username={username} published={ownerData.published} />
-        {/* Phase 7: render the owner's PERSISTED slug (the candidate-slug preview
-            override lands in 07-05) — no longer hardcoded 'minimal'. */}
-        <TemplateRenderer slug={ownerData.templateSlug} data={ownerData} />
+        <PreviewBanner
+          username={username}
+          published={ownerData.published}
+          // 07-05 switch-flow confirm bar (rendered only when previewing a CANDIDATE
+          // template — i.e. a vetted `?template=` cookie is present). When absent,
+          // PreviewBanner falls back to its plain Phase-4 "Exit preview" shape. All
+          // props are plain serializable data (RSC → client boundary): the candidate
+          // slug/name, the current slug/name, the owner's filled-visible section
+          // types, and the candidate's spec (a plain `{ sections, ... }` object). The
+          // MismatchWarning inside the banner runs `unsupportedFilledSections` from
+          // these (warn-but-allow, D-P7-11).
+          candidateSlug={candidateSlug ?? undefined}
+          candidateName={candidateMeta?.name}
+          currentSlug={ownerData.templateSlug}
+          currentName={resolveTemplateMeta(ownerData.templateSlug).name}
+          filledVisibleTypes={candidateSpec ? filledTypes : undefined}
+          candidateSpec={candidateSpec ?? undefined}
+        />
+        {/* Phase 7 (07-05): render the VETTED candidate slug when previewing a
+            prospective template, else the owner's PERSISTED slug — the candidate
+            rides this existing __prerender_bypass dynamic branch only. */}
+        <TemplateRenderer slug={renderedSlug} data={ownerData} />
       </>
     );
   }
