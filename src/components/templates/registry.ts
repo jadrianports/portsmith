@@ -26,31 +26,19 @@ import { editorialSpec } from './editorial/spec';
 
 /**
  * The slug → template map. The lazy import yields the template's default export
- * (the Server-Component root in `minimal/index.tsx`), typed to the shared
- * `{ data: PortfolioData }` prop contract every template root accepts.
+ * (the Server-Component root in `minimal/index.tsx` / `editorial/index.tsx`), typed
+ * to the shared `{ data: PortfolioData }` prop contract every template root accepts.
  */
-/**
- * Deferred (runtime-resolved) specifier for the editorial template root.
- *
- * WHY THE VARIABLE SPECIFIER (the [05-01] idiom): `editorial/index.tsx` lands in
- * 07-03; only its `spec.ts` exists from 07-01. `tsc --noEmit` under
- * `moduleResolution: bundler` DOES compile-time-resolve a LITERAL
- * `import('./editorial')` and would TS2307 until the folder has an index. Importing
- * through this variable specifier with `/* @vite-ignore *​/` defers resolution to
- * runtime (Turbopack/Next), so the registry registers `editorial` now (TMPL-01)
- * while tsc stays 0. Swap to the plain literal `dynamic(() => import('./editorial'))`
- * once 07-03 ships the index.
- */
-const EDITORIAL_TEMPLATE_MODULE = './editorial';
-
 export const templateRegistry: Record<string, ComponentType<{ data: PortfolioData }>> = {
   minimal: dynamic(() => import('./minimal')),
   // TMPL-01: the editorial ("Newsprint") template — the ONE registry line a new
-  // template adds (its folder is `editorial/`). Plain `dynamic()`, NEVER
+  // template adds (its folder is `editorial/`). A PLAIN LITERAL `dynamic(() =>
+  // import('./editorial'))` (07-03 shipped `editorial/index.tsx`, so the 07-01
+  // variable-specifier deferral is no longer needed) — required for proper
+  // per-template code-splitting (the <=200kb chunk budget 07-06 gates). NEVER
   // `{ ssr: false }` (the prohibition documented above — it triggers a build error
   // on a Server-Component entry; it is reserved for FUTURE Three.js CLIENT templates).
-  // The specifier is deferred to runtime until 07-03 ships the index (see above).
-  editorial: dynamic(() => import(/* @vite-ignore */ EDITORIAL_TEMPLATE_MODULE)),
+  editorial: dynamic(() => import('./editorial')),
   // Three.js / CLIENT-only templates (later) live inside a Client Component and may
   // use `{ ssr: false }` THERE — never on a Server-Component template entry above.
 };
