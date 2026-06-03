@@ -137,7 +137,15 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'unsupported_type' }, { status: 415 });
   }
 
-  // [D] Server-authoritative quota gate (409), BEFORE any write (MEDIA-03 / D-10).
+  // [D] Quota pre-check (409) — a fast-fail UX nicety, BEFORE any write (MEDIA-03).
+  //     DEMOTED (CR-01 / migration 009): this read-then-check is NO LONGER the quota
+  //     authority. The 009 `enforce_storage_quota()` BEFORE INSERT trigger on
+  //     storage.objects locks the owner's profile row (SELECT ... FOR UPDATE) and
+  //     re-checks the cap inside the same txn that charges usage — that DB trigger is
+  //     the gate (atomic, zero app trust). This pre-check stays only so an obviously
+  //     over-cap upload gets a clean 409 BEFORE bytes are uploaded (it cannot close the
+  //     read-then-write race; concurrent uploads slip past it — the trigger catches them
+  //     and the [F] handler below maps the RAISE to the same 409).
   //     Read the protected storage_used_bytes via the service-role admin client (the
   //     anon-key authenticated read would also work for SELECT, but the route already
   //     holds the admin client for the write; one client, one source of truth) and
@@ -172,6 +180,17 @@ export async function POST(req: Request): Promise<NextResponse> {
     .from(cfg.bucket)
     .upload(path, bytes, { contentType: sniffed, upsert: false });
   if (upErr) {
+    // [F] CR-01 race-loser mapping (migration 009). When two concurrent near-cap
+    //     uploads slip past the [D] pre-check, the 009 BEFORE INSERT trigger RAISEs the
+    //     loser with ERRCODE 'check_violation' (Postgres SQLSTATE 23514). The Storage
+    //     API surfaces this as a StorageApiError whose message is `database error,
+    //     code: 23514` (verified against the live local stack). Detect that signal and
+    //     return the SAME 409 quota_exceeded as a pre-check rejection, so a race-loser
+    //     and an obvious over-cap upload get identical UX. Any other upload error stays
+    //     a generic 500 (the cap is enforced by the trigger regardless of this mapping).
+    if (/(^|\D)23514(\D|$)/.test(upErr.message)) {
+      return NextResponse.json({ error: 'quota_exceeded' }, { status: 409 });
+    }
     return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
 
