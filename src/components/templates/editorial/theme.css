@@ -100,6 +100,22 @@
   background: var(--bg);
   color: var(--fg);
   min-height: 100vh;
+
+  /* SELF-CONTAINED BODY FONT (D-17 two-layer isolation / D-01 — 08-03 font-anchor).
+     Anchor the template ROOT to its OWN body face (Space Grotesk, `--font-body`,
+     injected onto this same element via `fontVars` in index.tsx). Before this, the
+     `.tmpl-editorial` root inherited whatever font the HOST root shipped — and the
+     pre-refactor public root carried the platform-chrome Inter, so the template was
+     SECRETLY borrowing chrome's font (a two-layer-isolation leak, D-17). Editorial's
+     pre-refactor diff happened to pass clean (its prose `max-width: 18rem`/`36rem`
+     measures are far less `ch`-sensitive than minimal's 62ch hero column), but it
+     carried the SAME latent host-font dependency. Anchoring the body font here makes
+     every `ch`/`em` measure — and the body text — resolve against the template's OWN
+     font, independent of any host root (hardening editorial against the same class of
+     leak that broke minimal). Display/serif headings stay explicitly set on their own
+     elements (`--font-display`, Fraunces); this only anchors the ROOT body face so the
+     cascade no longer reaches a host font. */
+  font-family: var(--font-body);
 }
 
 /* ============================================================================

@@ -93,6 +93,21 @@
   background: var(--bg);
   color: var(--fg);
   min-height: 100vh;
+
+  /* SELF-CONTAINED BODY FONT (D-17 two-layer isolation / D-01 — 08-03 font-anchor).
+     Anchor the template ROOT to its OWN body face (General Sans, `--font-body`,
+     injected onto this same element via `fontVars` in index.tsx). Before this, the
+     `.tmpl-minimal` root inherited whatever font the HOST root shipped — and the
+     pre-refactor public root carried the platform-chrome Inter, so the template was
+     SECRETLY borrowing chrome's font (a two-layer-isolation leak, D-17). That made
+     layout math depend on the host: the Hero's `max-width: 62ch` resolves against the
+     INHERITED font, so stripping chrome (Plan 02) shifted the lean root to a system
+     fallback and the hero name re-wrapped (the 08-03 diff failure). Anchoring the body
+     font here makes every `ch`/`em` measure — and the body text — resolve against the
+     template's OWN font, independent of any host root. Display headings stay explicitly
+     set on their own elements (`--font-display`); this only anchors the ROOT body face
+     so the cascade no longer reaches a host font. */
+  font-family: var(--font-body);
 }
 
 /* ============================================================================
