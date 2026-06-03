@@ -17,7 +17,9 @@
  * TWO-LAYER ISOLATION (D-17 / SHARED-5): PLATFORM CHROME — Evergreen & Copper
  * `--color-*` tokens + `--font-sans` (Inter) ONLY; NO template token / `.tmpl-*` class.
  */
-import { listTemplates } from '@/components/templates/registry';
+// Import from the zod-free metadata module, NOT '@/components/templates/registry'
+// (a registry import drags zod into this client chunk — see template-meta.ts / D-25).
+import { listTemplates } from '@/components/templates/template-meta';
 
 import { TemplateCard } from './template-card';
 

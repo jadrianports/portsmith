@@ -29,7 +29,11 @@
 import { TriangleAlert } from 'lucide-react';
 
 import { unsupportedFilledSections } from '@/lib/templates/mismatch';
-import { resolveTemplateMeta } from '@/components/templates/registry';
+// Import from the zod-free metadata module, NOT '@/components/templates/registry':
+// this is a CLIENT island reachable from the public /[username] route (via the
+// draft-mode PreviewBanner), and any registry import drags zod onto the public First
+// Load JS (D-25 budget — see template-meta.ts).
+import { resolveTemplateMeta } from '@/components/templates/template-meta';
 import type { TemplateSpec } from '@/components/templates/minimal/spec';
 
 /** Human-readable labels for the known CMS section types (the rows the panel lists). */
