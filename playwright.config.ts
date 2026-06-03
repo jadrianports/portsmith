@@ -31,6 +31,28 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:3000',
   },
+  // Deterministic visual-regression defaults (D-01 — Phase 08 parity harness).
+  // The baseline AND the diff both run on the founder's Win11 local machine, so
+  // cross-OS font rendering is NOT a flake source; the only remaining flake
+  // sources are font-load timing (handled per-test via `document.fonts.ready`)
+  // and animations (frozen here). These defaults make `toHaveScreenshot` stable:
+  //   - animations:'disabled' freezes CSS animations/transitions at end-state
+  //     (already the Playwright default; pinned explicitly for clarity).
+  //   - caret:'hide' removes the blinking text caret (a non-deterministic pixel).
+  //   - scale:'css' keeps DPR-independent CSS pixels on the founder's display.
+  //   - maxDiffPixelRatio:0.01 caps the OVERALL diff ratio so sub-pixel
+  //     anti-alias noise never fails the gate, but a real layout shift does.
+  expect: {
+    toHaveScreenshot: {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css',
+      maxDiffPixelRatio: 0.01,
+    },
+  },
+  // Stable baseline location under `e2e/__screenshots__/`. Playwright appends the
+  // platform suffix automatically, so the founder's Win11 baselines stay isolated.
+  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',
   // Boot `next dev` for the run; reuse a hand-started dev server locally. A
   // generous timeout covers a cold Next 16 compile on Windows (first request
   // triggers route compilation).
