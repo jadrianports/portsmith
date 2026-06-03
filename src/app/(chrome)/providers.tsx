@@ -28,8 +28,8 @@ function getQueryClient(): QueryClient {
 }
 
 /**
- * Root client-side provider tree, wired into the root layout
- * (`src/app/layout.tsx`). Wraps the app in TanStack Query's provider and mounts
+ * Root client-side provider tree, wired into the chrome root layout
+ * (`src/app/(chrome)/layout.tsx`). Wraps the app in TanStack Query's provider and mounts
  * the React Query Devtools in development only.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
