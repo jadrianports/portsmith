@@ -91,8 +91,12 @@ export default async function DashboardPage() {
   //    (CR-01 — `{ includeHidden: true }`) via the authenticated base-table read,
   //    so the editor shows last-saved content AND every hidden section (carrying
   //    its real `visible` flag) the owner can re-show. Owner-only by construction.
+  //    07-05: `data.templateSlug` (the owner's CURRENT template, resolved from the
+  //    static map by 07-04) rides along here and is threaded into EditorShell → the
+  //    TemplatePicker so the gallery marks the "● Current" card.
   const data = await getPortfolioOwnerByUsername(username, { includeHidden: true });
   if (!data) redirect('/login');
+  const templateSlug = data.templateSlug; // the current template (→ the picker marker).
 
   // 5) Unread-message count for the inbox nav badge (06-05 / CONT-02). A cheap
   //    head-count under RLS via the AUTHENTICATED client (NEVER supabaseAdmin) —
@@ -111,6 +115,8 @@ export default async function DashboardPage() {
       ownerId={sub}
       storageUsedBytes={storageUsedBytes}
       unreadMessageCount={unreadCount ?? 0}
+      // 07-05: the owner's CURRENT template slug → the TemplatePicker "● Current" mark.
+      currentTemplateSlug={templateSlug}
     />
   );
 }

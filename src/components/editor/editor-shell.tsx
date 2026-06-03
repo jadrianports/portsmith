@@ -55,6 +55,7 @@ import { PublishToggle } from './publish-toggle';
 import { SectionForm, type SimpleSectionType } from './section-form';
 import { SectionList, type EditorSection } from './section-list-row';
 import { StorageMeter } from './storage-meter';
+import { TemplatePicker } from './template-picker';
 import { UnsavedChangesGuard, useGuardedNavigate } from './unsaved-guard';
 
 /**
@@ -63,6 +64,14 @@ import { UnsavedChangesGuard, useGuardedNavigate } from './unsaved-guard';
  * "Profile" rail entry sets this, routing the panel to the ProfileForm.
  */
 const PROFILE_PANEL_ID = '__profile__';
+
+/**
+ * The sentinel `activeSectionId` for the TEMPLATE picker panel (07-05). Like the
+ * profile, the template gallery is not a `sections` row, so it gets its own non-UUID
+ * id; selecting the "Template" rail entry sets this, routing the panel to the
+ * TemplatePicker (Surface B — platform chrome).
+ */
+const TEMPLATE_PANEL_ID = '__template__';
 
 /** The simple (single-form) section types handled by SectionForm. */
 const SIMPLE_TYPES = new Set<string>(['hero', 'about', 'contact']);
@@ -116,6 +125,12 @@ export interface EditorShellProps {
    * inbox nav badge. RSC-loaded under RLS (owner-only). 0 → no badge.
    */
   unreadMessageCount?: number;
+  /**
+   * 07-05 — the owner's CURRENT template slug (the dashboard threads `data.templateSlug`
+   * here explicitly). Drives the TemplatePicker's "● Current" marker. Falls back to
+   * `data.templateSlug` when omitted.
+   */
+  currentTemplateSlug?: string;
 }
 
 export function EditorShell({
@@ -124,6 +139,7 @@ export function EditorShell({
   ownerId,
   storageUsedBytes,
   unreadMessageCount = 0,
+  currentTemplateSlug,
 }: EditorShellProps) {
   const queryClient = useQueryClient();
 
@@ -202,6 +218,13 @@ export function EditorShell({
   const activeRaw = rawSections.find((s) => s.id === activeSectionId) ?? null;
   // WR-02: whether the PROFILE / IDENTITY panel is the active selection.
   const profileActive = activeSectionId === PROFILE_PANEL_ID;
+  // 07-05: whether the TEMPLATE picker panel is the active selection.
+  const templateActive = activeSectionId === TEMPLATE_PANEL_ID;
+
+  // 07-05: the portfolio's CURRENT template slug — threaded into the picker so it can
+  // mark the "● Current" card. The dashboard passes it explicitly; fall back to the
+  // owner read's resolved slug (07-04 `templateSlug`) when the prop is omitted.
+  const activeTemplateSlug = currentTemplateSlug ?? data.templateSlug;
 
   // Advisory completeness (pure, data-derived — never a publish gate, D-P4-08).
   const checklistItems = useMemo(
@@ -231,11 +254,13 @@ export function EditorShell({
           "Save and continue" runs the active panel's registered save (WR-01). */}
       <UnsavedChangesGuard
         sectionLabel={
-          profileActive
-            ? 'Profile'
-            : activeRaw
-              ? titleFor(activeRaw.type, activeRaw.content)
-              : undefined
+          templateActive
+            ? 'Template'
+            : profileActive
+              ? 'Profile'
+              : activeRaw
+                ? titleFor(activeRaw.type, activeRaw.content)
+                : undefined
         }
       />
 
@@ -321,6 +346,14 @@ export function EditorShell({
               onSelect={() => selectSection(PROFILE_PANEL_ID)}
             />
 
+            {/* TEMPLATE picker entry (07-05 — Surface B). Sits with the Profile entry
+                at the top of the rail; selecting it routes the panel to the
+                TemplatePicker gallery. Dirty-guarded like every in-app navigation. */}
+            <TemplateRailEntry
+              active={templateActive}
+              onSelect={() => selectSection(TEMPLATE_PANEL_ID)}
+            />
+
             <RailSectionList
               sections={sections}
               portfolioId={portfolioId}
@@ -363,7 +396,13 @@ export function EditorShell({
           ) : null}
 
           <div className="mx-auto w-full max-w-2xl">
-            {profileActive ? (
+            {templateActive ? (
+              // 07-05: the TEMPLATE picker gallery (Surface B — platform chrome). The
+              // cards navigate to the enable route (prefetch={false}) to open the
+              // preview-before-commit flow; the rail entry just surfaces the gallery
+              // in the existing two-pane shell (the recommended placement).
+              <TemplatePicker key={TEMPLATE_PANEL_ID} currentSlug={activeTemplateSlug} />
+            ) : profileActive ? (
               // WR-02: the PROFILE / IDENTITY editor — the UI caller for
               // saveProfileAction (CMS-02 / D-P4-05).
               <ProfileForm
@@ -451,6 +490,43 @@ function ProfileRailEntry({
       <span className="text-sm font-semibold text-foreground">Profile</span>
       <span className="ml-auto text-[13px] leading-tight text-muted-foreground">
         Name · headline · links
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The TEMPLATE rail entry (07-05 — Surface B). A selectable row, styled identically to
+ * the ProfileRailEntry, that routes the panel to the TemplatePicker gallery. Carries
+ * the active brand marker when selected (parity with the other rail entries). The
+ * gallery itself is the switcher; this entry just surfaces it in the existing shell.
+ */
+function TemplateRailEntry({
+  active,
+  onSelect,
+}: {
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      className={
+        'group relative flex min-h-11 items-center gap-2 rounded-md border border-border ' +
+        'bg-surface px-3 py-2 text-left outline-none transition-colors ' +
+        'hover:border-border-strong hover:text-accent ' +
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+        'motion-reduce:transition-none'
+      }
+    >
+      {active ? (
+        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] rounded-l-md bg-brand" />
+      ) : null}
+      <span className="text-sm font-semibold text-foreground">Template</span>
+      <span className="ml-auto text-[13px] leading-tight text-muted-foreground">
+        Choose your look
       </span>
     </button>
   );
