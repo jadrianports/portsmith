@@ -30,8 +30,19 @@
  * `labelStyle` so the live form is pixel-identical to the locked 03 design. NO
  * `globals.css` / chrome `ui/*` classes here. (The reused `TurnstileWidget` carries
  * its own shared infra — that is sanctioned shared challenge plumbing, not chrome.)
+ *
+ * Turnstile DEFER (08-03, D-11 Lighthouse gate): the `TurnstileWidget` mounts the
+ * `@marsidev/react-turnstile` script (`injectScript` defaults true) the instant it
+ * renders, which preloads `challenges.cloudflare.com` and inflates mobile TBT on the
+ * public first-paint. So the widget is NOT rendered on hydration — it is ARMED (then
+ * mounted into the reserved 65px slot) only when the form nears the viewport
+ * (`IntersectionObserver`, `rootMargin:'200px'`) OR on the form's first focus /
+ * pointer-down (belt-and-suspenders for a user who tabs/clicks straight in). The
+ * reserved slot keeps `minHeight:65px` whether armed or not, so CLS stays 0; the
+ * widget arms well before a human can fill three fields, so the `canSubmit` /
+ * `turnstile_token` contract is untouched. Server siteverify (D-02/D-05) is unchanged.
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { TurnstileWidget } from '@/components/auth/turnstile-widget';
 import { safeHref } from '@/lib/safe-url';
@@ -80,9 +91,44 @@ export function ContactForm({ portfolioId, emailPublic }: ContactFormProps) {
   const [resetSignal, setResetSignal] = useState(0);
   const [state, setState] = useState<SubmitState>('idle');
 
+  // Turnstile defer (08-03): `armed` gates the real widget mount. It flips true when
+  // the reserved slot nears the viewport or the user first focuses/points at the form
+  // — keeping `challenges.cloudflare.com` off the public first-paint (D-11 TBT).
+  const [armed, setArmed] = useState(false);
+  const slotRef = useRef<HTMLDivElement | null>(null);
+
   const submitting = state === 'submitting';
   // Submit is disabled until a Turnstile token is set (the widget contract).
   const canSubmit = !!token && !submitting;
+
+  // Arm-on-near-viewport: load the widget slightly before the form scrolls in
+  // (`rootMargin:'200px'`) so a solved token is ready by the time a human reaches it.
+  // Guarded for SSR / browsers without IntersectionObserver — those arm on first
+  // focus/pointer-down (the `arm` handler below) instead, so the widget always mounts.
+  useEffect(() => {
+    if (armed) return;
+    if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') return;
+    const node = slotRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setArmed(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [armed]);
+
+  // Belt-and-suspenders: a user who tabs/clicks straight into the form arms it now
+  // (covers the no-IntersectionObserver path and an instant-focus deep link).
+  const arm = () => {
+    if (!armed) setArmed(true);
+  };
 
   // Generic error copy — IDENTICAL for 400/429/500 (D-04, never branch on 429).
   const errorCopy = emailPublic
@@ -174,6 +220,8 @@ export function ContactForm({ portfolioId, emailPublic }: ContactFormProps) {
   return (
     <form
       onSubmit={handleSubmit}
+      onFocus={arm}
+      onPointerDown={arm}
       noValidate
       aria-busy={submitting}
       style={{
@@ -246,10 +294,18 @@ export function ContactForm({ portfolioId, emailPublic }: ContactFormProps) {
         />
       </div>
 
-      {/* Real Turnstile widget mounted into the reserved 65px slot (no CLS). */}
-      <div style={{ minHeight: '65px', display: 'flex', alignItems: 'center' }}>
+      {/* Reserved 65px Turnstile slot — present whether armed or not so CLS stays 0
+          (08-03). The widget is mounted only once `armed` (near-viewport or first
+          focus/pointer-down), keeping `challenges.cloudflare.com` off the first-paint.
+          `data-testid="turnstile-slot"` is the stable hook the visual-parity spec masks
+          (deferred third-party content is now nondeterministic in a full-page capture). */}
+      <div
+        ref={slotRef}
+        data-testid="turnstile-slot"
+        style={{ minHeight: '65px', display: 'flex', alignItems: 'center' }}
+      >
         <div style={{ width: '100%' }}>
-          <TurnstileWidget onToken={setToken} resetSignal={resetSignal} />
+          {armed ? <TurnstileWidget onToken={setToken} resetSignal={resetSignal} /> : null}
         </div>
       </div>
 
