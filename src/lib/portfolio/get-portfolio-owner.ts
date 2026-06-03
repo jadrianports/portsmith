@@ -48,7 +48,7 @@
  */
 import 'server-only';
 
-import { minimalSpec } from '@/components/templates/minimal/spec';
+import { resolveSpec, slugForTemplateId } from '@/components/templates/registry';
 import type {
   PortfolioData,
   PublicProfile,
@@ -125,9 +125,11 @@ export async function getPortfolioOwnerByUsername(
   if (profile.username !== username) return null;
 
   // (3) The caller's own portfolio (RLS-scoped to user_id = callerId).
+  //     Select `template_id` too (Phase 7) so the preview renders the owner's
+  //     PERSISTED template, not a hardcoded 'minimal' — resolved via the static map.
   const { data: portfolio, error: portfolioError } = await db
     .from('portfolios')
-    .select('id')
+    .select('id, template_id')
     .eq('user_id', profile.id)
     .maybeSingle();
   if (portfolioError) {
@@ -206,12 +208,19 @@ export async function getPortfolioOwnerByUsername(
     website_url: settings.website_url,
   };
 
+  // Resolve the slug from the owner's persisted `portfolios.template_id` via the
+  // STATIC map (no extra DB read; Pitfall 6) so the preview renders the owner's
+  // CURRENT template. The candidate-slug preview override lands in 07-05; here the
+  // draft branch just stops hardcoding 'minimal'.
+  const templateSlug = slugForTemplateId(portfolio.template_id);
+
   return {
     profile: profileData,
     settings: settingsData,
     sections: projectedSections,
     recentPosts: [], // blog deferred (D-19) — matches the public read.
-    templateSpec: minimalSpec, // local spec leads the DB row (RESEARCH Pitfall 6).
+    templateSlug, // owner's persisted slug (resolved from the static map).
+    templateSpec: resolveSpec(templateSlug), // spec for the SAME slug (Pitfall 6).
     published: profile.published, // for the PreviewBanner "not public yet" caption.
   };
 }

@@ -44,13 +44,18 @@ export type PublicSection = V['public_sections']['Row'];
  * - `sections` is the visible-only set, pre-sorted by `sort_order`.
  * - `recentPosts` is always `[]` in this milestone — the blog is deferred (D-19);
  *   `never[]` documents that nothing is ever pushed into it here.
- * - `templateSpec` is the local spec (the P3 field-gating source of truth), not a
- *   DB read (RESEARCH Pitfall 6).
+ * - `templateSlug` is the resolved template slug (`slugForTemplateId(
+ *   portfolio.template_id)` — Phase 7 / D-P7-13), derived from the STATIC UUID map
+ *   (NOT a request-time DB read, so `/[username]` stays ISR — Pitfall 6). The page
+ *   passes it straight to `<TemplateRenderer slug={…}>` without re-deriving.
+ * - `templateSpec` is the spec for that SAME slug (`resolveSpec(slug)` — the
+ *   field-gating source of truth), not a DB read (RESEARCH Pitfall 6).
  */
 export interface PortfolioData {
   profile: PublicProfile;
   settings: PublicSettings;
   sections: PublicSection[];
   recentPosts: never[];
+  templateSlug: string;
   templateSpec: TemplateSpec;
 }

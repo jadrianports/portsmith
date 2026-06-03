@@ -33,7 +33,7 @@ import { cache } from 'react';
 
 import { createClient } from '@supabase/supabase-js';
 
-import { minimalSpec } from '@/components/templates/minimal/spec';
+import { resolveSpec, slugForTemplateId } from '@/components/templates/registry';
 import type { PortfolioData } from '@/components/templates/types';
 import type { Database } from '@/types/database';
 
@@ -111,12 +111,19 @@ export const getPortfolioByUsername = cache(
     }
     if (!settings) return null; // genuine not-found
 
+    // Resolve the slug from `public_portfolios.template_id` (already in hand from
+    // the `.select('*')` above — public_portfolios exposes it, 005:88) via the
+    // STATIC slug↔UUID map. NO request-time `templates` read → the route stays
+    // cookie-less ISR (Pitfall 2/6). `resolveSpec(slug)` selects the matching spec.
+    const templateSlug = slugForTemplateId(portfolio.template_id);
+
     return {
       profile,
       settings,
       sections: sections ?? [],
       recentPosts: [], // blog deferred (D-19)
-      templateSpec: minimalSpec, // local spec leads the DB row (RESEARCH Pitfall 6)
+      templateSlug, // resolved from the static map — drives <TemplateRenderer slug>
+      templateSpec: resolveSpec(templateSlug), // spec for the SAME slug (Pitfall 6)
     };
   },
 );

@@ -136,7 +136,9 @@ export default async function PortfolioPage({
     return (
       <>
         <PreviewBanner username={username} published={ownerData.published} />
-        <TemplateRenderer slug="minimal" data={ownerData} />
+        {/* Phase 7: render the owner's PERSISTED slug (the candidate-slug preview
+            override lands in 07-05) — no longer hardcoded 'minimal'. */}
+        <TemplateRenderer slug={ownerData.templateSlug} data={ownerData} />
       </>
     );
   }
@@ -145,8 +147,10 @@ export default async function PortfolioPage({
   const data = await getPortfolioByUsername(username);
   if (!data) notFound(); // D-24 — missing/unpublished.
 
-  // One template in Phase 3 — hardcoded 'minimal'. The engine resolves slug →
-  // lazy chunk → error boundary → the scoped .tmpl-minimal Server-Component root.
-  // TODO(Phase 7): resolve portfolio.template_id → slug for multi-template support.
-  return <TemplateRenderer slug="minimal" data={data} />;
+  // Phase 7: render the slug resolved from `public_portfolios.template_id` via the
+  // STATIC map in `get-portfolio.ts` (`data.templateSlug`) — NO request-time
+  // `templates` read, so this branch stays cookie-less ISR (Pitfall 2/6). The
+  // engine resolves slug → lazy chunk → error boundary → the scoped
+  // .tmpl-<slug> Server-Component root.
+  return <TemplateRenderer slug={data.templateSlug} data={data} />;
 }
