@@ -26,9 +26,19 @@
  *     awaits `document.fonts.ready` BEFORE the capture — without it the first
  *     screenshot can land mid-swap. (`toHaveScreenshot` itself also auto-stabilizes
  *     by waiting for two consecutive identical frames, absorbing late layout settle.)
- * No masking is needed for v1 (no clocks / random content on either page). If a
- * residual ambient animation ever surfaces in a diff, the config freeze already
- * covers it — do NOT add masking unless a genuinely dynamic element appears.
+ * ── DYNAMIC-CONTENT MASK (08-03, the Turnstile slot) ──────────────────────────
+ * The contact form's Cloudflare Turnstile widget was deferred off the public
+ * first-paint (08-03, D-11 TBT fix): it now mounts only when its reserved slot
+ * nears the viewport (`IntersectionObserver`, `rootMargin:'200px'`) or on first
+ * focus/pointer-down. A `fullPage` capture scrolls the whole document into the
+ * render tree, so the deferred widget's PRESENCE and load TIMING in the frame are
+ * now nondeterministic third-party content. Both screenshots therefore MASK the
+ * reserved slot via `[data-testid="turnstile-slot"]` (the slot is rendered whether
+ * armed or not, so the mask box is stable and CLS stays 0). The mask covers ONLY
+ * the Turnstile slot — it touches NO template element, so the rest of the page is
+ * still diffed pixel-for-pixel against the font-anchored baseline. Aside from this
+ * one dynamic slot there are no clocks / random content; the config animation freeze
+ * covers any residual ambient motion — do NOT add further masking without cause.
  *
  * ── REDUCED-MOTION (D-01, the load-bearing capture fix) ───────────────────────
  * The body sections of BOTH templates are wrapped in a `ScrollReveal`
@@ -118,7 +128,12 @@ test('minimal template — full-page visual parity (founder seed)', async ({ pag
   // strip — which changes which dev warnings fire — can't perturb the diff.
   await page.addStyleTag({ content: HIDE_NEXT_DEV_OVERLAY });
 
-  await expect(page).toHaveScreenshot('minimal-full.png', { fullPage: true });
+  // Mask the deferred Turnstile slot — its presence/timing in a full-page capture is
+  // now nondeterministic third-party content (08-03). Touches no template element.
+  await expect(page).toHaveScreenshot('minimal-full.png', {
+    fullPage: true,
+    mask: [page.locator('[data-testid="turnstile-slot"]')],
+  });
 });
 
 test.describe('editorial template — full-page visual parity (fresh owner)', () => {
@@ -155,6 +170,11 @@ test.describe('editorial template — full-page visual parity (fresh owner)', ()
     // Exclude the `next dev` overlay (dev chrome, not template) — same as the minimal test.
     await page.addStyleTag({ content: HIDE_NEXT_DEV_OVERLAY });
 
-    await expect(page).toHaveScreenshot('editorial-full.png', { fullPage: true });
+    // Mask the deferred Turnstile slot — same dynamic-content rationale as the
+    // minimal test (08-03). Touches no template element.
+    await expect(page).toHaveScreenshot('editorial-full.png', {
+      fullPage: true,
+      mask: [page.locator('[data-testid="turnstile-slot"]')],
+    });
   });
 });
