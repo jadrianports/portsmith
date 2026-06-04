@@ -40,8 +40,16 @@ jobs:
       - name: Export local Supabase env
         run: supabase status -o env >> "$GITHUB_ENV"
 
-      - name: Run tests (unit + RLS integration)
-        run: npx vitest run
+      # D-P10-01a build-ordering fix: the build-dependent gates
+      # (`tests/build/route-table-ssg.test.ts`, `npm run check:bundle`) read the
+      # production `.next/` prerender + chunk manifests, and route-table-ssg loud-fails
+      # when the build is absent. It lives in the Vitest `unit` project glob
+      # (vitest.config.ts: `tests/build/**`), so the unscoped `npx vitest run` used
+      # to run it BEFORE the build below — failing on a clean checkout. Run the
+      # NON-build tests first (integration + unit minus tests/build), then build,
+      # then the build-artifact gates. RESEARCH §Pitfall 2 sequence.
+      - name: Run tests (unit + RLS integration, excluding build-artifact gates)
+        run: npx vitest run --project unit --project integration --exclude 'tests/build/**'
 
       # FND-05 bundle-scan proof. Build the app, then assert the service-role
       # key VALUE never appears anywhere under .next/static (the client bundle).
@@ -55,13 +63,24 @@ jobs:
       # public values onto the NEXT_PUBLIC_* names Next reads at build time, and
       # pass the service-role key in so it has a real chance to leak — which is
       # exactly what the next step proves it does NOT do.
-      - name: Build app (produces .next/static for the bundle scan)
+      #
+      # This step ALSO produces the `.next/` manifests the build-artifact gates
+      # below read — so it MUST run before them (D-P10-01a).
+      - name: Build app (produces .next/static for the bundle scan + .next manifests for the build gates)
         run: npx next build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ env.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_SITE_URL: http://localhost:3000
           SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # Build-artifact gates: now that `.next/` exists they evaluate a REAL build.
+      # route-table-ssg (D-22 SSG/ISR proof) reads .next/prerender-manifest.json;
+      # check:bundle reuses the build just produced (`--skip-build`, no double build).
+      - name: Run build-artifact gates (D-22 SSG proof + bundle budget)
+        run: |
+          npx vitest run --project unit tests/build
+          npm run check:bundle -- --skip-build
 
       - name: Assert service-role key absent from client bundle
         run: |
