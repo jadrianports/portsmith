@@ -8,6 +8,18 @@
  * the real public render shell), but it is the DELIBERATE OPPOSITE of the public
  * `/[username]` page on the ISR axis (D-22):
  *
+ * ┌─────────────────────────────────────────────────────────────────────────────────────┐
+ * │ FOLDER NAME (load-bearing, fixed in Plan 10-04): this directory is named               │
+ * │ `%5F%5Ffixture` — the URL-ENCODED form of `__fixture`. Next App Router treats ANY      │
+ * │ folder whose name STARTS WITH `_` as a PRIVATE folder and EXCLUDES it from the route   │
+ * │ tree (it never compiles; every request 404s — exactly what a bare `__fixture` folder   │
+ * │ did under Next 16/Turbopack). Naming the folder with percent-encoded underscores opts  │
+ * │ it BACK into routing while Next decodes the segment to the PUBLIC URL `/__fixture/      │
+ * │ <slug>` — so `renderFixture` / the `gate:*` npm scripts / Plan 10-06 W6 all still hit  │
+ * │ `/__fixture/<slug>` UNCHANGED. Do NOT rename this folder to a bare `__fixture`; it      │
+ * │ will silently stop routing and every render gate will fail to find `.tmpl-<slug>`.     │
+ * └─────────────────────────────────────────────────────────────────────────────────────┘
+ *
  *   - `export const dynamic = 'force-dynamic'` — explicitly NOT the ISR path. It is NOT in
  *     any `generateStaticParams` and has NO `revalidate`, so it never prerenders and never
  *     appears on the public SSG surface. `route-table-ssg.test.ts` keys strictly on
