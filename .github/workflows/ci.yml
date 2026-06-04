@@ -91,3 +91,67 @@ jobs:
           echo "FND-05 OK: service-role key absent from .next/static"
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
+
+  # ── TEMPLATE GATE (D-P10-01 mirror) ───────────────────────────────────────────
+  # The `gate:template` umbrella (scripts/gate-template.mjs) is the LOCAL source of
+  # truth (D-P10-01); THIS job is its CI BACKSTOP MIRROR, running the SAME `gate:*`
+  # scripts so local and CI can never diverge (T-10-06-CIMIRROR). It composes every
+  # template gate into ONE pipeline that blocks on any single failure (CICD-01).
+  #
+  # REPO TOPOLOGY: the full working repo has NO git remote (by design); the public
+  # `jadrianports/portsmith` is a filtered code-only export. So this CI mirror only
+  # ever FIRES on that public export repo's Actions — it is the one surface where the
+  # gates run automatically. Locally the umbrella IS the gate (run `npm run gate:template`).
+  #
+  # ORDERING (D-P10-01a): the umbrella runs `tsc -> static -> next build -> build-
+  # artifact -> render` IN-PROCESS (scripts/gate-template.mjs owns the order), so the
+  # build provably precedes the build-artifact + render gates. The Supabase stack is
+  # provisioned + env-mapped here exactly as the `test` job does, because the render
+  # tier's Playwright `webServer` (`npm run dev`) needs the local-stack public env.
+  template-gate:
+    name: Template gate (gate:template umbrella mirror — CICD-01)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The render tier (Playwright) needs a browser; the static + build tiers do not.
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      # The render gates render the stack-free `/__fixture/<slug>` route (no DB), but
+      # `next dev` + `next build` still need the PUBLIC Supabase env to boot/compile.
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: latest
+
+      - name: Start local Supabase stack
+        run: supabase start
+
+      - name: Reset database (apply migrations + seed)
+        run: supabase db reset
+
+      - name: Export local Supabase env
+        run: supabase status -o env >> "$GITHUB_ENV"
+
+      # Run the SAME umbrella the operator runs locally. It performs its OWN
+      # `next build` (Tier 2) BEFORE the build-artifact + render gates (D-P10-01a),
+      # so no separate build step is needed here. Map the public env onto the
+      # NEXT_PUBLIC_* names Next reads at build + dev time (same mapping as `test`).
+      - name: Run gate:template umbrella (tsc -> static -> next build -> build-artifact -> render)
+        run: npm run gate:template
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SUPABASE_SERVICE_ROLE_KEY }}
