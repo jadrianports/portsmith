@@ -14,7 +14,7 @@
     "promote-admin": "tsx scripts/promote-admin.ts",
     "seed:founder": "tsx scripts/seed-founder-portfolio.ts",
     "check:bundle": "tsx scripts/check-bundle-budget.ts",
-    "gate:template": "node -e \"console.error('gate:template umbrella not finalized until plan 10-06 — run the per-gate scripts directly (gate:security / gate:isolation / gate:registry / gate:budget / gate:conformance / gate:a11y / gate:parity)'); process.exit(1)\"",
+    "gate:template": "node scripts/gate-template.mjs",
     "gate:security": "npx vitest run tests/unit/templates/security-grep.test.ts",
     "gate:isolation": "npx vitest run tests/unit/templates/template-isolation-any.test.ts tests/unit/templates/token-conformance.test.ts",
     "gate:registry": "npx vitest run tests/unit/templates/registry-consistency.test.ts",
