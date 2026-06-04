@@ -207,6 +207,24 @@ function scanTsFile(file: string, src: string, violations: SecurityViolation[]):
     ) {
       checkImportSpecifier((node.arguments[0] as ts.StringLiteral).text, file, violations);
     }
+    // WR-03: a RE-EXPORT specifier — `export { default } from 'canvas-confetti'` (an
+    // ExportDeclaration with a string moduleSpecifier) reaches an unvetted package and must
+    // be allowlist-checked exactly like an import.
+    if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      checkImportSpecifier(node.moduleSpecifier.text, file, violations);
+    }
+    // WR-03: a DYNAMIC import — `await import('canvas-confetti')` (a CallExpression whose
+    // callee is the `import` keyword). The rich-lane pattern this contract blesses
+    // (`dynamic(() => import('./Scene'))`) and Lovable exports both routinely use it, so it
+    // is not a theoretical edge — allowlist-check the specifier like a static import.
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteral(node.arguments[0])
+    ) {
+      checkImportSpecifier((node.arguments[0] as ts.StringLiteral).text, file, violations);
+    }
 
     ts.forEachChild(node, walk);
   };
@@ -296,14 +314,41 @@ function scanTextRules(file: string, rawSrc: string, violations: SecurityViolati
 
   // RULE external-origin: any external `https://`/`http://`/`//host` origin in `src=` or
   // `url(…)` that is NOT the NEXT_PUBLIC_SUPABASE_URL origin (the same host-lock
-  // `safe-image.ts:41-57` enforces — Storage is the ONLY allowed image origin).
+  // `safe-image.ts:41-57` enforces — Storage is the ONLY allowed image origin). This is the
+  // SHARPER, lower-false-positive layer kept on top of the broad pass below.
+  const reportedExternal = new Set<string>();
   for (const m of src.matchAll(/(?:src\s*=\s*['"]|url\(\s*['"]?)((?:https?:)?\/\/[^'")\s]+)/gi)) {
     const url = m[1];
-    if (isExternalOrigin(url, supabaseOrigin)) {
+    if (isExternalOrigin(url, supabaseOrigin) && !reportedExternal.has(url)) {
+      reportedExternal.add(url);
       violations.push({
         rule: 'external-origin',
         file,
         detail: `an external origin '${url}' in src=/url() — only the Supabase Storage origin is allowed (safe-image host-lock)`,
+      });
+    }
+  }
+
+  // WR-01 broad pass: an external origin written as a BARE string/template literal —
+  // `const u = "https://evil.example/tracker.png"; <img src={u} />` — evades the `src=`/`url(`
+  // textual proximity rule above (the literal is not adjacent to `src=`). A
+  // hostile/AI-generated Lovable export emits exactly this variable-indirection form, so flag
+  // ANY external (non-Supabase) absolute/protocol-relative origin token in the comment-
+  // stripped source. The live `minimal`/`editorial` corpus contains NO such token (only the
+  // host-locked Supabase origin, which `isExternalOrigin` allows), so this stays GREEN on the
+  // corpus while closing the indirection hole the negative fixture's literal `src=` form left
+  // open. The `external-font-origin` rule above remains the sharper font-CDN layer. `reportedExternal`
+  // de-dups so a URL already flagged by the sharper src=/url() rule is not double-reported.
+  for (const m of src.matchAll(/(?:https?:)?\/\/[^\s'")]+/g)) {
+    const url = m[0];
+    if (isExternalOrigin(url, supabaseOrigin) && !reportedExternal.has(url)) {
+      reportedExternal.add(url);
+      violations.push({
+        rule: 'external-origin',
+        file,
+        detail:
+          `an external origin '${url}' — only the Supabase Storage origin is allowed ` +
+          '(safe-image host-lock); a bare external-URL literal evades the src=/url() proximity rule',
       });
     }
   }
