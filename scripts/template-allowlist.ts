@@ -30,8 +30,14 @@
  * {@link isAllowedRelativeImport}) is an unknown dependency → D-P10-03 hard-fail.
  */
 export const ALLOWED_IMPORT_SPECIFIERS = [
-  // Icons (the only non-next/font dep installed today — package.json).
+  // Icons (the only non-next/font deps installed today — package.json).
   'lucide-react',
+  // Brand logos: both live templates import named, tree-shaken icons from `simple-icons`
+  // (`minimal/sections/icons.ts` + `editorial/sections/icons.ts`). Each imported value is
+  // a CONSTANT SVG `path` from the package (T-03-17 / T-07-07 — no runtime/user input), so
+  // the brand-logo lane is XSS-safe by construction. Allowlisted (D-P10-03) so the GREEN-
+  // on-corpus security canary passes the known-good templates.
+  'simple-icons',
   // The ONE blessed animation lib (standard lane). Modern Motion line ONLY — bare
   // `framer-motion` is deliberately NOT here (A6): an unknown-dep hard-fail forces the
   // operator to confirm the modern package.
