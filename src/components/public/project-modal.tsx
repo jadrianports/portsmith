@@ -315,10 +315,16 @@ function ProjectModal({ item, onClose }: ProjectModalProps) {
       }
       if (e.key !== 'Tab') return;
 
-      // Trap Tab/Shift+Tab inside the dialog.
+      // Trap Tab/Shift+Tab inside the dialog (WR-07: drive the trap off the DIALOG BOUNDARY,
+      // not a per-element visibility proxy). Visibility filter uses
+      // `getClientRects().length > 0` instead of `offsetParent !== null`: `offsetParent` is
+      // `null` for ANY `position: fixed` element even when fully visible, so the old proxy
+      // would silently exclude a legitimately-focusable fixed control (a future template could
+      // add one) and let Tab escape the dialog. `getClientRects()` correctly reports a visible
+      // fixed element as focusable.
       const focusables = dialog
         ? Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-            (el) => el.offsetParent !== null || el === document.activeElement,
+            (el) => el.getClientRects().length > 0 || el === document.activeElement,
           )
         : [];
       if (focusables.length === 0) {
@@ -331,8 +337,20 @@ function ProjectModal({ item, onClose }: ProjectModalProps) {
       const last = focusables[focusables.length - 1];
       const active = document.activeElement;
 
+      // WR-07: if the active element is NOT one of the tracked focusables (e.g. focus landed
+      // on the scrim, the dialog container itself, or a control the visibility filter dropped),
+      // the boundary checks below (`active === first`/`active === last`) would never fire and
+      // focus could leak out of the modal — the trap would not be total. Force focus back to
+      // the boundary in BOTH directions so the trap is complete regardless of where focus is.
+      const activeInTrap = active instanceof HTMLElement && focusables.includes(active);
+      if (!activeInTrap) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+        return;
+      }
+
       if (e.shiftKey) {
-        if (active === first || active === dialog) {
+        if (active === first) {
           e.preventDefault();
           last.focus();
         }
