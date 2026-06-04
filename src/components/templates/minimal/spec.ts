@@ -43,7 +43,12 @@ export const minimalSpec = {
       fields: ['company', 'role', 'start_date', 'end_date', 'description'],
     },
     contact: { supported: true, fields: ['heading', 'subheading'] },
-    blog_preview: { supported: true, fields: ['heading', 'post_count'] },
+    // WR-02: `MinimalTemplate` renders no `blog_preview` section (the CMS never produces
+    // one in v1), so this MUST be `supported: false` to match what the template actually
+    // renders — matching editorial. A `supported: true` here is a spec/template mismatch the
+    // conformance gate cannot catch (golden fixture omits blog_preview), so the spec is the
+    // source of truth that must be correct.
+    blog_preview: { supported: false, fields: [] },
     // NEW (Task 1 of this plan): the `skills` section type. The DB row's spec JSONB
     // lags here until a future migration; the local spec leads (RESEARCH Pitfall 6).
     skills: { supported: true, fields: ['heading', 'groups'] },
