@@ -1,0 +1,54 @@
+/*
+ * The negative fixture's scoped theme (Phase-10 Plan 02; the inverted twin of
+ * `src/components/templates/minimal/theme.css`). It DELIBERATELY trips two gates:
+ *
+ *   token-conformance REJECT: it DROPS a REQUIRED_TOKEN (`--ring` is intentionally absent
+ *   from the `.tmpl-broken` block — `contract.ts` REQUIRED_TOKENS lists it). The
+ *   token-conformance gate asserts every REQUIRED_TOKEN is defined → this goes RED.
+ *
+ *   two-layer ISOLATION REJECT (D-17): it references a CHROME `--color-*` design token, it
+ *   declares a Tailwind `@theme` block (chrome-only), and it hardcodes a hex OUTSIDE the
+ *   scoped token block — all three are isolation violations the generalized isolation gate
+ *   rejects. The live templates never do any of these.
+ *
+ * D-P10-02a: this file lives ONLY under `tests/fixtures/` and is never loaded on a public page.
+ */
+
+/* ISOLATION VIOLATION (D-17): a chrome `@theme` block is chrome-only — a template must use
+   scoped CSS custom properties, never `@theme`. */
+@theme {
+  --color-brand: #0b0c0e; /* chrome `--color-*` token leaking into a template — REJECT */
+}
+
+.tmpl-broken {
+  /* The colour roles — DELIBERATELY MISSING `--ring` (the dropped REQUIRED_TOKEN). */
+  --bg: #0c0b1e;
+  --surface: #16122e;
+  --surface-muted: #1e1840;
+  --fg: #f0ecfb;
+  --muted-fg: #a39dc4;
+  --border: #2a2350;
+  --border-strong: #3d3470;
+  --accent: #ff2d95;
+  /* --ring: INTENTIONALLY ABSENT (token-conformance REJECT). */
+  --success: #34d399;
+  --destructive: #fb7185;
+
+  /* The radius scale (present so ONLY `--ring` is the dropped token). */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+
+  /* ISOLATION VIOLATION (D-17): a template must read its OWN scoped tokens, never a chrome
+     `--color-*` design token. This references the chrome token above → REJECT. */
+  background: var(--color-brand);
+  color: var(--fg);
+  min-height: 100vh;
+}
+
+/* ISOLATION VIOLATION (D-17): a hardcoded hex OUTSIDE the scoped token block (the live
+   templates keep ALL hex inside the `.tmpl-<slug>` token declarations). */
+.tmpl-broken .broken-banner {
+  border: 1px solid #ff00ff;
+}
