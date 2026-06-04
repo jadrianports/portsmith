@@ -1,180 +1,109 @@
 /**
- * D-01 — the visual-regression PARITY harness (Phase 08, Plan 08-01). This spec
- * captures a deterministic FULL-PAGE screenshot of BOTH live templates on the
- * PRE-refactor tree so the post-refactor pixel-diff (Plan 03) can prove the
- * chrome strip (Plan 02) shifted not one pixel of either template render.
+ * PIPE-11 — the generalized VISUAL-PARITY render gate (Phase-10 Plan 04, the Wave-2
+ * render tier). It renders EVERY registered template (`minimal` + `editorial`) over the
+ * SRC-SIDE GOLDEN FIXTURE via the stack-free `__fixture` route (`renderFixture`), captures a
+ * committed self-baseline per slug (`<slug>-golden.png`), and re-FAILS on any pixel drift
+ * (within the global `maxDiffPixelRatio:0.01`). A Phase-11 ingested template inherits the gate
+ * by registry membership (one slug added to `SLUGS`).
  *
- *   1) MINIMAL  — the seeded founder public page `/jadrianports` (`.tmpl-minimal`,
- *      dark synthwave). Read-only against the LIVE local stack; reuses the
- *      seed-or-fail guard from `e2e/portfolio-render.spec.ts` so a missing seed
- *      FAILS LOUDLY instead of silently false-greening the baseline.
- *   2) EDITORIAL — a fresh self-provisioned owner whose public page renders
- *      `.tmpl-editorial` (light ivory). A NEWLY bootstrapped portfolio defaults to
- *      EDITORIAL (migration 008 part C — the founder STAYS minimal, D-P7-09), so
- *      `createConfirmedOwner` → `setOwnerPublished(true)` → `waitForPublicState`
- *      yields the editorial render with NO template-switch UI driving required.
- *      The owner is torn down in `afterAll` (LOCAL stack only, `*@example.test`).
+ * ── WHY THE GOLDEN FIXTURE, NOT THE FOUNDER SEED (D-P10-04) ────────────────────
+ * The Phase-8 origin of this spec rendered the SEEDED founder page (`/jadrianports`) + a fresh
+ * cms-auth editorial owner to prove the Plan-08-02 chrome strip shifted no pixel. That
+ * served Phase 8. For Phase 10 the regression target is the TEMPLATE RENDER ITSELF over a
+ * KNOWN, STABLE content set — so the gate now renders the golden fixture (the same populated
+ * content the conformance + a11y gates use) via the `__fixture` route. This SUPERSEDES the
+ * live-stack founder-seed parity for Phase-10's regression purpose AND removes the gate's
+ * dependency on a running Supabase stack / seeded data — the gate is now self-contained and
+ * deterministic. (The Phase-8 `-full.png` baselines are retired with this generalization.)
  *
- * ── DETERMINISM (D-01) ────────────────────────────────────────────────────────
- * The baseline AND the diff both run on the founder's Win11 machine, so cross-OS
- * font rendering is NOT a flake source. The two real flake sources are handled:
- *   - ANIMATIONS — frozen at end-state by `expect.toHaveScreenshot.animations:
- *     'disabled'` in playwright.config.ts (the templates' hero LCP wrapper is
- *     already static and the scroll-reveal islands SSR `opacity:1`).
- *   - FONT-LOAD TIMING — the templates load self-hosted faces via `next/font`
- *     (`display:'swap'`). Playwright does NOT auto-wait for fonts, so each test
- *     awaits `document.fonts.ready` BEFORE the capture — without it the first
- *     screenshot can land mid-swap. (`toHaveScreenshot` itself also auto-stabilizes
- *     by waiting for two consecutive identical frames, absorbing late layout settle.)
- * ── DYNAMIC-CONTENT MASK (08-03, the Turnstile slot) ──────────────────────────
- * The contact form's Cloudflare Turnstile widget was deferred off the public
- * first-paint (08-03, D-11 TBT fix): it now mounts only when its reserved slot
- * nears the viewport (`IntersectionObserver`, `rootMargin:'200px'`) or on first
- * focus/pointer-down. A `fullPage` capture scrolls the whole document into the
- * render tree, so the deferred widget's PRESENCE and load TIMING in the frame are
- * now nondeterministic third-party content. Both screenshots therefore MASK the
- * reserved slot via `[data-testid="turnstile-slot"]` (the slot is rendered whether
- * armed or not, so the mask box is stable and CLS stays 0). The mask covers ONLY
- * the Turnstile slot — it touches NO template element, so the rest of the page is
- * still diffed pixel-for-pixel against the font-anchored baseline. Aside from this
- * one dynamic slot there are no clocks / random content; the config animation freeze
- * covers any residual ambient motion — do NOT add further masking without cause.
+ * ── DETERMINISM (inherited; do NOT re-specify) ────────────────────────────────
+ * The proven recipe lives in `renderFixture` (font-readiness via `document.fonts.ready`, the
+ * `<nextjs-portal>` dev-overlay hide) and `playwright.config.ts` (the GLOBAL
+ * `contextOptions.reducedMotion:'reduce'` — load-bearing so the ScrollReveal islands stay
+ * REVEALED on a full-page capture instead of freezing invisible off-screen; plus
+ * `animations:'disabled'`, `caret:'hide'`, `scale:'css'`, `maxDiffPixelRatio:0.01`). The
+ * baseline AND the diff both run on the founder's Win11 machine, so cross-OS font rendering is
+ * not a flake source.
  *
- * ── REDUCED-MOTION (D-01, the load-bearing capture fix) ───────────────────────
- * The body sections of BOTH templates are wrapped in a `ScrollReveal`
- * IntersectionObserver island (scroll-reveal.tsx) that, when motion is allowed,
- * hydrates to `opacity:0` and only reveals on intersection. A `fullPage` capture
- * renders the whole document at once, so off-screen sections never intersect and
- * would freeze INVISIBLE — the baseline would show only the hero + footer. The
- * harness emulates `prefers-reduced-motion: reduce` (playwright.config.ts `use`)
- * which (a) drives the island's `prefersReduced` branch (sections stay revealed)
- * and (b) triggers the CSS fallback `.tmpl-reveal { opacity:1 !important }`
- * (theme.css), so the FULL body renders visible with zero entrance motion. This
- * is the canonical reduced-motion render and is identical pre/post Plan 02.
+ * ── DYNAMIC-CONTENT MASK (the Turnstile slot) ─────────────────────────────────
+ * The `__fixture` render has NO Turnstile widget (no contact `IntersectionObserver` arm fires
+ * against injected data), so `TURNSTILE_SLOT_SELECTOR` masks nothing here — it is the SAME
+ * shared convention the live-stack fallback path would need, kept for parity with the other
+ * render gates (a harmless no-op on `__fixture`).
  *
- * ── NEXT DEV OVERLAY EXCLUSION (D-01) ─────────────────────────────────────────
- * `next dev` injects a top-level `<nextjs-portal>` custom element hosting the dev
- * indicator / dev-tools button (confirmed via a live DOM probe: it is the only
- * dev-chrome element with a visual footprint, it is NOT inside any template root,
- * and the template theme-toggle — `aria-label="Switch to {light|dark} mode"` — is
- * a SEPARATE element outside it). It is in-frame on a `fullPage` capture but is
- * dev chrome, not template, so it must be excluded: Plan 02's chrome strip changes
- * which dev warnings fire, which could perturb the indicator and false-fail the
- * diff. Each test hides `nextjs-portal` via `addStyleTag` BEFORE capture (cleaner
- * than a Playwright `mask` — the element is gone, no pink mask box in the image).
- * This touches NO template element (the theme-toggle stays visible).
+ * ── ORDERING (T-10-04-PARITYBASELINE) ─────────────────────────────────────────
+ * Baselines MUST be captured on the KNOWN-GOOD render and committed — NEVER captured after a
+ * template change (that encodes a regression as "correct"). For Phase 10 the known-good is the
+ * current `minimal`/`editorial` render of the golden fixture (captured AFTER the Plan-10-04
+ * project-modal WCAG-4.1.2 fix, so the baselines reflect the corrected, accessible render).
+ * Capture with: `npx playwright test e2e/template-visual-parity.spec.ts --update-snapshots`.
  *
- * ── PRECONDITION (LOAD-BEARING) ───────────────────────────────────────────────
- * Runs against the LIVE dev server (playwright.config.ts `webServer: npm run dev`,
- * baseURL http://127.0.0.1:3000) + the LOCAL Supabase stack. The minimal test
- * reads the SEEDED founder portfolio; the editorial test self-provisions via the
- * service-role admin API (key from `.env.local`, which playwright.config.ts loads).
+ * ── PHASE-11 SOURCE-REFERENCE SLOT (D-P10-04) ─────────────────────────────────
+ * Phase 10 ships the SELF-baseline (`<slug>-golden.png`) + the documented source-reference
+ * SLOT (`e2e/__source-reference__/README.md`, the `<slug>-source.png` convention). Phase 11
+ * drops in the operator's Lovable source screenshot and flips the `test.skip` placeholder
+ * below to a real `toHaveScreenshot` diff (ingested render vs. source design — translate, not
+ * redesign). See `e2e/__source-reference__/README.md`.
  *
- * ── ORDERING (the single most important constraint in Phase 08) ───────────────
- * The baselines MUST be captured on the PRE-refactor tree, committed, THEN diffed
- * after the layout split. Baselines captured after the refactor would encode the
- * post-refactor state as "correct" and prove nothing.
- *
- * Run command: `npx playwright test e2e/template-visual-parity.spec.ts`.
- * First capture: `npx playwright test e2e/template-visual-parity.spec.ts --update-snapshots`.
+ * Run command: `npx playwright test e2e/template-visual-parity.spec.ts` (npm: `gate:parity`).
+ * First capture:  `npx playwright test e2e/template-visual-parity.spec.ts --update-snapshots`.
  */
 import { expect, test } from '@playwright/test';
 
-import {
-  createConfirmedOwner,
-  deleteOwner,
-  setOwnerPublished,
-  waitForPublicState,
-  type TestOwner,
-} from './helpers/cms-auth';
-
-/** The seeded founder public slug — minimal template (must match generateStaticParams). */
-const SEEDED = 'jadrianports';
+import { renderFixture, TURNSTILE_SLOT_SELECTOR } from './helpers/render-fixture';
 
 /**
- * Hides the `next dev` overlay (`<nextjs-portal>` — the dev indicator / dev-tools
- * button) before a full-page capture. Dev chrome, NOT a template element, so it is
- * excluded from the baseline; touches no template element (the theme-toggle is a
- * separate element outside the portal). Injected per-test right before `toHaveScreenshot`.
+ * Every registered template slug — the corpus the parity gate generalizes over. Hardcoded
+ * here (NOT imported from `registry.ts`, whose `next/dynamic` import is un-resolvable in the
+ * Playwright Node ESM runner) and mirroring `Object.keys(templateRegistry)` (asserted by
+ * `registry-consistency.test.ts`). A Phase-11 template adds one line here alongside its
+ * registry line — and captures its `<slug>-golden.png` baseline with `--update-snapshots`.
  */
-const HIDE_NEXT_DEV_OVERLAY = 'nextjs-portal{display:none!important}';
+const SLUGS = ['minimal', 'editorial'];
 
-// `next dev` cold-compiles `/[username]` on first hit (Windows, Next 16); give
-// generous headroom so the first navigation's route compilation fits the budget.
+// `next dev` cold-compiles the `__fixture` route + each lazy template chunk on first hit
+// (Windows, Next 16); generous headroom for the first navigation's route compilation.
 test.beforeEach(({}, info) => {
   info.setTimeout(120_000);
 });
 
-test('minimal template — full-page visual parity (founder seed)', async ({ page }) => {
-  const res = await page.goto(`/${SEEDED}`);
+for (const slug of SLUGS) {
+  test(`${slug} — full-page visual parity (golden fixture, PIPE-11)`, async ({ page }) => {
+    // POPULATED render of the SRC-SIDE golden fixture via the stack-free __fixture route —
+    // the SAME render the conformance + a11y gates use. renderFixture already awaits
+    // `.tmpl-<slug>` visible + `document.fonts.ready` + hides the dev overlay.
+    await renderFixture(page, slug, { variant: 'full' });
 
-  // Precondition guard: a non-200 means the founder portfolio was not seeded. Fail
-  // loudly with the fix rather than silently skipping — a missing seed must not
-  // false-green the baseline (mirrors portfolio-render.spec.ts).
-  expect(
-    res?.status(),
-    `GET /${SEEDED} returned ${res?.status()}. The founder portfolio is not seeded — ` +
-      'seed not run: supabase start && npm run seed:founder (against the local stack).',
-  ).toBe(200);
-
-  // The scoped template root rendered (proves the lazy `minimal` template loaded).
-  await expect(page.locator('.tmpl-minimal')).toBeVisible();
-
-  // FONT-READINESS — Playwright does NOT auto-wait for `next/font`; without this
-  // the first capture can land mid font-swap (`display:'swap'`).
-  await page.evaluate(() => document.fonts.ready);
-
-  // Exclude the `next dev` overlay (dev chrome, not template) so the Plan 02 chrome
-  // strip — which changes which dev warnings fire — can't perturb the diff.
-  await page.addStyleTag({ content: HIDE_NEXT_DEV_OVERLAY });
-
-  // Mask the deferred Turnstile slot — its presence/timing in a full-page capture is
-  // now nondeterministic third-party content (08-03). Touches no template element.
-  await expect(page).toHaveScreenshot('minimal-full.png', {
-    fullPage: true,
-    mask: [page.locator('[data-testid="turnstile-slot"]')],
-  });
-});
-
-test.describe('editorial template — full-page visual parity (fresh owner)', () => {
-  let owner: TestOwner;
-
-  test.beforeAll(async () => {
-    // A NEWLY bootstrapped portfolio defaults to EDITORIAL (migration 008 part C) —
-    // so this fresh owner's public page renders `.tmpl-editorial` with no switch UI
-    // to drive. Provision via the service-role admin API (LOCAL stack only).
-    owner = await createConfirmedOwner('vparity');
-    // A fresh account is unpublished; publish so the public ISR page is live.
-    await setOwnerPublished(owner, true);
-  });
-
-  test.afterAll(async () => {
-    await deleteOwner(owner);
-  });
-
-  test('seeded editorial owner full-page visual parity', async ({ page }) => {
-    const publicPath = `/${owner.username}`;
-
-    // The on-demand publish + ISR purge is fast but not synchronous — poll until the
-    // public page is live (200) before capturing.
-    await waitForPublicState(page, publicPath, { status: 200 });
-
-    await page.goto(publicPath);
-
-    // The scoped editorial template root rendered (proves the editorial template loaded).
-    await expect(page.locator('.tmpl-editorial')).toBeVisible();
-
-    // FONT-READINESS — same as the minimal test (self-hosted `next/font` faces).
-    await page.evaluate(() => document.fonts.ready);
-
-    // Exclude the `next dev` overlay (dev chrome, not template) — same as the minimal test.
-    await page.addStyleTag({ content: HIDE_NEXT_DEV_OVERLAY });
-
-    // Mask the deferred Turnstile slot — same dynamic-content rationale as the
-    // minimal test (08-03). Touches no template element.
-    await expect(page).toHaveScreenshot('editorial-full.png', {
+    // Self-baseline `<slug>-golden.png` under snapshotPathTemplate
+    // (e2e/__screenshots__/template-visual-parity.spec.ts/). The Turnstile mask is the shared
+    // convention (no-op on __fixture — there is no Turnstile widget here). Drift beyond
+    // maxDiffPixelRatio:0.01 (a real layout shift) FAILS the gate.
+    await expect(page).toHaveScreenshot(`${slug}-golden.png`, {
       fullPage: true,
-      mask: [page.locator('[data-testid="turnstile-slot"]')],
+      mask: [page.locator(TURNSTILE_SLOT_SELECTOR)],
     });
   });
-});
+}
+
+/**
+ * PHASE-11 SOURCE-PARITY SLOT (D-P10-04 — skipped placeholder). Phase 10 ships the slot + the
+ * self-baseline above; Phase 11 fills `e2e/__source-reference__/<slug>-source.png` (the
+ * operator's Lovable source-design screenshot at the golden-fixture content + the same
+ * viewport) and FLIPS this `skip` to a real diff that asserts the ingested template render
+ * matches the source design (the translate-not-redesign parity — a drift is a FINDING the gate
+ * catches, not a render to trust). See `e2e/__source-reference__/README.md`.
+ */
+for (const slug of SLUGS) {
+  test.skip(`${slug} — source-design parity (Phase 11 — fill __source-reference__/${slug}-source.png)`, async ({
+    page,
+  }) => {
+    // Phase 11: render the ingested template over the golden fixture, then diff against the
+    // operator's committed source screenshot. Kept SKIPPED in Phase 10 (no source ref yet).
+    //   await renderFixture(page, slug, { variant: 'full' });
+    //   await expect(page).toHaveScreenshot(`../__source-reference__/${slug}-source.png`, {
+    //     fullPage: true,
+    //     mask: [page.locator(TURNSTILE_SLOT_SELECTOR)],
+    //   });
+    expect(slug).toBeTruthy();
+  });
+}
