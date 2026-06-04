@@ -35,9 +35,8 @@
  */
 import './theme.css';
 
-import { fraunces, jetbrainsMono, spaceGrotesk, themeInitScript } from './fonts';
-import { ScrollReveal } from './scroll-reveal';
-import { ThemeToggle } from './theme-toggle';
+import { fraunces, jetbrainsMono, spaceGrotesk } from './fonts';
+import { ScrollReveal, ThemeToggle, themeInitScript } from '../_kit';
 import { About } from './sections/about';
 import { Contact } from './sections/contact';
 import { Experience } from './sections/experience';
@@ -81,7 +80,7 @@ export default function EditorialTemplate({ data }: { data: PortfolioData }) {
   const personLdHtml = personLdScriptHtml(data, profile.username ?? '');
 
   return (
-    <div className={`tmpl-editorial ${fontVars}`} data-template-theme={defaultMode}>
+    <div className={`tmpl-editorial ${fontVars}`} data-template-root data-template-theme={defaultMode}>
       {/*
         Pre-paint FOUC guard (T-07-05): runs BEFORE first paint and sets
         `data-template-theme` synchronously from localStorage → server default

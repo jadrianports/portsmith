@@ -213,6 +213,27 @@
 }
 
 /* ============================================================================
+ * Theme toggle (09-01 — shared-kit `ThemeToggle` island styling hook). The island
+ * (`../_kit/theme-toggle.tsx`) carries only the universal 44px hit-area + glyph
+ * centering inline; ALL per-template visual styling lives HERE (D-01/D-03 — looks
+ * in the template, logic in the kit). Minimal = inline-flow, pill radius.
+ *
+ * FOCUS RING (D-06 canonicalize): the toggle's `:focus-visible` ring is the canonical
+ * `--ring` (= #ff2d95, the same magenta the contact-field focus uses), NOT the former
+ * inline `--accent-cyan`. The `--accent-cyan` TOKEN stays as the template-private
+ * secondary accent (project-link hovers); only the toggle ring migrates to `--ring`.
+ * Moving from an always-on inline `:focus` to `:focus-visible` means no ring on
+ * mouse-click focus (the standard keyboard-only treatment).
+ * ========================================================================== */
+.tmpl-minimal .tmpl-theme-toggle {
+  border-radius: var(--radius-full);
+}
+.tmpl-minimal .tmpl-theme-toggle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
  * Hero ambient keyframes (03-05) — the "available" dot pulse + the scroll-cue bob.
  * CSS-only, perf-cheap, and ALWAYS disabled under reduced-motion by the blanket
  * reset below (UI-SPEC §Motion "Ambient: … all OFF under reduced-motion"). Scoped

@@ -193,6 +193,31 @@
 }
 
 /* ============================================================================
+ * Theme toggle (09-01 — shared-kit `ThemeToggle` island styling hook). The island
+ * (`../_kit/theme-toggle.tsx`) carries only the universal 44px hit-area + glyph
+ * centering inline; ALL per-template visual styling lives HERE (D-01/D-03 — looks in
+ * the template, logic in the kit). Editorial = fixed top-right, near-square radius,
+ * paper-surface background (formerly inline in the per-template island).
+ *
+ * FOCUS RING: the toggle's `:focus-visible` ring is the canonical `--ring` (vermilion,
+ * editorial's existing focus token — no token migration). Moving from an always-on
+ * inline `:focus` to `:focus-visible` means no ring on mouse-click focus (the standard
+ * keyboard-only treatment).
+ * ========================================================================== */
+.tmpl-editorial .tmpl-theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 50;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.tmpl-editorial .tmpl-theme-toggle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
  * Projects — card paper-lift + link underline-shift on hover (A.5 / A.7 §4).
  * Inline styles cannot express `:hover`, and the section is a Server Component, so
  * the interactive treatment lives here, scoped to `.tmpl-editorial` (D-17). All

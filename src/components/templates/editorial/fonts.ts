@@ -75,49 +75,9 @@ export const jetbrainsMono = JetBrains_Mono({
   display: 'swap',
 });
 
-/**
- * The localStorage key the toggle writes and the FOUC guard reads. Kept in one
- * place so the toggle island (theme-toggle.tsx) and this pre-paint script agree.
- * SHARED key with `minimal` by design — a visitor's light/dark choice is a single
- * site-wide preference (the attribute is set on whichever template root is mounted).
- */
-export const THEME_STORAGE_KEY = 'portsmith-theme';
-
-/** The two-value theme enum (mirrors `portfolio_settings.theme_mode`). */
-export type TemplateThemeMode = 'light' | 'dark';
-
-/**
- * Build the pre-paint FOUC-guard inline-script STRING. `index.tsx` drops the returned
- * string into a `<script dangerouslySetInnerHTML>` that runs BEFORE first paint, so
- * the correct theme is set synchronously and there is no light<->dark flash.
- *
- * Resolution order (the standard no-flash pattern):
- *   1. a persisted visitor choice in `localStorage['portsmith-theme']`
- *   2. the server-injected default (`settings.theme_mode`, **defaults `light` for
- *      editorial** — D-P7-06, inverting minimal's default-dark)
- *   3. the OS `prefers-color-scheme`
- * The resolved value is written to `data-template-theme` on the `.tmpl-editorial`
- * root element.
- *
- * SECURITY (T-07-05 / XSS): the ONLY interpolated value is `defaultMode`, which the
- * caller MUST pass as the server-controlled `theme_mode` enum ('light' | 'dark').
- * This function COERCES it to exactly 'light' or 'dark' before embedding, so no
- * free-form / user-controlled string can ever reach the inline script. The key is the
- * static `THEME_STORAGE_KEY` constant. Never widen this to accept user content.
- */
-export function themeInitScript(defaultMode: TemplateThemeMode | string | null | undefined): string {
-  // Coerce to the strict enum — anything that is not exactly 'dark' falls back to
-  // 'light' (the EDITORIAL default, D-P7-06; inverts minimal's `'light' ? 'light' :
-  // 'dark'`). This guarantees the embedded literal is one of two known-safe tokens
-  // regardless of what the caller passes.
-  const safeDefault: TemplateThemeMode = defaultMode === 'dark' ? 'dark' : 'light';
-  return [
-    '(function(){try{',
-    `var d='${safeDefault}';`,
-    `var s=localStorage.getItem('${THEME_STORAGE_KEY}');`,
-    "var m=(s==='light'||s==='dark')?s:(d||(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'));",
-    "var el=document.querySelector('.tmpl-editorial');",
-    'if(el){el.setAttribute("data-template-theme",m);}',
-    '}catch(e){}})();',
-  ].join('');
-}
+// The shared FOUC-guard infra (`themeInitScript` + `THEME_STORAGE_KEY` +
+// `TemplateThemeMode`) moved to the shared kit (`../_kit/theme-init.ts`, PIPE-01 /
+// D-01/D-02) and is now imported by `index.tsx` from `'../_kit'`. The kit keeps the
+// XSS-safe `light|dark` coercion; editorial preserves its LIGHT default by passing
+// `'light'` through from `index.tsx` (Pitfall 2). Only the template-specific
+// `next/font` faces above remain per-template by design.

@@ -30,9 +30,8 @@
  */
 import './theme.css';
 
-import { clashDisplay, generalSans, jetbrainsMono, themeInitScript } from './fonts';
-import { ScrollReveal } from './scroll-reveal';
-import { ThemeToggle } from './theme-toggle';
+import { clashDisplay, generalSans, jetbrainsMono } from './fonts';
+import { ScrollReveal, ThemeToggle, themeInitScript } from '../_kit';
 import { About } from './sections/about';
 import { Contact } from './sections/contact';
 import { Experience } from './sections/experience';
@@ -74,6 +73,7 @@ export default function MinimalTemplate({ data }: { data: PortfolioData }) {
   return (
     <div
       className={`tmpl-minimal ${fontVars}`}
+      data-template-root
       data-template-theme={defaultMode}
     >
       {/*
