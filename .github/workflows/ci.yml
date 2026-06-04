@@ -84,6 +84,16 @@ jobs:
 
       - name: Assert service-role key absent from client bundle
         run: |
+          # WR-04: guard the empty-key case BEFORE the grep. `grep -F ""` matches every
+          # line of every file, so an empty/unset SUPABASE_SERVICE_ROLE_KEY would make the
+          # `if` body run and hard-fail with a misleading "key found in client bundle"
+          # error — a false BLOCKER masking the real problem (the key was simply absent).
+          # An empty key also makes the scan meaningless (it can never prove absence), so
+          # the FND-05 backstop must assert the key is present before scanning.
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY is empty — cannot run the FND-05 bundle scan"
+            exit 1
+          fi
           if grep -rqF "$SUPABASE_SERVICE_ROLE_KEY" .next/static; then
             echo "::error::service-role key found in client bundle (.next/static) — FND-05 violation"
             exit 1
