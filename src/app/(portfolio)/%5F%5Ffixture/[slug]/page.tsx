@@ -41,6 +41,7 @@
  * The live-stack `e2e/helpers/cms-auth.ts` path (createConfirmedOwner → seed → publish →
  * render `/<username>`) is the proven FALLBACK if this route is ever undesirable.
  */
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { TemplateRenderer } from '@/components/templates/template-renderer';
@@ -49,6 +50,18 @@ import { goldenPortfolioData } from '@/lib/fixtures/golden-portfolio-data';
 
 /** Explicitly NOT the ISR path (D-22) — this route never prerenders, never goes on SSG. */
 export const dynamic = 'force-dynamic';
+
+/**
+ * A static `<title>` so the test-only fixture render carries one — matching the REAL public
+ * `/[username]` page, which always sets a title via `generateMetadata`. Without this, the
+ * a11y gate's axe scan would flag a `document-title` (WCAG 2.4.2) violation that is a HARNESS
+ * artifact (the fixture route's missing metadata), NOT a template defect — a false-positive
+ * that would mask real findings. The title is generic (the gate evaluates the template body,
+ * never this string).
+ */
+export const metadata: Metadata = {
+  title: 'Template fixture render (dev/test only)',
+};
 
 export default async function FixtureRenderPage({
   params,

@@ -127,20 +127,18 @@ function ProjectCardTrigger({
   const techStack = resolveTech(item);
 
   return (
+    // A11y (WCAG 4.1.2 nested-interactive): the card is a PLAIN container — NOT
+    // `role="button"`/`tabindex`. An interactive `role="button"` element MUST NOT contain
+    // focusable interactive descendants (the "Visit ↗"/"Code ↗" `<a>` links), which axe flags
+    // `nested-interactive` (serious). The accessible modal TRIGGER is the title `<button>`
+    // below (keyboard-operable, with the accessible name); the whole-card `onClick` is a
+    // pointer-only convenience (mouse users can click anywhere on the card), and links inside
+    // `stopPropagation()` so they don't also open the modal. Keyboard/AT users reach the modal
+    // via the title button and the links as separate, non-nested controls.
     <article
       ref={triggerRef}
       className="tmpl-project-card"
-      // The card is the trigger — keyboard operable (Enter/Space) + an accessible name.
-      role="button"
-      tabIndex={0}
-      aria-label={`View details for ${item.title}`}
       onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -176,17 +174,40 @@ function ProjectCardTrigger({
         </div>
       ) : null}
 
-      <h3
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: '1.25rem',
-          lineHeight: 1.2,
-          color: 'var(--fg)',
-          margin: 0,
-        }}
-      >
-        {item.title}
+      {/* The accessible modal TRIGGER (WCAG 4.1.2 fix): a real <button> that LOOKS like the
+          heading (transparent, no border, inherits the display-font scale). It is the
+          keyboard/AT-operable control (Enter/Space) with the accessible name; the surrounding
+          card is a plain container, so there is no nested-interactive violation. Visually
+          identical to the prior <h3> — same font/size/color/weight, left-aligned, no chrome. */}
+      <h3 style={{ margin: 0 }}>
+        <button
+          type="button"
+          onClick={(e) => {
+            // The title button is the canonical trigger; stop the card's onClick from
+            // double-firing the open handler.
+            e.stopPropagation();
+            onOpen();
+          }}
+          aria-haspopup="dialog"
+          aria-label={`View details for ${item.title}`}
+          style={{
+            display: 'block',
+            width: '100%',
+            margin: 0,
+            padding: 0,
+            border: 'none',
+            background: 'transparent',
+            textAlign: 'left',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-display)',
+            fontWeight: 600,
+            fontSize: '1.25rem',
+            lineHeight: 1.2,
+            color: 'var(--fg)',
+          }}
+        >
+          {item.title}
+        </button>
       </h3>
 
       {present(item.description) ? (
