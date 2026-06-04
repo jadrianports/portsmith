@@ -36,7 +36,7 @@
  * │  isolation (D-17)     → theme.css adds a chrome `--color-*` token + an `@theme` block  │
  * │                         + a hardcoded hex outside the token block.                    │
  * │  token-conformance    → theme.css DROPS at least one REQUIRED_TOKEN (`--ring`).        │
- * │  budget (async cap)   → fonts.ts annotates a deliberately-oversized import marker.     │
+ * │  budget (async cap)   → proven by the async-island-cap UNIT test, not a marker here.  │
  * └─────────────────────────────────────────────────────────────────────────────────────┘
  */
 import './theme.css';
