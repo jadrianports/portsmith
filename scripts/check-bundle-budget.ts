@@ -16,6 +16,21 @@
  *       Pitfall 3 (the `simple-icons` bundle-leak risk: a non-tree-shaken barrel
  *       or a whole-set import ballooning the client chunk).
  *
+ *   (3) a per-template **async-island scene chunk exceeds 250 kB gzipped** — the
+ *       Phase-10 ADDITION (PIPE-08 / CONTRACT §5). The rich/viz lane ships a lazy
+ *       `{ ssr: false }` scene island (Three.js / R3F) that, by construction,
+ *       appears in NEITHER the route's `rootMainFiles` NOR the page
+ *       client-reference-manifest (CONTRACT §5), so the First-Load-JS gate above
+ *       genuinely cannot see it — it needs its OWN measurement path governed by a
+ *       SEPARATE async-island sanity cap (`ASYNC_ISLAND_CAP_BYTES = 250 kB gz`, a
+ *       starting figure Phase 13 tunes). The standard-lane templates (`minimal` /
+ *       `editorial`) ship NO async scene chunk, so the live `.next/` scan
+ *       legitimately NO-OPS on the current corpus ("no async scene chunk → pass").
+ *       The reject LOGIC is still proven NOW: the cap predicate is EXPORTED
+ *       (`assertAsyncIslandWithinCap`) and unit-exercised against a synthetic
+ *       over-cap input by `tests/unit/templates/async-island-cap.test.ts` (B2 /
+ *       D-P10-02 — a witnessed failure of the real code path, NOT a deferred stub).
+ *
  * This is THE CI/phase gate: wire it as `npm run check:bundle`. A breach exits
  * non-zero with a clear message so the build/CI fails and the phase cannot close
  * on a regressed route.
@@ -60,9 +75,22 @@ import { spawnSync } from 'node:child_process';
 import { gzipSync } from 'node:zlib';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 /** The hard TMPL-04 budget: client First Load JS for the public route. */
 const FIRST_LOAD_JS_BUDGET_BYTES = 200 * 1024; // 200 kB gzipped (D-25)
+
+/**
+ * The per-template async-island sanity cap (PIPE-08 / CONTRACT §5). The rich/viz
+ * lane's lazy `{ ssr: false }` scene chunk (Three.js / R3F) is NOT counted in the
+ * route's First Load JS (it appears in neither `rootMainFiles` nor the page
+ * client-reference-manifest), so it is bounded by THIS separate cap. 250 kB gz is a
+ * STARTING FIGURE — Phase 13 (the first rich-lane template) tunes it against a real
+ * measured scene chunk. The standard-lane corpus (minimal/editorial) ships no async
+ * scene chunk, so the live scan no-ops; the cap's REJECT path is unit-proven NOW
+ * against a synthetic over-cap input (B2 / D-P10-02).
+ */
+export const ASYNC_ISLAND_CAP_BYTES = 250 * 1024; // 250 kB gzipped (CONTRACT §5)
 
 /** Repo-relative paths (the script is run from the repo root by the npm script). */
 const NEXT_DIR = path.resolve('.next');
@@ -258,16 +286,117 @@ function assertFirstLoadJsWithinBudget(): void {
   );
 }
 
+/**
+ * Half 3 — ASYNC-ISLAND CAP (PIPE-08 / CONTRACT §5). The EXPORTED, PURE, UNIT-TESTABLE
+ * reject predicate: given the gzipped byte length of a template's lazy `{ ssr: false }`
+ * scene chunk and a human-readable `label` (the slug + construct that produced it),
+ * THROW an `Error` whose message NAMES the over-cap construct and its size vs the cap
+ * when `gzippedBytes` exceeds {@link ASYNC_ISLAND_CAP_BYTES}; return silently otherwise.
+ *
+ * This is the code path the B2 unit test exercises with a synthetic over-cap value
+ * (`tests/unit/templates/async-island-cap.test.ts`) — NOT a mock that "activates at
+ * Phase 13". Keeping the size check a pure function over a byte length (rather than
+ * buried inside the `.next/`-scanning driver) is what makes it unit-exercisable
+ * before any rich-lane template exists to measure.
+ *
+ * It throws (rather than calling `fail()`/`process.exit`) so it is safe to import and
+ * assert against in a unit test; the live driver below catches/re-surfaces via `fail()`.
+ */
+export function assertAsyncIslandWithinCap(gzippedBytes: number, label: string): void {
+  if (!Number.isFinite(gzippedBytes) || gzippedBytes < 0) {
+    throw new Error(
+      `[async-island-cap] invalid gzipped size for "${label}": ${String(gzippedBytes)}`,
+    );
+  }
+  if (gzippedBytes > ASYNC_ISLAND_CAP_BYTES) {
+    const gotKb = (gzippedBytes / 1024).toFixed(1);
+    const capKb = (ASYNC_ISLAND_CAP_BYTES / 1024).toFixed(0);
+    throw new Error(
+      `[async-island-cap] "${label}" async-island scene chunk is ${gotKb} kB gzipped — ` +
+        `OVER the ${capKb} kB async-island cap (PIPE-08 / CONTRACT §5). The rich/viz lane's ` +
+        `lazy { ssr: false } scene island (e.g. an un-tree-shaken \`import * from 'three'\` or ` +
+        `a bundled texture/model) must be code-split + slimmed below the cap before merging.`,
+    );
+  }
+}
+
+/**
+ * The LIVE driver — locate each template's own lazy `{ ssr: false }` scene chunk in
+ * `.next/`, gzip it, and feed it to {@link assertAsyncIslandWithinCap}. The standard
+ * lane (minimal/editorial) ships NO async scene chunk, so there is legitimately
+ * nothing to measure and the driver NO-OPS ("no async scene chunk → pass") — it must
+ * NOT fail on absence. A real rich-lane template (Phase 13) registers its async chunk
+ * here; the chunk's gzipped size is then bounded by the cap. The chunk is gzipped with
+ * the SAME `gzipSync(readFileSync(abs), { level: 9 }).length` mechanic
+ * `collectRouteClientChunks` uses for First Load JS, so the two measurements agree.
+ *
+ * Discovery: a rich-lane template's scene island compiles to a Turbopack chunk that
+ * carries an `ssr:false`/scene marker. Until such a template exists there is no such
+ * chunk to find — `discoverAsyncSceneChunks()` returns `[]` and the loop is empty.
+ */
+function discoverAsyncSceneChunks(): { abs: string; label: string }[] {
+  // Phase 10: NO rich-lane template exists, so there is no lazy { ssr: false } scene
+  // chunk in `.next/` to measure. When a Phase-13 async-island template ships, its
+  // scene chunk is discovered + returned here (e.g. by matching the template's
+  // dynamic-import chunk-group manifest); for now this is an intentional empty set so
+  // the live scan no-ops on the standard lane. The REJECT predicate above is the
+  // Phase-10 proof (unit-exercised), per A5 (implementing-but-no-op-now matches scope).
+  return [];
+}
+
+function assertTemplateAsyncIslandsWithinCap(): void {
+  const sceneChunks = discoverAsyncSceneChunks();
+  if (sceneChunks.length === 0) {
+    console.log(
+      '[check:bundle] PASS async-island-cap: no lazy { ssr: false } scene chunk on the ' +
+        'standard lane (minimal/editorial) — nothing to measure (no-op until a Phase-13 ' +
+        `rich-lane template ships). Cap is ${(ASYNC_ISLAND_CAP_BYTES / 1024).toFixed(0)} kB gz.`,
+    );
+    return;
+  }
+  for (const { abs, label } of sceneChunks) {
+    if (!existsSync(abs) || !statSync(abs).isFile()) {
+      fail(`async-island scene chunk listed for "${label}" does not exist on disk: ${abs}`);
+    }
+    const gz = gzipSync(readFileSync(abs), { level: 9 }).length;
+    // The pure predicate throws on over-cap; surface it as a gate failure (non-zero exit).
+    try {
+      assertAsyncIslandWithinCap(gz, label);
+    } catch (err) {
+      fail(err instanceof Error ? err.message : String(err));
+    }
+    console.log(
+      `[check:bundle] PASS async-island-cap: "${label}" = ${(gz / 1024).toFixed(1)} kB gz ` +
+        `(cap ${(ASYNC_ISLAND_CAP_BYTES / 1024).toFixed(0)} kB). Under cap.`,
+    );
+  }
+}
+
 function main(): void {
-  console.log('[check:bundle] TMPL-04 deterministic gate — ISR/static + ≤200 kB First Load JS.');
+  console.log('[check:bundle] TMPL-04 deterministic gate — ISR/static + ≤200 kB First Load JS + async-island cap.');
   runBuildIfNeeded();
   assertRouteIsIsrStatic();
   assertFirstLoadJsWithinBudget();
-  console.log('\n[check:bundle] OK — both deterministic TMPL-04 halves pass. (Lighthouse ≥90 is the separate holistic gate.)\n');
+  assertTemplateAsyncIslandsWithinCap();
+  console.log('\n[check:bundle] OK — both deterministic TMPL-04 halves pass + async-island cap holds. (Lighthouse ≥90 is the separate holistic gate.)\n');
 }
 
-try {
-  main();
-} catch (err) {
-  fail(err instanceof Error ? err.message : String(err));
+/**
+ * CLI-ONLY tail. Guarded so importing this module (e.g. the B2 unit test importing
+ * `assertAsyncIslandWithinCap` / `ASYNC_ISLAND_CAP_BYTES`) does NOT run `next build`
+ * or the gate. `import.meta.url` matches the process entry only when run directly via
+ * `tsx scripts/check-bundle-budget.ts` (the `check:bundle` script).
+ */
+const isDirectRun =
+  typeof process !== 'undefined' &&
+  Array.isArray(process.argv) &&
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectRun) {
+  try {
+    main();
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err));
+  }
 }
