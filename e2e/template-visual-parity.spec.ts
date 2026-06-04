@@ -51,15 +51,17 @@
 import { expect, test } from '@playwright/test';
 
 import { renderFixture, TURNSTILE_SLOT_SELECTOR } from './helpers/render-fixture';
+import { TEMPLATE_SLUGS } from './helpers/slugs';
 
 /**
- * Every registered template slug — the corpus the parity gate generalizes over. Hardcoded
- * here (NOT imported from `registry.ts`, whose `next/dynamic` import is un-resolvable in the
- * Playwright Node ESM runner) and mirroring `Object.keys(templateRegistry)` (asserted by
- * `registry-consistency.test.ts`). A Phase-11 template adds one line here alongside its
- * registry line — and captures its `<slug>-golden.png` baseline with `--update-snapshots`.
+ * Every registered template slug — the corpus the parity gate generalizes over. Sourced from
+ * the SHARED `e2e/helpers/slugs.ts` constant (NOT imported from `registry.ts`, whose
+ * `next/dynamic` import is un-resolvable in the Playwright Node ESM runner). WR-05: that shared
+ * constant is anchored to `Object.keys(templateRegistry)` by `slugs-anchor.test.ts`, so a
+ * Phase-11 template adds one line in `slugs.ts` alongside its registry line — and captures its
+ * `<slug>-golden.png` baseline with `--update-snapshots`.
  */
-const SLUGS = ['minimal', 'editorial'];
+const SLUGS = TEMPLATE_SLUGS;
 
 // `next dev` cold-compiles the `__fixture` route + each lazy template chunk on first hit
 // (Windows, Next 16); generous headroom for the first navigation's route compilation.

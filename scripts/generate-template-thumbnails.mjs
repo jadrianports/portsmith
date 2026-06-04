@@ -47,7 +47,12 @@ import { chromium } from '@playwright/test';
 const W = 1280; // 16:10 source — TemplateCard reserves the box at aspect-[16/10].
 const H = 800;
 const BASE_URL = 'http://127.0.0.1:3000';
-const SLUGS = ['minimal', 'editorial']; // mirrors Object.keys(templateRegistry) (registry-consistency.test.ts)
+// WR-05: this `.mjs` runs under plain `node` and cannot import the `.ts` registry or the
+// shared `e2e/helpers/slugs.ts` constant, so the slug set is a literal here. The anchor guard
+// `tests/unit/templates/slugs-anchor.test.ts` reads THIS literal from source and asserts it
+// equals `Object.keys(templateRegistry)`, so a Phase-11 template addition fails loudly until
+// this line is updated.
+const SLUGS = ['minimal', 'editorial'];
 const WEBP_QUALITY = 0.82;
 
 /**

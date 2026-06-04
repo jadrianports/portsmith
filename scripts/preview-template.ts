@@ -32,11 +32,17 @@
  */
 import { spawnSync } from 'node:child_process';
 
+import { TEMPLATE_SLUGS } from '../e2e/helpers/slugs';
+
 /** The local dev origin the `__fixture` route + the render gates use (playwright.config baseURL). */
 const BASE_URL = 'http://127.0.0.1:3000';
 
-/** The standard-lane slugs (mirrors Object.keys(templateRegistry); a Phase-11 template adds one). */
-const KNOWN_SLUGS = ['minimal', 'editorial'];
+/**
+ * The standard-lane slugs — sourced from the SHARED `e2e/helpers/slugs.ts` constant (WR-05).
+ * That constant is anchored to `Object.keys(templateRegistry)` by `slugs-anchor.test.ts`, so a
+ * Phase-11 template adds one line there and this preview command picks it up.
+ */
+const KNOWN_SLUGS: readonly string[] = TEMPLATE_SLUGS;
 
 function usage(message?: string): never {
   if (message) console.error(`\n[preview:template] ${message}\n`);

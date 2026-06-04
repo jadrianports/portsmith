@@ -46,6 +46,7 @@ import { expect, test } from '@playwright/test';
 import type { Result } from 'axe-core';
 
 import { renderFixture } from './helpers/render-fixture';
+import { TEMPLATE_SLUGS } from './helpers/slugs';
 
 /** The WCAG ruleset (RESEARCH A2): WCAG 2.0 + 2.1, levels A + AA. */
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
@@ -56,13 +57,13 @@ const isBlocking = (v: Result): boolean => v.impact === 'serious' || v.impact ==
 const isWarning = (v: Result): boolean => v.impact === 'minor' || v.impact === 'moderate';
 
 /**
- * Every registered template slug — the corpus the a11y gate generalizes over. Hardcoded here
- * (NOT imported from `registry.ts`) because the Playwright Node ESM runner cannot resolve
- * `registry.ts`'s `next/dynamic` import at collection time. The set mirrors
- * `Object.keys(templateRegistry)` (asserted by `registry-consistency.test.ts`); a Phase-11
- * template adds one line here alongside its registry line.
+ * Every registered template slug — the corpus the a11y gate generalizes over. Sourced from the
+ * SHARED `e2e/helpers/slugs.ts` constant (NOT imported from `registry.ts`, whose `next/dynamic`
+ * import the Playwright Node ESM runner cannot resolve at collection time). WR-05: that shared
+ * constant is anchored to `Object.keys(templateRegistry)` by `slugs-anchor.test.ts`, so a
+ * Phase-11 template addition fails loudly until the slug is added.
  */
-const SLUGS = ['minimal', 'editorial'];
+const SLUGS = TEMPLATE_SLUGS;
 
 // `next dev` cold-compiles the `__fixture` route + each lazy template chunk on first hit
 // (Windows, Next 16); generous headroom for the first navigation (parity-spec budget).

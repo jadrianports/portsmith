@@ -21,17 +21,31 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { scanTemplateSecurity } from '../../../scripts/gate-security';
+import { templateRegistry } from '@/components/templates/registry';
 
-const MINIMAL = path.resolve('src/components/templates/minimal');
-const EDITORIAL = path.resolve('src/components/templates/editorial');
+// WR-05: derive the scanned corpus from EVERY registered slug rather than hardcoding
+// MINIMAL/EDITORIAL. This Vitest runner CAN import `registry.ts` (Node ESM, no Playwright
+// collection constraint), so a Phase-11 ingested (untrusted) template is security-scanned by
+// `gate:security` AUTOMATICALLY on registry membership — closing the highest-risk coverage gap
+// (a freshly-ingested template silently escaping the very gate that exists to vet it). The
+// slug IS the folder name under `src/components/templates/`.
+const REGISTERED_SLUGS = Object.keys(templateRegistry);
+const CORPUS: ReadonlyArray<readonly [string, string]> = REGISTERED_SLUGS.map((slug) => [
+  slug,
+  path.resolve('src/components/templates', slug),
+]);
 const BROKEN = path.resolve('tests/fixtures/broken-template');
 
 describe('CICD-01 security — the D-13/14 static pass (gate-security.ts)', () => {
-  describe('GREEN-on-corpus: the two live templates pass with zero violations (Pitfall 1 canary)', () => {
-    it.each([
-      ['minimal', MINIMAL],
-      ['editorial', EDITORIAL],
-    ])('scanTemplateSecurity(%s) returns ZERO violations', (slug, folder) => {
+  describe('GREEN-on-corpus: every registered template passes with zero violations (Pitfall 1 canary)', () => {
+    it('has at least one registered slug to security-scan', () => {
+      expect(
+        REGISTERED_SLUGS.length,
+        'templateRegistry is empty — no template folder would be security-scanned.',
+      ).toBeGreaterThan(0);
+    });
+
+    it.each(CORPUS as Array<[string, string]>)('scanTemplateSecurity(%s) returns ZERO violations', (slug, folder) => {
       const { violations } = scanTemplateSecurity(folder);
       expect(
         violations,
