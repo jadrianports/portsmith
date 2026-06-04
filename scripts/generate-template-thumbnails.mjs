@@ -1,116 +1,224 @@
 /**
- * Generates the template-picker thumbnail PLACEHOLDERS
- * (`public/templates/minimal.webp` + `public/templates/editorial.webp`) referenced by
- * `TemplateCard` (07-05 / UI-SPEC B.5 #2, D-P7-07).
+ * Generates the template-picker thumbnails (`public/templates/<slug>.webp`) referenced by
+ * `TemplateCard` (07-05 / UI-SPEC B.5 #2, D-P7-07) as REAL per-template renders (PIPE-06).
  *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ REPLACE: these are neutral, on-brand PLACEHOLDERS — NOT real per-template     │
- * │ screenshots. They ship at the CORRECT 16:10 box + alt (zero CLS) so the cards │
- * │ render now, while the real founder-captured screenshots are a tracked         │
- * │ pre-public item (mirrors the 06-03 og-default.png precedent + its             │
- * │ `.planning/todos/pending/...` follow-up). To recapture: render each template  │
- * │ with representative content, screenshot at 16:10 (~1280×800), compress to     │
- * │ WebP, and overwrite these two files. The box/alt/aspect stay correct          │
- * │ regardless of the asset (TemplateCard owns them).                             │
- * └─────────────────────────────────────────────────────────────────────────────┘
+ * ── WHAT THIS IS (PIPE-06 — folds `recapture-template-thumbnails`) ─────────────
+ * Each thumbnail is a REAL golden-fixture render of the template, captured via Playwright
+ * against the stack-free `/__fixture/<slug>?variant=full` route (Plan 10-02 — NO Supabase,
+ * NO DB, NO cookies), then encoded to WebP IN-PAGE via the browser `<canvas>.toBlob(
+ * 'image/webp')` — the SAME mechanism CLAUDE.md documents for the avatar pipeline
+ * (client `react-cropper` → `<canvas>.toBlob('image/webp')`). NO `sharp`: Playwright's
+ * `page.screenshot({ type: 'webp' })` is NOT supported, so the canvas encode is the
+ * sharp-free path (CLAUDE.md: Sharp "absent by choice"). Output is 1280×800 (16:10) —
+ * the box `TemplateCard` reserves (`aspect-[16/10]`, zero CLS).
  *
- * Each placeholder is an on-brand vertical wash that hints the template's look WITHOUT
- * branding/text/avatars (Surface-B asset contract):
- *   - minimal  → dark synthwave (Midnight-Outrun: deep-midnight field + a restrained
- *                sunset-horizon glow), the same palette family as og-default.png.
- *   - editorial→ light "Newsprint" (warm ivory paper canvas + a faint ink masthead
- *                rule and a muted column band), the editorial/Swiss counterweight.
+ * ── DEV-SERVER SCOPE (W7) ──────────────────────────────────────────────────────
+ * This .mjs launches chromium DIRECTLY (not through the Playwright test runner), so it
+ * OWNS the dev-server lifecycle, mirroring `playwright.config.ts`'s
+ * `reuseExistingServer:!CI` semantics:
+ *   - If a dev server is ALREADY reachable at http://127.0.0.1:3000 it is REUSED
+ *     (a hand-started `npm run dev`, or 10-06's umbrella's already-running server).
+ *   - Otherwise this script BOOTS `npm run dev`, AWAITS readiness, captures, then tears
+ *     it down. It NEVER navigates against a dead server — if boot fails it exits non-zero
+ *     with a clear "start `npm run dev` first" message.
+ * So 10-06's umbrella (Task 1) may either leave its dev server up (reused here) or let
+ * this script self-boot; either way the `/__fixture/<slug>` target is guaranteed live.
  *
- * Uses `sharp` (already installed, pulled transitively by Next image optimization) to
- * encode WebP from a raw RGB buffer — no @vercel/og, no canvas, no Three.js. Re-run:
+ * ── FAIL-CLOSED (B4) ─────────────────────────────────────────────────────────��─
+ * The generator is a generative side-effect that VALIDATES its output and THROWS / exits
+ * non-zero rather than committing a bad asset. After the in-page encode, `assertValidWebp`
+ * checks the bytes are a real WebP (RIFF/WEBP magic) AND that the canvas was drawn at the
+ * exact 1280×800 box (a blank/empty/wrong-size render fails the check). A failing slug
+ * exits the whole script non-zero and does NOT overwrite the good committed asset. The
+ * fail-closed path is PROVEN REAL by an inline self-check (`--self-check`, run by this
+ * file at startup) that feeds `assertValidWebp` a wrong-size + a non-WebP buffer and
+ * asserts it throws — so the assertion is demonstrably fail-closed, not GREEN-only.
+ *
+ * Re-run (with a dev server up, or letting this script boot one):
  *   node scripts/generate-template-thumbnails.mjs
+ * Prove the fail-closed assertion only (no render, no dev server):
+ *   node scripts/generate-template-thumbnails.mjs --self-check
  */
-import sharp from 'sharp';
+import { spawn } from 'node:child_process';
 import { writeFileSync, mkdirSync } from 'node:fs';
+
+import { chromium } from '@playwright/test';
 
 const W = 1280; // 16:10 source — TemplateCard reserves the box at aspect-[16/10].
 const H = 800;
-
-const clamp = (v) => (v < 0 ? 0 : v > 255 ? 255 : Math.round(v));
-const gauss = (t, c, s) => Math.exp(-((t - c) ** 2) / (2 * s * s));
+const BASE_URL = 'http://127.0.0.1:3000';
+const SLUGS = ['minimal', 'editorial']; // mirrors Object.keys(templateRegistry) (registry-consistency.test.ts)
+const WEBP_QUALITY = 0.82;
 
 /**
- * Render a placeholder to a raw RGB buffer via a per-row painter `(t) => [r,g,b]`
- * where `t` is the vertical position 0..1.
+ * B4 fail-closed validity check — a pure helper over an encoded buffer + the dimensions
+ * the in-page canvas reported. THROWS (naming the slug) if the buffer is not a valid WebP
+ * or was not drawn at the exact 1280×800 box. Pure so the inline self-check can exercise
+ * its REJECT path with a deliberately-broken buffer.
+ *
+ * A valid WebP starts with the RIFF container magic: bytes 0-3 = "RIFF", bytes 8-11 = "WEBP".
  */
-function paint(rowColor) {
-  const buf = Buffer.alloc(W * H * 3);
-  for (let y = 0; y < H; y++) {
-    const [r, g, b] = rowColor(y / (H - 1));
-    const R = clamp(r);
-    const G = clamp(g);
-    const B = clamp(b);
-    for (let x = 0; x < W; x++) {
-      const o = (y * W + x) * 3;
-      buf[o] = R;
-      buf[o + 1] = G;
-      buf[o + 2] = B;
+function assertValidWebp(buf, label, drawnWidth, drawnHeight) {
+  if (!buf || buf.length < 16) {
+    throw new Error(`[thumbnails] "${label}": encoded buffer is empty/too small (${buf?.length ?? 0} bytes) — broken render, refusing to write.`);
+  }
+  const riff = buf.toString('ascii', 0, 4);
+  const webp = buf.toString('ascii', 8, 12);
+  if (riff !== 'RIFF' || webp !== 'WEBP') {
+    throw new Error(`[thumbnails] "${label}": not a valid WebP (magic "${riff}"/"${webp}", expected "RIFF"/"WEBP") — refusing to write a bad asset.`);
+  }
+  if (drawnWidth !== W || drawnHeight !== H) {
+    throw new Error(`[thumbnails] "${label}": canvas drawn at ${drawnWidth}x${drawnHeight}, expected ${W}x${H} (16:10) — wrong-size/blank render, refusing to write.`);
+  }
+}
+
+/**
+ * INLINE FAIL-CLOSED SELF-CHECK (B4 proof) — exercise `assertValidWebp`'s REJECT path
+ * against deliberately-broken inputs and assert it throws. Runs at startup (and is the
+ * whole job under `--self-check`). If any branch DOESN'T throw, the assertion is not
+ * fail-closed → exit non-zero. This proves the validity gate is real, not GREEN-only.
+ */
+function proveFailClosed() {
+  const cases = [
+    { name: 'wrong-size canvas', fn: () => assertValidWebp(Buffer.from('RIFF\x00\x00\x00\x00WEBP....'), 'self-check/wrong-size', 640, 480) },
+    { name: 'non-WebP bytes', fn: () => assertValidWebp(Buffer.from('NOTAWEBPNOTAWEBP'), 'self-check/non-webp', W, H) },
+    { name: 'empty buffer', fn: () => assertValidWebp(Buffer.alloc(0), 'self-check/empty', W, H) },
+  ];
+  for (const { name, fn } of cases) {
+    let threw = false;
+    try {
+      fn();
+    } catch {
+      threw = true;
+    }
+    if (!threw) {
+      console.error(`[thumbnails] FAIL-CLOSED SELF-CHECK BROKEN: assertValidWebp did NOT throw on "${name}".`);
+      process.exit(1);
     }
   }
-  return buf;
+  console.log('[thumbnails] fail-closed self-check PASS — assertValidWebp rejects wrong-size / non-WebP / empty (B4).');
 }
 
-// ── MINIMAL — dark synthwave (Midnight-Outrun, mirrors og-default's palette) ──
-const MIN_TOP = [12, 11, 30]; // #0c0b1e deep midnight
-const MIN_BOTTOM = [18, 14, 40]; // slightly deeper/warmer toward the base
-const MIN_GLOW = [120, 38, 96]; // magenta-purple horizon bloom (peak add)
-const MIN_GLOW_C = 0.78;
-const MIN_GLOW_S = 0.1;
-const MIN_LINE = [180, 70, 120]; // a warmer sunset line just below the bloom
-const MIN_LINE_C = 0.8;
-const MIN_LINE_S = 0.014;
-const minimal = paint((t) => {
-  let r = MIN_TOP[0] + (MIN_BOTTOM[0] - MIN_TOP[0]) * t;
-  let g = MIN_TOP[1] + (MIN_BOTTOM[1] - MIN_TOP[1]) * t;
-  let b = MIN_TOP[2] + (MIN_BOTTOM[2] - MIN_TOP[2]) * t;
-  const gw = gauss(t, MIN_GLOW_C, MIN_GLOW_S);
-  r += MIN_GLOW[0] * gw;
-  g += MIN_GLOW[1] * gw;
-  b += MIN_GLOW[2] * gw;
-  const lw = gauss(t, MIN_LINE_C, MIN_LINE_S);
-  r += MIN_LINE[0] * lw;
-  g += MIN_LINE[1] * lw;
-  b += MIN_LINE[2] * lw;
-  return [r, g, b];
-});
-
-// ── EDITORIAL — light "Newsprint" (ivory paper + a faint ink masthead rule) ──
-const ED_PAPER = [247, 244, 236]; // #F7F4EC warm ivory canvas (the Newsprint paper)
-const ED_MUTED = [239, 234, 221]; // #EFEADD muted inset band (a hinted column)
-const ED_INK = [26, 25, 22]; // #1A1916 near-black ink (the masthead rule)
-const ED_RULE_C = 0.3; // a single hairline masthead rule ~⅓ down
-const ED_RULE_S = 0.006;
-const ED_BAND_C = 0.62; // a faint muted column band lower in the frame
-const ED_BAND_S = 0.16;
-const editorial = paint((t) => {
-  // Start from the ivory paper, dip slightly toward the muted inset in a lower band,
-  // and lay one near-ink hairline rule near the top (the broadsheet masthead).
-  const band = gauss(t, ED_BAND_C, ED_BAND_S) * 0.6; // 0..0.6 toward muted
-  let r = ED_PAPER[0] + (ED_MUTED[0] - ED_PAPER[0]) * band;
-  let g = ED_PAPER[1] + (ED_MUTED[1] - ED_PAPER[1]) * band;
-  let b = ED_PAPER[2] + (ED_MUTED[2] - ED_PAPER[2]) * band;
-  const rule = gauss(t, ED_RULE_C, ED_RULE_S); // 0..1 toward ink at the rule
-  r += (ED_INK[0] - r) * rule;
-  g += (ED_INK[1] - g) * rule;
-  b += (ED_INK[2] - b) * rule;
-  return [r, g, b];
-});
-
-mkdirSync('public/templates', { recursive: true });
-
-for (const [slug, raw] of [
-  ['minimal', minimal],
-  ['editorial', editorial],
-]) {
-  const webp = await sharp(raw, { raw: { width: W, height: H, channels: 3 } })
-    .webp({ quality: 80 })
-    .toBuffer();
-  const path = `public/templates/${slug}.webp`;
-  writeFileSync(path, webp);
-  console.log(`wrote ${path} — ${W}x${H} (16:10), ${webp.length} bytes [REPLACE: placeholder]`);
+/** Poll until the dev server answers at BASE_URL, or time out. Mirrors webServer readiness. */
+async function waitForServer(url, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(url, { method: 'GET' });
+      if (res.ok || (res.status >= 200 && res.status < 500)) return true;
+    } catch {
+      // not up yet
+    }
+    await new Promise((r) => setTimeout(r, 750));
+  }
+  return false;
 }
+
+/**
+ * Capture one slug: navigate the stack-free golden render, apply the determinism recipe
+ * (matching `e2e/helpers/render-fixture.ts`), draw the 1280×800 viewport onto an in-page
+ * canvas, and `toBlob('image/webp')`. Returns `{ buf, drawnWidth, drawnHeight }`.
+ */
+async function captureSlug(page, slug) {
+  await page.setViewportSize({ width: W, height: H });
+  const res = await page.goto(`${BASE_URL}/__fixture/${slug}?variant=full`, { waitUntil: 'networkidle' });
+  if (!res || !res.ok()) {
+    throw new Error(`[thumbnails] "${slug}": __fixture render returned ${res ? res.status() : 'no response'} — broken render, refusing to write.`);
+  }
+  // The scoped template root rendered (proves the lazy template chunk loaded + rendered).
+  await page.locator(`.tmpl-${slug}`).first().waitFor({ state: 'visible', timeout: 60_000 });
+  // Font-readiness — Playwright does NOT auto-wait for next/font (display:'swap').
+  await page.evaluate(() => document.fonts.ready);
+  // Hide the `next dev` overlay (dev chrome, not a template element).
+  await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
+
+  // In-page WebP encode via canvas.toBlob (the sharp-free, CLAUDE.md-sanctioned path):
+  // screenshot the 1280×800 viewport to PNG, draw it onto a 1280×800 canvas, toBlob('image/webp').
+  const pngBytes = await page.screenshot({ clip: { x: 0, y: 0, width: W, height: H } });
+  const pngBase64 = pngBytes.toString('base64');
+
+  const result = await page.evaluate(
+    async ({ b64, w, h, q }) => {
+      const img = new Image();
+      const loaded = new Promise((resolve, reject) => {
+        img.onload = () => resolve(true);
+        img.onerror = () => reject(new Error('image decode failed'));
+      });
+      img.src = `data:image/png;base64,${b64}`;
+      await loaded;
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('2d context unavailable');
+      ctx.drawImage(img, 0, 0, w, h);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', q));
+      if (!blob) throw new Error('toBlob returned null');
+      const ab = await blob.arrayBuffer();
+      const bytes = Array.from(new Uint8Array(ab));
+      return { bytes, drawnWidth: canvas.width, drawnHeight: canvas.height };
+    },
+    { b64: pngBase64, w: W, h: H, q: WEBP_QUALITY },
+  );
+
+  return {
+    buf: Buffer.from(result.bytes),
+    drawnWidth: result.drawnWidth,
+    drawnHeight: result.drawnHeight,
+  };
+}
+
+async function main() {
+  // B4: prove the fail-closed assertion is real BEFORE doing any rendering.
+  proveFailClosed();
+  if (process.argv.includes('--self-check')) {
+    console.log('[thumbnails] --self-check only — skipping render. (Fail-closed assertion proven above.)');
+    return;
+  }
+
+  // W7: reuse an already-running dev server, else boot one (reuseExistingServer semantics).
+  let devProc = null;
+  const alreadyUp = await waitForServer(BASE_URL, 1_500);
+  if (alreadyUp) {
+    console.log(`[thumbnails] reusing the dev server already up at ${BASE_URL}.`);
+  } else {
+    console.log(`[thumbnails] no dev server at ${BASE_URL} — booting \`npm run dev\` (W7) ...`);
+    devProc = spawn('npm run dev', { stdio: 'ignore', env: process.env, shell: true });
+    const booted = await waitForServer(BASE_URL, 180_000); // cold Next 16 Windows compile headroom
+    if (!booted) {
+      if (devProc) devProc.kill();
+      console.error(`[thumbnails] dev server never came up at ${BASE_URL}. Start \`npm run dev\` first, then re-run.`);
+      process.exit(1);
+    }
+    console.log(`[thumbnails] dev server is up at ${BASE_URL}.`);
+  }
+
+  const browser = await chromium.launch();
+  const captured = [];
+  try {
+    const page = await browser.newPage();
+    for (const slug of SLUGS) {
+      console.log(`[thumbnails] rendering "${slug}" via /__fixture/${slug}?variant=full ...`);
+      const { buf, drawnWidth, drawnHeight } = await captureSlug(page, slug);
+      // B4 fail-closed: validate BEFORE writing — a broken/empty/wrong-size render throws here.
+      assertValidWebp(buf, slug, drawnWidth, drawnHeight);
+      captured.push({ slug, buf });
+    }
+  } finally {
+    await browser.close();
+    if (devProc) devProc.kill();
+  }
+
+  // Only write once EVERY slug captured + validated (all-or-nothing — never half-overwrite).
+  mkdirSync('public/templates', { recursive: true });
+  for (const { slug, buf } of captured) {
+    const out = `public/templates/${slug}.webp`;
+    writeFileSync(out, buf);
+    console.log(`wrote ${out} — ${W}x${H} (16:10), ${buf.length} bytes (real golden-fixture render)`);
+  }
+}
+
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+});
