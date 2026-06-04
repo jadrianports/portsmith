@@ -117,25 +117,25 @@ export default function EditorialTemplate({ data }: { data: PortfolioData }) {
           FCP. The editorial Hero gets ZERO entrance motion (the name is the LCP
           element — A.5). The 6 below-the-fold sections keep the JS fade-up-on-scroll +
           the reduced-motion / no-JS visible fallback. */}
-      <ScrollReveal as="section" priority>
+      <ScrollReveal as="section" priority data-section-type="hero">
         <Hero section={sectionOfType(sections, 'hero')} />
       </ScrollReveal>
-      <ScrollReveal as="section">
+      <ScrollReveal as="section" data-section-type="about">
         <About section={sectionOfType(sections, 'about')} />
       </ScrollReveal>
-      <ScrollReveal as="section">
+      <ScrollReveal as="section" data-section-type="skills">
         <Skills section={sectionOfType(sections, 'skills')} />
       </ScrollReveal>
-      <ScrollReveal as="section">
+      <ScrollReveal as="section" data-section-type="projects">
         <Projects section={sectionOfType(sections, 'projects')} />
       </ScrollReveal>
-      <ScrollReveal as="section">
+      <ScrollReveal as="section" data-section-type="experience">
         <Experience section={sectionOfType(sections, 'experience')} />
       </ScrollReveal>
-      <ScrollReveal as="section">
+      <ScrollReveal as="section" data-section-type="testimonials">
         <Testimonials section={sectionOfType(sections, 'testimonials')} />
       </ScrollReveal>
-      <ScrollReveal as="section">
+      <ScrollReveal as="section" data-section-type="contact">
         <Contact section={sectionOfType(sections, 'contact')} />
       </ScrollReveal>
 

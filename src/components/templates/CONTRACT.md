@@ -158,6 +158,15 @@ A template root MUST:
    `.tmpl-<slug> .tmpl-load-reveal` in its scoped `theme.css`. The kit islands emit only
    those class names — all visual styling lives in the template (logic in the kit, looks in
    the template, D-01/D-03). The focus ring uses the canonical `--ring`.
+5. Set **`data-section-type="<soft-enum type>"`** on EVERY section wrapper (e.g.
+   `<ScrollReveal as="section" data-section-type="hero">`). This is the per-section analog
+   of the root's `data-template-root`: it gives the PIPE-05 conformance gate a robust,
+   always-mounted DOM signal to prove no spec-declared `supported: true` section is dropped
+   (the wrapper is mounted even when its body is empty — the body is not). The value is a
+   SOFT-ENUM section TYPE (`hero`/`about`/`skills`/`projects`/`experience`/`testimonials`/
+   `contact`/…), NEVER a slug or a token, so the kit `ScrollReveal` (which forwards the
+   attribute) stays chrome-free + slug-agnostic (D-02). A Phase-11 ingested template inherits
+   this requirement by following the same root pattern.
 
 The root is a **Server Component**; the only standard-lane client JS is the **2 sanctioned
 kit islands** (`ScrollReveal` + `ThemeToggle`). The Hero must use `ScrollReveal priority`

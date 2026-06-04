@@ -102,21 +102,41 @@ export function ScrollReveal({
    * a below-the-fold section.
    */
   priority = false,
+  /**
+   * SLUG-AGNOSTIC per-section DOM marker (Phase-10 Plan 02; Pitfall 5). When set, the
+   * wrapper emits `data-section-type="<type>"` so the PIPE-05 conformance gate can assert
+   * a spec-declared `supported: true` section is in the DOM (the per-section analog of the
+   * root's `data-template-root`). The value is a SOFT-ENUM section TYPE
+   * (`hero`/`about`/…), NEVER a slug or a token — so the kit stays chrome-free +
+   * slug-agnostic (D-02 / kit-isolation). Forwarded verbatim through BOTH render paths
+   * below. The prop IS the attribute name (`'data-section-type'`) so a template root writes
+   * the literal `data-section-type="hero"` the conformance gate greps for.
+   */
+  'data-section-type': dataSectionType,
 }: {
   children: React.ReactNode;
   delay?: number;
   as?: 'div' | 'section' | 'li';
   priority?: boolean;
+  'data-section-type'?: string;
 }) {
   // ABOVE-THE-FOLD LCP PATH: render a static, fully-visible wrapper — never gated
   // by hydration/opacity:0. The CSS-only `.tmpl-load-reveal` entrance (theme.css)
   // is opacity-stable (translate-only), so the LCP text is painted at first paint
   // regardless of JS. This branch ships no observer/state for the Hero.
   if (priority) {
-    return <Tag className="tmpl-load-reveal">{children}</Tag>;
+    return (
+      <Tag className="tmpl-load-reveal" data-section-type={dataSectionType}>
+        {children}
+      </Tag>
+    );
   }
 
-  return <ScrollRevealOnScroll delay={delay} as={Tag}>{children}</ScrollRevealOnScroll>;
+  return (
+    <ScrollRevealOnScroll delay={delay} as={Tag} data-section-type={dataSectionType}>
+      {children}
+    </ScrollRevealOnScroll>
+  );
 }
 
 /**
@@ -129,10 +149,12 @@ function ScrollRevealOnScroll({
   children,
   delay,
   as: Tag,
+  'data-section-type': dataSectionType,
 }: {
   children: React.ReactNode;
   delay: number;
   as: 'div' | 'section' | 'li';
+  'data-section-type'?: string;
 }) {
   const ref = useRef<HTMLElement | null>(null);
   // Default to revealed so the no-JS / SSR output is fully visible. We only opt
@@ -167,6 +189,11 @@ function ScrollRevealOnScroll({
     <Tag
       // The cast keeps a single ref usable across the small allowed tag set.
       ref={ref as React.Ref<HTMLDivElement & HTMLLIElement>}
+      // Slug-agnostic per-section DOM marker (Phase-10 Plan 02; Pitfall 5) — the
+      // wrapper is ALWAYS mounted (even when its body is empty), so it is the right
+      // place to assert "this supported section is in the DOM". Carries a soft-enum
+      // type, never a slug/token — kit stays chrome-free + slug-agnostic.
+      data-section-type={dataSectionType}
       // Class hook for the reduced-motion CSS-level visible-fallback in theme.css
       // (`.tmpl-reveal { opacity:1 !important }` under prefers-reduced-motion) — a
       // belt-and-suspenders guarantee independent of this JS effect (UI-SPEC §Motion).
