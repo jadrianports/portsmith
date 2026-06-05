@@ -1,0 +1,12 @@
+{
+  "name": "clean-export-fixture",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "comment": "CLEAN ingest fixture (Phase-11 Plan 02 / PIPE-04). The GREEN canary — the input-side analog of the minimal/editorial GREEN-on-corpus role. Every dependency is allowlisted in scripts/template-allowlist.ts ALLOWED_IMPORT_SPECIFIERS (react, react-dom, lucide-react) so the dep parse produces ZERO unknown-dependency flags AND zero must-strip findings. The green assertion is specifically `findings.filter(f => f.tier === 'must-strip').length === 0` — flags on unknown deps are PERMITTED in clean, only must-strip must be zero. App.tsx contains a plain heading + a relative import, no secrets/external-origins/danger-html.",
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "lucide-react": "^1.17.0"
+  }
+}

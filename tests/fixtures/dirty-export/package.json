@@ -1,0 +1,16 @@
+{
+  "name": "marketing-girl-dirty-fixture",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "comment": "DIRTY ingest fixture (Phase-11 Plan 02 / PIPE-04 / D-P11-07). Mirrors the broken-template negative-fixture idiom: a small, committed, compile-irrelevant raw-Lovable-export shape, scanned by `scanIngest` BY FOLDER PATH only (never imported into the Next graph). `react-quill` is an UNVETTED dep absent from scripts/template-allowlist.ts ALLOWED_IMPORT_SPECIFIERS -> the dep parse pushes an `unknown-dependency` FLAG (tier 'flag', NEVER blocks the input-scan exit code, D-P11-06 two-tier). `canvas-confetti` is a second unvetted dep for breadth. The must-strip RED triggers live in App.tsx.",
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-quill": "^2.0.0",
+    "canvas-confetti": "^1.9.3"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
