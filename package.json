@@ -14,6 +14,7 @@
     "promote-admin": "tsx scripts/promote-admin.ts",
     "seed:founder": "tsx scripts/seed-founder-portfolio.ts",
     "check:bundle": "tsx scripts/check-bundle-budget.ts",
+    "ingest:scan": "tsx scripts/ingest-scan.ts",
     "gate:template": "node scripts/gate-template.mjs",
     "gate:security": "npx vitest run tests/unit/templates/security-grep.test.ts",
     "gate:isolation": "npx vitest run tests/unit/templates/template-isolation-any.test.ts tests/unit/templates/token-conformance.test.ts",

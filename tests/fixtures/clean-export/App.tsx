@@ -18,7 +18,10 @@
  */
 
 // A relative (in-repo) import — `isInRepoImport` treats this as first-party source, so it
-// is NOT an unknown dependency. The module need not exist; the scanner reads the specifier.
+// is NOT an unknown dependency. The module need not exist; the scanner reads the SPECIFIER
+// (TEXT/AST), never resolves it. The `@ts-expect-error` mirrors broken-template/index.tsx:50
+// so this compile-irrelevant fixture keeps the `tsc --noEmit` lint gate clean.
+// @ts-expect-error — intentionally-missing module; the scanner reads the import specifier text.
 import { Section } from './section';
 
 export default function App() {
