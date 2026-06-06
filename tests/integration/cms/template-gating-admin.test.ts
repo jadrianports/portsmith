@@ -230,7 +230,7 @@ describe('GATE-04 gap-closure — grants-embed disambiguation + revoke-aware imp
       .eq('template_id', MINIMAL_UUID)
       .eq('user_id', ctx.userA.id);
     expect(ok.error).toBeNull();
-    const row = (ok.data ?? [])[0] as { profiles: { username: string } | null } | undefined;
+    const row = (ok.data ?? [])[0] as unknown as { profiles: { username: string } | null } | undefined;
     expect(row?.profiles?.username).toBe(ctx.userA.username);
 
     // (b) the AMBIGUOUS bare embed (the pre-fix form) MUST error — PostgREST cannot
