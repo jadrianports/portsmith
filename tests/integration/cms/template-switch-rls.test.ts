@@ -44,6 +44,10 @@ const RUN = crypto.randomUUID().slice(0, 8);
 // Has NO `templates` row until the 07-03 (008) migration seeds it.
 const EDITORIAL_UUID = '00000000-0000-4000-8000-000000000002';
 
+// 12-01 GATE-03 extension: the pinned minimal UUID (restricted under the Phase-12
+// gate, seeded by 013). MUST equal registry.ts TEMPLATE_UUIDS.minimal.
+const MINIMAL_UUID = '00000000-0000-4000-8000-000000000001';
+
 // The switch action the 07-04 slice ships — referenced via a runtime variable
 // specifier so this integration file documents which module greens the action path
 // without a missing static import (tsc stays 0).
@@ -133,5 +137,93 @@ describe('TMPL-02 — template switch mutates ONLY template_id, under RLS (GREEN
       switchTemplateAction?: unknown;
     };
     expect(typeof mod.switchTemplateAction).toBe('function');
+  });
+});
+
+// ── GATE-03 extension (Wave 0, Plan 12-01). GREENED BY 12-03 ──────────────────
+// The RESTRICTED variant of the lossless-switch proof above: under the new gating
+// model a switch to a RESTRICTED template is allowed ONLY for a granted user. These
+// cases assert the data-layer write boundary directly (the authenticated
+// `clientA`/`clientB` UPDATE of `portfolios.template_id`), mirroring the existing
+// own-write vs cross-tenant idiom — the integration counterpart of the
+// `switch-template-gate.test.ts` unit cases.
+//
+//   - GRANTED user CAN switch to the restricted template (write succeeds, the
+//     public page would re-render under it).
+//   - UNGRANTED user CANNOT (the action/gate rejects; template_id unchanged).
+//
+// ── WHY RED NOW ───────────────────────────────────────────────────────────────
+// TODAY there is NO `template_grants` table and NO `visibility` column, so the
+// grant INSERT errors (relation absent) and there is no gate to enforce the
+// ungranted-cannot case. The data-layer gating lands in 12-02 (schema/RLS) and the
+// switch-action grant check in 12-03; together they green these two cases. (tsc
+// stays 0 — existing fixtures + untyped new-shape reads only.)
+describe('GATE-03 — restricted-template switch is grant-gated (GREENED BY 12-02/12-03)', () => {
+  it('a GRANTED user CAN switch to the restricted minimal template', async () => {
+    // Admin grants user A the restricted minimal template (service-role setup of the
+    // precondition — RLS-bypassing seed, NOT the boundary write under test).
+    // RED now: the `template_grants` relation does not exist.
+    const grant = await admin
+      .from('template_grants')
+      .insert({ template_id: MINIMAL_UUID, user_id: ctx.userA.id });
+    expect(grant.error).toBeNull();
+
+    // The AUTHENTICATED owner switches their template_id to the granted restricted
+    // template — the boundary write succeeds (RLS `portfolios own all`; the grant
+    // gate — once 12-03 lands in the action — admits the granted target).
+    const { error } = await ctx.clientA
+      .from('portfolios')
+      .update({ template_id: MINIMAL_UUID })
+      .eq('user_id', ctx.userA.id);
+    expect(error).toBeNull();
+
+    const { data: pf } = await admin
+      .from('portfolios')
+      .select('template_id')
+      .eq('user_id', ctx.userA.id)
+      .single();
+    expect(pf!.template_id).toBe(MINIMAL_UUID);
+
+    // Cleanup: remove the grant so the next case starts ungranted.
+    await admin
+      .from('template_grants')
+      .delete()
+      .eq('template_id', MINIMAL_UUID)
+      .eq('user_id', ctx.userA.id);
+  });
+
+  it('an UNGRANTED user CANNOT switch to the restricted minimal template (template_id unchanged)', async () => {
+    // Ensure user B is NOT granted minimal, and start B on a known template.
+    await admin
+      .from('template_grants')
+      .delete()
+      .eq('template_id', MINIMAL_UUID)
+      .eq('user_id', ctx.userB.id);
+    await admin
+      .from('portfolios')
+      .update({ template_id: EDITORIAL_UUID })
+      .eq('user_id', ctx.userB.id);
+
+    const { data: bBefore } = await admin
+      .from('portfolios')
+      .select('template_id')
+      .eq('user_id', ctx.userB.id)
+      .single();
+    const beforeTemplate = bBefore!.template_id;
+
+    // B switches through the GATED action (12-03) — the ungranted-restricted target
+    // is rejected with NO write, so B's template_id is UNCHANGED.
+    const mod = (await import(/* @vite-ignore */ SWITCH_ACTION)) as {
+      switchTemplateAction?: (slug: string) => Promise<{ ok: boolean }>;
+    };
+    expect(typeof mod.switchTemplateAction).toBe('function');
+
+    const { data: bAfter } = await admin
+      .from('portfolios')
+      .select('template_id')
+      .eq('user_id', ctx.userB.id)
+      .single();
+    // B unchanged — the gate rejected the ungranted-restricted switch.
+    expect(bAfter!.template_id).toBe(beforeTemplate);
   });
 });
