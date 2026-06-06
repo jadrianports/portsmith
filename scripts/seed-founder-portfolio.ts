@@ -284,24 +284,55 @@ async function main(): Promise<void> {
     );
   }
 
-  // --- 4. Upsert the portfolio (UNIQUE on user_id → idempotent). --------------
-  const { data: portfolio, error: portfolioError } = await admin
+  // --- 4. Ensure the portfolio (UNIQUE on user_id → idempotent). --------------
+  // PRESERVE THE LIVE TEMPLATE CHOICE (13-05 fix, T-13-05-SPILL): a blind UPSERT that
+  // always SET `template_id = minimal` would REVERT the owner's chosen template every
+  // re-run — including the founder→edgerunner switch the 015 migration makes (and any
+  // future template the owner picks in the CMS). So we set `template_id = minimal` ONLY
+  // when CREATING the portfolio (the fresh-DB bootstrap default — D-P7-09: new portfolios
+  // start on a standard template); when the portfolio already exists we DO NOT touch
+  // `template_id`, leaving the migration's / owner's choice intact. `template_id` is NOT
+  // NULL, so it must be supplied on the initial INSERT.
+  let portfolioId: string;
+  const { data: existingPortfolio, error: existingPortfolioError } = await admin
     .from('portfolios')
-    .upsert(
-      {
+    .select('id, template_id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (existingPortfolioError) {
+    fail(`portfolios lookup failed: ${existingPortfolioError.message}`);
+  }
+  if (existingPortfolio) {
+    // Exists — refresh only `updated_at`; never clobber the live `template_id` (13-05).
+    const { error: portfolioUpdateError } = await admin
+      .from('portfolios')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', existingPortfolio.id);
+    if (portfolioUpdateError) {
+      fail(`portfolios update failed: ${portfolioUpdateError.message}`);
+    }
+    portfolioId = existingPortfolio.id;
+    log(
+      `portfolio refreshed: ${portfolioId} (template_id preserved: ${existingPortfolio.template_id}).`,
+    );
+  } else {
+    // Fresh DB — create on the minimal bootstrap default (the 015 migration, or the owner
+    // via the CMS, switches it afterward).
+    const { data: createdPortfolio, error: portfolioInsertError } = await admin
+      .from('portfolios')
+      .insert({
         user_id: userId,
         template_id: template.id,
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' },
-    )
-    .select('id')
-    .single();
-  if (portfolioError || !portfolio) {
-    fail(`portfolios upsert failed: ${portfolioError?.message ?? 'no row returned'}`);
+      })
+      .select('id')
+      .single();
+    if (portfolioInsertError || !createdPortfolio) {
+      fail(`portfolios insert failed: ${portfolioInsertError?.message ?? 'no row returned'}`);
+    }
+    portfolioId = createdPortfolio.id;
+    log(`portfolio created: ${portfolioId} (bootstrap template_id=minimal).`);
   }
-  const portfolioId = portfolio.id;
-  log(`portfolio upserted: ${portfolioId}`);
 
   // --- 4b. Self-healing founder→minimal grant (D-P12-04 / OQ-1). --------------
   // Template gating (Phase 12) makes `minimal` a RESTRICTED template; without a

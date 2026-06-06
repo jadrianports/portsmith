@@ -190,6 +190,32 @@ made.
 | capture approach (frozen-frame vs masked canvas) | **RESERVED** — try frozen-frame first; mask the canvas only if it flakes >0.01 (RESEARCH §4) |
 | source-parity | expected **DEFERRED** (SPA/multi-page → single-scroll; self-baseline only) — confirm at gate |
 
+## Migration & Seed — APPLIED (Plan 13-05)
+
+`015_seed_edgerunner_template.sql` was applied FORWARD-ONLY (`npx supabase migration up --local`, never
+`db reset`) and asserted against the live local stack. The data-only seed runs in the load-bearing
+grant-THEN-switch order (T-13-05-ORDER): INSERT edgerunner …0004 (restricted) → grant the founder
+(derived from the portfolio on minimal, never a hardcoded username) → switch the founder's portfolio off
+minimal → flip minimal → public.
+
+| Assertion (post-apply) | Result |
+|------------------------|--------|
+| exactly ONE `templates` row id …0004, slug `edgerunner`, visibility `restricted` | ✅ |
+| founder's portfolio `template_id` now …0004 (ZERO portfolios remain on …0001, A6) | ✅ |
+| `template_grants` row for (…0004, founder user_id) present | ✅ |
+| `minimal` visibility now `public` | ✅ |
+| `tsx scripts/seed-founder-portfolio.ts` re-run clean (self-heal grant + metrics + skills.level through `validateSectionContent`) | ✅ |
+
+**No `database.ts` regen — A3 confirmed.** 015 is data-only (INSERT/UPDATE on existing tables; no new
+column or table), so the generated `src/types/database.ts` read types are unchanged — exactly the 010
+aurora precedent. `supabase gen types` was deliberately NOT run; `git status src/types/database.ts` shows
+no change.
+
+**Seed-revert bug fixed (Rule 1, T-13-05-SPILL).** The seed's blind portfolio UPSERT (`SET template_id =
+minimal`) reverted the migration's founder→edgerunner switch on every re-run. Fixed: the seed now preserves
+the live `template_id` on an existing portfolio (refresh `updated_at` only) and sets `minimal` ONLY when
+creating the portfolio fresh. Verified idempotent: re-running the seed keeps the founder on edgerunner …0004.
+
 ## Gate Results — RESERVED (Plan 13-07 umbrella)
 
 `npm run gate:template -- edgerunner` (the CICD-01 umbrella: tsc → static → build → render) is run by the
