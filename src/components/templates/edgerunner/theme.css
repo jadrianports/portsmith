@@ -1,0 +1,440 @@
+/*
+ * Scoped theme tokens for the `edgerunner` template — "Neon Edgerunner" (the
+ * founder's synthwave Lovable export, translated — PIPE-09 / D-02 faithful ingest).
+ *
+ * TWO-LAYER UI ISOLATION (D-17, SHARED-D, CONTRACT §3):
+ * This file declares the template's OWN tokens scoped to the `.tmpl-edgerunner`
+ * root. It shares NOTHING with the platform-chrome design tokens in
+ * `src/app/globals.css` (Evergreen/Copper, CMS-only). There is deliberately:
+ *   - NO Tailwind at-rule theme block here (chrome owns that; the template uses
+ *     plain scoped CSS custom properties instead).
+ *   - NO reference to any chrome color custom property (the `color-` prefixed ones).
+ *   - NO chrome UI font (the chrome sans face is forbidden inside the template).
+ * Every other template file reads `var(--token)` — this file is the SOLE token source,
+ * so it is the ONLY place hardcoded hex/oklch values live in the template.
+ *
+ * DARK-ONLY (D-06): edgerunner ships ONLY the dark set. There is deliberately NO
+ * `[data-template-theme='light']` block — the emissive WebGL/neon look depends on a
+ * dark canvas, so the template hardcodes `data-template-theme="dark"` and never mounts
+ * the kit ThemeToggle. This is edgerunner's per-template choice, NOT a platform retreat
+ * from light/dark (minimal/editorial/aurora keep the dual-mode contract). All 18
+ * REQUIRED_TOKENS are still defined (token-conformance.test.ts asserts them).
+ *
+ * THE CSS SYNTHWAVE LAYER (D-04 progressive enhancement): the decorative
+ * `@keyframes tmpl-edgerunner-*` below (re-authored from the export's CityScene beams /
+ * AnimatedSun / hero flicker) paint the FULL synthwave aesthetic with ZERO WebGL — so
+ * the page is complete before (and without) the lazy `HoloShape` Scene island. The
+ * WebGL centerpiece is purely additive. All animation is template-prefixed (never
+ * collides with chrome) and zeroed under `prefers-reduced-motion` by the blanket reset.
+ *
+ * CHROME-GUTTER FIX: the `.tmpl-edgerunner` root sets `background: var(--bg)` +
+ * `min-height: 100vh` so the template paints its OWN full-bleed canvas; the
+ * `(portfolio)` route-group layout additionally neutralizes the chrome `body`
+ * background for that group only.
+ */
+
+/* ============================================================================
+ * DARK — "Neon Edgerunner" (the ONLY mode — D-06). The neon oklch values are
+ * re-authored from the export's `styles.css:109-114` `--neon-*` palette; the
+ * surfaces/foreground derive from the export's deep-indigo `--bg-deep`.
+ * ========================================================================== */
+.tmpl-edgerunner {
+  /* Surfaces — deep indigo-violet night (the export's `--bg-deep`). */
+  --bg: oklch(0.1 0.04 285); /* page canvas */
+  --surface: oklch(0.14 0.05 285); /* elevated cards / contact panel */
+  --surface-muted: oklch(0.18 0.06 285); /* inset fills, chips / skill panels */
+
+  /* Foreground — near-white with a faint magenta cast (the export `--foreground`). */
+  --fg: oklch(0.97 0.02 320); /* primary text */
+  --muted-fg: oklch(0.72 0.06 300); /* muted-body / meta / dates */
+
+  /* Borders — low-chroma violet hairlines (decorative, WCAG 1.4.11 exempt). */
+  --border: oklch(0.3 0.1 300 / 0.4);
+  --border-strong: oklch(0.42 0.12 300 / 0.55);
+
+  /* Accents — the synthwave neon system (the export's `--neon-*`, REQUIRED + extras). */
+  --accent: oklch(0.72 0.3 350); /* PRIMARY neon-pink — CTA fill/glow, link-hover, active */
+  --ring: oklch(0.72 0.3 350); /* focus ring = neon-pink */
+  --success: oklch(0.78 0.18 160);
+  --destructive: oklch(0.65 0.28 25); /* contact form-shell error state only */
+
+  /* Template-private neon extras (CONTRACT §3 — allowed, NOT in REQUIRED_TOKENS).
+     Re-authored 1:1 from the export `styles.css:109-114`. */
+  --neon-pink: oklch(0.72 0.3 350);
+  --neon-magenta: oklch(0.65 0.32 330);
+  --neon-cyan: oklch(0.85 0.18 200);
+  --neon-purple: oklch(0.62 0.28 305);
+  --neon-yellow: oklch(0.92 0.18 95);
+
+  /* The neon gradient — THE signature (hero name text-clip, sun arc, section rules).
+     Re-authored from the export's `--gradient-neon`. */
+  --neon-gradient: linear-gradient(
+    135deg,
+    var(--neon-pink),
+    var(--neon-purple),
+    var(--neon-cyan)
+  );
+  /* The retro-sky sunset (hero backdrop atmosphere — the export's `--gradient-sky`). */
+  --sky-gradient: linear-gradient(
+    180deg,
+    oklch(0.16 0.1 305) 0%,
+    oklch(0.2 0.18 340) 45%,
+    oklch(0.4 0.25 25) 75%,
+    oklch(0.65 0.22 60) 100%
+  );
+
+  /* Shared report-dialog COMPLETE-VALUE tokens (the SAME `<ReportDialog>` + project
+     modal islands mount under edgerunner and read THESE per-template tokens; the
+     islands carry NO hardcoded hex). Each token is the WHOLE CSS value for one dialog
+     property — edgerunner reproduces its neon-pink/cyan glow. NOT in REQUIRED_TOKENS
+     (CONTRACT.md) but mandatory for any template mounting those islands. */
+  --tmpl-modal-hairline: var(--neon-gradient); /* the signature neon top-hairline */
+  /* The backdrop: neon-pink→cyan radial bloom over the dimmed `--bg` scrim. */
+  --tmpl-modal-backdrop: radial-gradient(
+      120% 80% at 50% 120%,
+      color-mix(in oklab, var(--neon-pink) 10%, transparent) 0%,
+      color-mix(in oklab, var(--neon-cyan) 6%, transparent) 35%,
+      transparent 70%
+    ),
+    color-mix(in srgb, var(--bg) 82%, transparent);
+  /* The dialog box-shadow: the 1px neon-pink ring + the pink/cyan edge-glow. */
+  --tmpl-modal-shadow: 0 0 0 1px var(--accent),
+    0 18px 44px -22px color-mix(in oklab, var(--neon-pink) 45%, transparent),
+    0 0 60px -34px color-mix(in oklab, var(--neon-cyan) 55%, transparent);
+  /* The submit-CTA drop: the neon-pink glow drop. */
+  --tmpl-modal-cta-shadow: 0 8px 28px -12px
+    color-mix(in oklab, var(--neon-pink) 50%, transparent);
+
+  /* Radius — the template's OWN scale (distinct from chrome; the export `--radius`). */
+  --radius-sm: 8px; /* chips, small inputs, tier pills */
+  --radius-md: 10px; /* buttons, form fields */
+  --radius-lg: 14px; /* project/testimonial cards, contact panel */
+  --radius-full: 9999px; /* status dot, avatar, toggle knob */
+
+  /* The template owns its full-bleed canvas (no chrome gutter behind the scroll). */
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+
+  /* SELF-CONTAINED BODY FONT (D-17 two-layer isolation). Anchor the template ROOT to
+     its OWN body face (Space Grotesk, `--font-body`, injected via `fontVars` in
+     index.tsx). The display headings set `--font-display` (Orbitron) on their own
+     elements; this anchors the ROOT body face so the cascade never reaches a host
+     font (the leak that bit minimal pre-08-03). */
+  font-family: var(--font-body);
+}
+
+/* ============================================================================
+ * CONTENT SHELL — ONE shared, responsive centered column applied to every
+ * section's CONTENT (Hero foreground, About, Metrics, Experience, Projects, Skills,
+ * Contact) and the Footer. Decorative full-bleed layers (the hero sky/sun/grid
+ * backdrop, the footer grid echo) are DELIBERATELY left OUTSIDE the shell so they
+ * still span the viewport — only foreground content is shelled. Mirrors minimal.
+ * ========================================================================== */
+.tmpl-edgerunner .tmpl-shell {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.5rem, 5vw, 4rem);
+}
+
+/* ============================================================================
+ * ABOVE-THE-FOLD HERO LOAD-REVEAL (TMPL-04 LCP ≤ 2.5s). The Hero is the LCP element
+ * and is ALWAYS in view, so it must NOT be gated by the JS IntersectionObserver
+ * opacity:0 reveal. The Hero wrapper (`.tmpl-load-reveal`, rendered STATIC by
+ * ScrollReveal's `priority` branch) paints at its final position from frame 1.
+ * Mirrors minimal: ZERO entrance motion on the LCP element, CLS = 0.
+ * ========================================================================== */
+.tmpl-edgerunner .tmpl-load-reveal {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+/* ============================================================================
+ * THE CSS SYNTHWAVE LAYER (D-04) — decorative `@keyframes`, template-prefixed.
+ * Re-authored from the export's `styles.css` (flicker / neon-pulse / float /
+ * grid-scroll / scanline / spin-slow) + the AnimatedSun/CityScene/PowerOnFlash
+ * motion. These paint the full synthwave aesthetic with NO WebGL — the page is
+ * complete before (and without) the lazy HoloShape Scene island. Names are
+ * `tmpl-edgerunner-*` so they NEVER collide with platform chrome. ALL are zeroed
+ * under `prefers-reduced-motion` by the blanket reset at the bottom of this file.
+ * ========================================================================== */
+
+/* Hero name flicker — the export's CRT neon-sign flicker (`flicker 4s`). */
+@keyframes tmpl-edgerunner-flicker {
+  0%,
+  18%,
+  22%,
+  25%,
+  53%,
+  57%,
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px color-mix(in oklab, var(--neon-pink) 70%, transparent))
+      drop-shadow(0 0 18px color-mix(in oklab, var(--neon-magenta) 45%, transparent));
+  }
+  20%,
+  24%,
+  55% {
+    opacity: 0.78;
+    filter: none;
+  }
+}
+
+/* Neon halo pulse — the export's `neon-pulse 2.4s` (status dot / glow accents). */
+@keyframes tmpl-edgerunner-neon-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 12px var(--neon-pink),
+      0 0 28px color-mix(in oklab, var(--neon-pink) 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 22px var(--neon-cyan),
+      0 0 48px color-mix(in oklab, var(--neon-cyan) 50%, transparent);
+  }
+}
+
+/* Float — the export's `float 6s` (the hero sun / holo gentle bob). */
+@keyframes tmpl-edgerunner-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(1.5deg);
+  }
+}
+
+/* Grid scroll — the export's CityScene perspective-grid downward drift. */
+@keyframes tmpl-edgerunner-grid-scroll {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(56px);
+  }
+}
+
+/* Scanline sweep — the export's `scanline 8s` CRT overlay (decorative ambience). */
+@keyframes tmpl-edgerunner-scanline {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* AnimatedSun spin — the export's slow rotating retro-sun (`spin-slow 18s`). */
+@keyframes tmpl-edgerunner-spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* PowerOnFlash (D-07) — a ONE-SHOT CRT boot fade, NOT a hard strobe. A single soft
+   opacity fade (well under WCAG 2.3.1's 3 flashes/sec). The effects.tsx PowerOnFlash
+   island mounts an overlay that wears `.tmpl-edgerunner-poweron` for ~1s then unmounts;
+   gated OFF under reduced-motion by the blanket reset below + the island's JS gate. */
+@keyframes tmpl-edgerunner-poweron {
+  0% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ============================================================================
+ * Hero name — the flickering neon-clip headline. The flicker is a slow, restrained
+ * CRT sign animation (NOT a strobe); reduced-motion zeroes it (the headline still
+ * paints its final neon-gradient clip). Scoped to `.tmpl-edgerunner`.
+ * ========================================================================== */
+.tmpl-edgerunner .tmpl-hero-name {
+  animation: tmpl-edgerunner-flicker 6s linear infinite;
+}
+
+/* ============================================================================
+ * Project cards — neon glow-lift on hover (NOT motion; a static glow, reduced-motion
+ * exempt like minimal's). Scoped, token-driven.
+ * ========================================================================== */
+.tmpl-edgerunner .tmpl-project-card {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.tmpl-edgerunner .tmpl-project-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px var(--accent),
+    0 10px 30px -14px color-mix(in oklab, var(--neon-pink) 45%, transparent);
+  transform: translateY(-2px);
+}
+
+.tmpl-edgerunner .tmpl-project-link {
+  position: relative;
+  transition:
+    color 140ms ease,
+    text-shadow 140ms ease;
+}
+.tmpl-edgerunner .tmpl-project-link:hover {
+  color: var(--neon-cyan);
+  text-shadow: 0 0 10px color-mix(in oklab, var(--neon-cyan) 50%, transparent);
+}
+
+/* ============================================================================
+ * Skills BARS (D-09 — edgerunner's signature). The bar fill width is set inline
+ * (from skills.level); this only owns the in-view transition. The `.tmpl-reveal`
+ * scroll-reveal wrapper toggles a visible class — when the section is in view the
+ * fill grows from 0 to its level width. The transition is reduced-motion-zeroed
+ * (the blanket reset) and the fill renders at its final width with no transition
+ * under reduce, so the bar is never stuck empty.
+ * ========================================================================== */
+.tmpl-edgerunner .tmpl-skill-bar-track {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.tmpl-edgerunner .tmpl-skill-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--neon-gradient);
+  box-shadow: 0 0 12px -2px color-mix(in oklab, var(--neon-pink) 60%, transparent);
+  transition: width 900ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* ============================================================================
+ * Contact form-field focus ring + Server-Component focus treatment. Inline styles
+ * cannot express `:focus-visible`; scoped to `.tmpl-edgerunner`, token-driven. The
+ * neon-pink focus-ring on `:focus-visible` (UI a11y >=3:1 every surface).
+ * ========================================================================== */
+.tmpl-edgerunner .tmpl-contact-field {
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.tmpl-edgerunner .tmpl-contact-field:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+}
+
+/* ============================================================================
+ * Theme toggle styling hook — DELIBERATELY UNUSED (D-06: edgerunner does NOT mount
+ * ThemeToggle). Kept absent on purpose; no `.tmpl-theme-toggle` rule here.
+ * ========================================================================== */
+
+/* ----------------------------------------------------------------------------
+ * Contact submit + work-item modal entrance (06-02 / 06-04). Both gated under
+ * `prefers-reduced-motion: no-preference`; the blanket reduce reset below ALSO
+ * zeroes them (defence in depth). Content is never hidden behind motion — the modal
+ * renders its final visible state without these classes, so under reduce it simply
+ * appears in place.
+ * -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  .tmpl-edgerunner .tmpl-contact-spinner {
+    animation: tmpl-edgerunner-spin-slow 0.7s linear infinite;
+  }
+  /* Backdrop fade-in (~140ms). */
+  .tmpl-edgerunner .tmpl-modal-backdrop-enter {
+    animation: tmpl-edgerunner-modal-backdrop-in 140ms ease-out 1;
+  }
+  /* Dialog: scale 0.96→1 + translateY 8px→0 + fade (~200ms, decelerate). */
+  .tmpl-edgerunner .tmpl-project-modal-enter {
+    animation: tmpl-edgerunner-modal-in 200ms cubic-bezier(0.2, 0, 0, 1) 1;
+  }
+  /* The neon top-hairline sweep as the dialog rises (~240ms). */
+  .tmpl-edgerunner .tmpl-project-modal-enter .tmpl-modal-hairline {
+    animation: tmpl-edgerunner-modal-hairline-sweep 240ms cubic-bezier(0.2, 0, 0, 1) 1;
+  }
+}
+
+@keyframes tmpl-edgerunner-modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tmpl-edgerunner-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes tmpl-edgerunner-modal-hairline-sweep {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+/* Glowing tech chips on the dialog — a restrained cyan tint (low alpha). NOT motion
+   (a static glow), reduced-motion-exempt like the card glow-lift. */
+.tmpl-edgerunner .tmpl-modal-chip {
+  box-shadow: 0 0 12px -6px color-mix(in oklab, var(--neon-cyan) 45%, transparent);
+}
+
+/* The 44px close button — neon-pink `:focus-visible` ring + a hover tint. */
+.tmpl-edgerunner .tmpl-modal-close {
+  transition:
+    color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.tmpl-edgerunner .tmpl-modal-close:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.tmpl-edgerunner .tmpl-modal-close:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ring);
+}
+
+/* ============================================================================
+ * Reduced-motion contract (hard requirement — UI-SPEC §Motion / D-07).
+ * Under `prefers-reduced-motion: reduce`, ALL animation/transition inside the
+ * template is zeroed — including the synthwave CSS layer (flicker/sun/grid/scanline),
+ * the skill-bar grow, the PowerOnFlash, and the CursorTrail (the effects.tsx islands
+ * ALSO self-gate in JS — defence in depth). Content is never hidden behind motion
+ * (the scroll-reveal island short-circuits to fully-visible; the skill bars render at
+ * their final width). Hover glows (not motion) remain. Scoped to `.tmpl-edgerunner *`
+ * so it never touches platform chrome.
+ * ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .tmpl-edgerunner *,
+  .tmpl-edgerunner *::before,
+  .tmpl-edgerunner *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* CSS-level visible-fallback GUARANTEE for the scroll-reveal (UI-SPEC §Motion).
+     The ScrollReveal island starts at an INLINE `opacity:0`; this forces the
+     revealed state at the CSS layer so content is visible under reduced-motion even
+     if the JS effect is slow/blocked, fully decoupled from JS. */
+  .tmpl-edgerunner .tmpl-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
