@@ -69,7 +69,15 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['tests/unit/**/*.test.ts', 'tests/build/**/*.test.ts'],
+          // `.test.tsx` is collected too (13-06): the skills-`level` editor's pure
+          // save helpers live in a `.tsx` client module; the render-FREE test imports
+          // them (the storage-meter precedent — no DOM, the `node` env stands, no
+          // jsdom/testing-library dependency added). esbuild transpiles the `.tsx`.
+          include: [
+            'tests/unit/**/*.test.ts',
+            'tests/unit/**/*.test.tsx',
+            'tests/build/**/*.test.ts',
+          ],
         },
       },
       {
