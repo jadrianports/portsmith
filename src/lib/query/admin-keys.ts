@@ -17,4 +17,10 @@ export const adminKeys = {
   all: ['admin'] as const,
   /** The unreviewed report queue (mark-reviewed invalidates this). */
   reports: () => [...adminKeys.all, 'reports'] as const,
+  /**
+   * The /admin/templates gating surface (GATE-04, 12-05): all templates + their
+   * grant lists. A visibility flip / grant / revoke mutation invalidates this so
+   * the panel re-reads the authenticated admin-RLS `getTemplateGating()` snapshot.
+   */
+  templateGating: () => [...adminKeys.all, 'template-gating'] as const,
 };
