@@ -26,6 +26,16 @@
  *      { ok:false, error:'Unknown template.' } with NO write (T-07-10). The
  *      single source of truth is the registry's `templateSlugSchema` (derived
  *      from the registry keys), so a 3rd template auto-extends the gate.
+ *   2.5 GRANT GATE (GATE-03 / D-P12-13) — this action is the SOLE write-time
+ *      authority for restricted-template access. AFTER the Zod gate (no DB read
+ *      for an unknown slug) and BEFORE the write: read the target's
+ *      `templates.visibility`; if `'restricted'`, read the caller's OWN
+ *      `template_grants` row; an ungranted-restricted target is { ok:false,
+ *      error:NOT_ALLOWED } with NO write. Both reads use the SAME AUTHENTICATED
+ *      `createClient()`, NEVER service-role (RESEARCH Pitfall 4). Because an
+ *      ungranted-restricted `template_id` can NEVER be persisted here, the public
+ *      ISR render needs NO render-time grant/visibility check — D-22 stays
+ *      EXACTLY as-is (no public-path change; build + bundle gates untouched).
  *   3. SINGLE-COLUMN write under RLS via the AUTHENTICATED client. The SHARED-4
  *      deviations vs publish-action: the row lives in `portfolios` (NOT
  *      `profiles`), scoped to the caller's OWN row via `.eq('user_id', sub)`
@@ -66,6 +76,10 @@ const NOT_SIGNED_IN = 'Not signed in.';
 const UNKNOWN_TEMPLATE = 'Unknown template.';
 // UI-SPEC §B.8 verbatim — the write-failure copy the template picker surfaces.
 const SWITCH_FAILED = 'We couldn’t switch your template. Please try again.';
+// GATE-03 / D-P12-13: an ungranted-restricted target is rejected here. GENERIC copy —
+// it leaks NO reason (the target exists / is restricted / the caller simply lacks a
+// grant are all indistinguishable to the caller; V7 / no-enumeration posture).
+const NOT_ALLOWED = 'That template isn’t available to you.';
 
 /**
  * Switch the owner's portfolio to a different template. Mutates ONLY
@@ -101,6 +115,41 @@ export async function switchTemplateAction(slug: string): Promise<SwitchTemplate
   //    (T-07-09). On error ⇒ the UI-SPEC B.8 copy.
   const templateId = uuidForSlug(parsed.data);
   const supabase = await createClient();
+
+  // 2.5) GRANT GATE (GATE-03 / D-P12-13 — this action is the SOLE write-time
+  //    authority). Runs AFTER the Zod gate (so an unknown slug never reaches a DB
+  //    read) and BEFORE the write (so an ungranted-restricted `template_id` is NEVER
+  //    persisted — which is why the public ISR render needs NO render-time grant
+  //    check and D-22 stays exactly as-is). Reads under the SAME AUTHENTICATED
+  //    `createClient()`, NEVER service-role (RESEARCH Pitfall 4) — no `supabaseAdmin`
+  //    import lives in this file.
+  //
+  //    The visibility read relies on `templates public select` (USING is_active=true,
+  //    NOT visibility-filtered, 004:235) — so the auth caller CAN read a RESTRICTED
+  //    row's visibility (intended: knowing a template is restricted is not sensitive;
+  //    being GRANTED it is the gated thing).
+  const { data: tpl } = await supabase
+    .from('templates')
+    .select('visibility')
+    .eq('id', templateId)
+    .single();
+  // No row ⇒ the template is inactive/unknown — same generic backstop as an unknown
+  // slug (the Zod gate already covers a bad slug; this guards an active→inactive race).
+  if (!tpl) return { ok: false, error: UNKNOWN_TEMPLATE };
+  if ((tpl as { visibility?: string }).visibility === 'restricted') {
+    // The caller's OWN grant row. `template_grants own select` RLS already scopes the
+    // read to the caller; the `.eq('user_id', sub)` is redundant under that policy but
+    // is the repo's belt-and-suspenders habit (mirrors the explicit owner scoping
+    // throughout the CMS write path). NO grant ⇒ reject with NO write.
+    const { data: grant } = await supabase
+      .from('template_grants')
+      .select('user_id')
+      .eq('template_id', templateId)
+      .eq('user_id', sub)
+      .maybeSingle();
+    if (!grant) return { ok: false, error: NOT_ALLOWED };
+  }
+
   const { error } = await supabase
     .from('portfolios')
     .update({ template_id: templateId })

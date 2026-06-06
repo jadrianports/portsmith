@@ -110,8 +110,21 @@ beforeEach(() => {
   updateChain.mockClear();
   updateEq.mockClear();
   from.mockClear();
+  // Clear the FULL read-chain spies — cases assert `.not.toHaveBeenCalled()` /
+  // `.toHaveBeenCalledWith(...)` on `templatesSelect`/`templatesEq` (case b/c) and the
+  // grant + profiles chains, so every spy these tests inspect must reset per-case or a
+  // prior case's calls leak into the next assertion (the per-case clean slate the
+  // scaffold's :116 comment intends).
+  templatesSelect.mockClear();
+  templatesEq.mockClear();
   templatesSingle.mockClear();
+  grantsSelect.mockClear();
+  grantsEqTemplate.mockClear();
+  grantsEqUser.mockClear();
   grantsMaybeSingle.mockClear();
+  profilesSelect.mockClear();
+  profilesEq.mockClear();
+  profilesSingle.mockClear();
   revalidatePath.mockClear();
   // Defaults: target is restricted, NO grant (the (a) ungranted-restricted case).
   templatesVisibility = { visibility: 'restricted' };
