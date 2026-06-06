@@ -297,6 +297,34 @@ async function main(): Promise<void> {
   const portfolioId = portfolio.id;
   log(`portfolio upserted: ${portfolioId}`);
 
+  // --- 4b. Self-healing founder→minimal grant (D-P12-04 / OQ-1). --------------
+  // Template gating (Phase 12) makes `minimal` a RESTRICTED template; without a
+  // grant the founder would be ungranted-restricted on his OWN template and the
+  // GATE-03 switch gate would reject re-selecting it. Migration 013 seeds this
+  // grant by deriving the founder FROM the data (the portfolio on the minimal
+  // UUID) — but on a FRESH DB, if THIS seed script runs AFTER 013, no portfolio is
+  // on minimal at migration time and 013's INSERT…SELECT matches zero rows (OQ-1).
+  // So we ALSO upsert the grant here, order-independently, using the script's
+  // EXISTING service-role admin client + the already-resolved founder id +
+  // `template.id` (the minimal template id). This is the ONE place a grant write
+  // legitimately uses the service-role client — it is a build/seed script, not a
+  // request path, consistent with every other write above (the request-path grant
+  // writes go through authenticated admin-RLS, 12-05). `onConflict` on the
+  // composite PK with `ignoreDuplicates` makes a re-run (or a 013-already-ran DB)
+  // a clean no-op.
+  const { error: grantError } = await admin.from('template_grants').upsert(
+    {
+      template_id: template.id,
+      user_id: userId,
+      granted_by: null,
+    },
+    { onConflict: 'template_id,user_id', ignoreDuplicates: true },
+  );
+  if (grantError) {
+    fail(`founder→minimal template_grants upsert failed: ${grantError.message}`);
+  }
+  log('founder→minimal template_grants upserted (self-healing, D-P12-04/OQ-1).');
+
   // --- 5. Upsert portfolio_settings (UNIQUE on portfolio_id → idempotent). ----
   // Theme is forced dark + toggle-on; presets explicit (D-15/D-16).
   const { error: settingsError } = await admin.from('portfolio_settings').upsert(
