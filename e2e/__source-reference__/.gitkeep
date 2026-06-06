@@ -1,0 +1,1 @@
+# keeps e2e/__source-reference__/ tracked; per-template <slug>-source.png lives here when a template opts into strict source-design parity (see README.md)
