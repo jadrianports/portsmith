@@ -40,6 +40,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import { Gem, Globe, Lock, Plus, Sparkles, Trash2, UserPlus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import {
   useCallback,
   useEffect,
@@ -82,6 +83,7 @@ type PendingConfirm =
 
 export function TemplateGatingPanel({ initial }: TemplateGatingPanelProps) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [actionError, setActionError] = useState<string | null>(null);
   const [announce, setAnnounce] = useState('');
   const [pending, setPending] = useState<PendingConfirm | null>(null);
@@ -101,9 +103,16 @@ export function TemplateGatingPanel({ initial }: TemplateGatingPanelProps) {
     staleTime: Infinity,
   });
 
+  // Re-read the authoritative getTemplateGating() snapshot after every mutation.
+  // The list query is cache-only (queryFn: skipToken), so invalidateQueries alone
+  // can't refetch — router.refresh() re-runs the force-dynamic RSC, which re-reads
+  // getTemplateGating() and re-seeds `initial` (the useEffect below propagates it
+  // into the cache). This is what reflects a grant/revoke and the auto-fallback's
+  // server-side grant/visibility ripple in the panel without a manual reload.
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: listKey });
-  }, [queryClient, listKey]);
+    router.refresh();
+  }, [queryClient, listKey, router]);
 
   // ── Visibility flip (NON-optimistic) ────────────────────────────────────────
   const visibilityMutation = useMutation({

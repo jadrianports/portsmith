@@ -73,9 +73,16 @@ export async function getTemplateGating(): Promise<TemplateGating[]> {
 
   // 2) Every grant row joined to its grantee profile (the `template_grants admin
   //    all` policy lets the admin read all grants). One query, folded by template_id.
+  //    DISAMBIGUATION (load-bearing): template_grants has TWO FKs to profiles
+  //    (`user_id` = grantee, `granted_by` = audit), so a bare `profiles(...)` embed
+  //    is ambiguous and PostgREST errors ("more than one relationship found"),
+  //    silently collapsing the whole surface to the empty state. Pin the embed to the
+  //    grantee FK by its constraint name so we join the GRANTEE, not the granter.
   const { data: grants, error: gErr } = await supabase
     .from('template_grants')
-    .select('template_id, user_id, granted_at, profiles(username, email)')
+    .select(
+      'template_id, user_id, granted_at, profiles!template_grants_user_id_fkey(username, email)',
+    )
     .order('granted_at', { ascending: false });
   if (gErr) return [];
 
