@@ -23,9 +23,24 @@ import { validateSectionContent } from '@/lib/validations';
 import { goldenFixture, goldenFixtureSections } from '../../fixtures/lovable-scaffold-golden';
 
 describe('Lovable scaffold golden fixture (PIPE-10 / D-12)', () => {
-  it('covers exactly the 7 dev section types (no blog_preview)', () => {
+  it('covers the 7 dev section types + the 5 marketer types (12 keys, no blog_preview)', () => {
     expect(Object.keys(goldenFixture).sort()).toEqual(
-      ['about', 'contact', 'experience', 'hero', 'projects', 'skills', 'testimonials'].sort(),
+      [
+        // 7 dev types (D-P7-05)
+        'about',
+        'contact',
+        'experience',
+        'hero',
+        'projects',
+        'skills',
+        'testimonials',
+        // 5 marketer-vertical types (11-04 Step C1) — for the upcoming `aurora` template
+        'certifications',
+        'education',
+        'metrics',
+        'moodboard',
+        'services',
+      ].sort(),
     );
     // blog_preview is in the schema but the CMS never produces it in v1 — it must NOT
     // be in the dev scaffold's golden fixture.
@@ -43,12 +58,23 @@ describe('Lovable scaffold golden fixture (PIPE-10 / D-12)', () => {
 
   // Spell out each section as its own assertion too, so a failure names the offending
   // type directly (the loop above proves the set; these pin each branch).
-  it.each(['hero', 'about', 'skills', 'projects', 'experience', 'testimonials', 'contact'] as const)(
-    'golden fixture "%s" parses cleanly through the gate',
-    (type) => {
-      expect(() => validateSectionContent(type, goldenFixture[type])).not.toThrow();
-    },
-  );
+  it.each([
+    'hero',
+    'about',
+    'skills',
+    'projects',
+    'experience',
+    'testimonials',
+    'contact',
+    // 5 marketer-vertical types (11-04 Step C1)
+    'education',
+    'metrics',
+    'services',
+    'moodboard',
+    'certifications',
+  ] as const)('golden fixture "%s" parses cleanly through the gate', (type) => {
+    expect(() => validateSectionContent(type, goldenFixture[type])).not.toThrow();
+  });
 
   it('contains no dangerous-scheme URL anywhere in the fixture (grep-equivalent guard)', () => {
     const serialized = JSON.stringify(goldenFixture);

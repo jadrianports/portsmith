@@ -38,11 +38,19 @@
  *
  * SHAPE
  * -----
- * Keyed by the 7 dev section types the CMS produces (D-P7-05). `blog_preview` is
- * OMITTED on purpose: it exists in the schema, but the CMS never produces it in v1
- * (the editorial template marks it unsupported), so the dev scaffold does not ask
- * Lovable to build it. Each value is the `content` object for that type, shaped
- * EXACTLY as the matching `sectionContentSchemas` branch (verbatim field names).
+ * Keyed by the 7 dev section types the CMS produces (D-P7-05) PLUS the 5 marketer-vertical
+ * types added in 11-04 Step C1 (`education`/`metrics`/`services`/`moodboard`/
+ * `certifications`) — 12 keys total. `blog_preview` is OMITTED on purpose: it exists in the
+ * schema, but the CMS never produces it in v1 (the editorial template marks it unsupported),
+ * so the dev scaffold does not ask Lovable to build it. Each value is the `content` object
+ * for that type, shaped EXACTLY as the matching `sectionContentSchemas` branch (verbatim
+ * field names).
+ *
+ * RENDER-NEUTRALITY (11-04 Step C1): adding the 5 marketer keys does NOT change what the
+ * minimal/editorial templates render — those specs OMIT the new types (a Partial spec record
+ * ⇒ treated as unsupported) AND `goldenPortfolioData`'s `GOLDEN_SECTION_ORDER` emits only the
+ * 7 dev sections. So the live templates' golden parity baselines stay byte-identical; the new
+ * keys exist only so a SUPPORTING template (the upcoming `aurora`) can render them.
  *
  * VARIANT-READINESS (D-11-scaffold)
  * ---------------------------------
@@ -186,6 +194,119 @@ export const goldenFixture = {
     heading: 'Get in touch',
     subheading: "Open to senior and staff roles, and the occasional consulting project. I'll reply within a day or two.",
     email_public: 'hello@rileychen.example',
+  },
+  // ── 11-04 Step C1: the 5 marketer-vertical types ────────────────────────────────
+  // Added so a SUPPORTING template (the upcoming `aurora`) renders them over the golden
+  // route. minimal/editorial OMIT these types from their spec (Partial record ⇒ treated
+  // as unsupported) AND `goldenPortfolioData`'s GOLDEN_SECTION_ORDER does not emit them,
+  // so adding these keys does NOT change what minimal/editorial render — their golden
+  // parity baselines stay byte-identical. Content is dev-flavored to match Riley Chen but
+  // the SHAPE is profession-agnostic. Every URL is http(s); every image has a non-empty
+  // alt (the altTextOk refine); palette colors are hex literals.
+  education: {
+    heading: 'Education',
+    items: [
+      {
+        id: 'edu_berkeley',
+        degree: 'B.S. in Computer Science',
+        school: 'University of California, Berkeley',
+        year: '2010 - 2014',
+        achievements: ['Graduated with Distinction', 'ACM Programming Team'],
+      },
+      {
+        id: 'edu_recurse',
+        degree: 'Recurse Center (S2 batch)',
+        school: 'The Recurse Center',
+        year: '2017',
+        achievements: ['Built a toy database from scratch', 'Mentored two attendees'],
+      },
+    ],
+  },
+  metrics: {
+    heading: 'By the numbers',
+    subheading: 'A few outcomes from the last few years of shipping.',
+    items: [
+      { id: 'met_years', value: '8+', label: 'Years shipping production web apps', icon: 'calendar' },
+      { id: 'met_users', value: '120k', label: 'Monthly active users served', icon: 'users' },
+      { id: 'met_perf', value: '60%', label: 'Faster invoice generation', icon: 'gauge' },
+      { id: 'met_uptime', value: '99.9%', label: 'Platform uptime', icon: 'activity' },
+    ],
+  },
+  services: {
+    heading: 'How I can help',
+    subheading: 'Consulting engagements I take on between roles.',
+    items: [
+      {
+        id: 'svc_perf',
+        title: 'Performance audits',
+        description: 'Find and fix the slow paths in a Next.js or Postgres app.',
+        icon: 'gauge',
+        deliverables: ['Lighthouse + bundle report', 'Prioritized fix list', 'One follow-up review'],
+      },
+      {
+        id: 'svc_a11y',
+        title: 'Accessibility reviews',
+        description: 'WCAG 2.2 AA pass over your key user flows.',
+        icon: 'accessibility',
+        deliverables: ['Axe + manual audit', 'Annotated screenshots', 'Remediation PRs'],
+      },
+      {
+        id: 'svc_types',
+        title: 'Type-safety migrations',
+        description: 'Move a JS codebase to strict, end-to-end TypeScript.',
+        icon: 'shield',
+      },
+    ],
+  },
+  moodboard: {
+    heading: 'Things I find beautiful',
+    subheading: 'Visual references that shape how I build interfaces.',
+    items: [
+      {
+        id: 'mb_grid',
+        image: `${STORAGE}/portfolio-assets/moodboard-grid.webp`,
+        image_alt: 'A precise modular grid layout in muted neutrals',
+        caption: 'Modular grids',
+      },
+      {
+        id: 'mb_type',
+        image: `${STORAGE}/portfolio-assets/moodboard-type.webp`,
+        image_alt: 'Large editorial typography set in a serif display face',
+        caption: 'Editorial type',
+      },
+      {
+        id: 'mb_mono',
+        image: `${STORAGE}/portfolio-assets/moodboard-mono.webp`,
+        image_alt: 'A monochrome interface with a single accent color',
+        caption: 'Restrained color',
+      },
+    ],
+    palette: [
+      { color: '#0A0A0A', name: 'Ink' },
+      { color: '#F7F7F2', name: 'Paper' },
+      { color: '#3B82F6', name: 'Signal' },
+    ],
+  },
+  certifications: {
+    heading: 'Certifications',
+    items: [
+      {
+        id: 'cert_aws',
+        title: 'AWS Certified Solutions Architect – Associate',
+        issuer: 'Amazon Web Services',
+        year: '2023',
+        description: 'Designing distributed systems on AWS.',
+        url: 'https://example.com/certs/aws-saa',
+      },
+      {
+        id: 'cert_cka',
+        title: 'Certified Kubernetes Administrator (CKA)',
+        issuer: 'The Linux Foundation',
+        year: '2022',
+        description: 'Cluster operation and troubleshooting.',
+        url: 'https://example.com/certs/cka',
+      },
+    ],
   },
 } as const;
 
