@@ -200,16 +200,27 @@ export const blogPreviewContentSchema = z.object({
  * `validateSectionContent` gate, the `SectionType` union, and the `@/lib/validations`
  * barrel all pick it up automatically.
  *
- * Profession-agnostic by construction (CONTEXT D-27): `icon` and `tier` are BOTH
- * optional, so a marketer's "Core Competencies" group is as valid as a developer's
- * "Tech Stack". `tier` uses tasteful labels — never numeric / percentage gauges
- * (CONTEXT D-09). `icon` is a free-form simple-icons slug string (e.g. 'react');
- * leaving it a bare string keeps the schema profession-neutral.
+ * Profession-agnostic by construction (CONTEXT D-27): `icon`, `tier`, and `level` are
+ * ALL optional, so a marketer's "Core Competencies" group is as valid as a developer's
+ * "Tech Stack". `icon` is a free-form simple-icons slug string (e.g. 'react'); leaving
+ * it a bare string keeps the schema profession-neutral.
+ *
+ * TWO RENDERINGS, NO CONTRADICTION (reconciles the Phase-3 vs Phase-13 "D-09" labels —
+ * RESEARCH §7 / Pitfall 5):
+ *   - `tier` (core/proficient/learning) is the TASTEFUL-LABEL rendering used by the
+ *     standard-lane templates (minimal/editorial) — those templates render text tier
+ *     pills and NEVER numeric / percentage gauges (the Phase-3 CONTEXT D-09 decision).
+ *   - `level` (optional, 0–100 int) is consumed ONLY by rich templates (edgerunner) for
+ *     its signature animated bars (the Phase-13 CONTEXT D-09 decision). minimal/editorial
+ *     IGNORE `level` entirely — its presence in the data never forces a gauge anywhere.
+ * Both fields are optional and template-independent, so the same content round-trips
+ * losslessly across any template switch ("clamp the data, free the look").
  */
 export const skillItemSchema = z.object({
   name: z.string().min(1).max(60),
   icon: z.string().optional(), // simple-icons slug, e.g. 'react' — optional ⇒ profession-agnostic
-  tier: z.enum(['core', 'proficient', 'learning']).optional(), // tasteful labels, NOT % gauges (D-09)
+  tier: z.enum(['core', 'proficient', 'learning']).optional(), // tasteful labels for minimal/editorial (Phase-3 D-09)
+  level: z.number().int().min(0).max(100).optional(), // 0–100 proficiency for edgerunner's animated bars (Phase-13 D-09); ignored by minimal/editorial
 });
 
 export const skillGroupSchema = z.object({

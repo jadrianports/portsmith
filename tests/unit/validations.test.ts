@@ -456,6 +456,44 @@ describe('skills content schema', () => {
       skillsContentSchema.safeParse({ heading: 'Skills', groups: Array(7).fill(oneGroup) }).success,
     ).toBe(false);
   });
+
+  // D-09 (Phase 13) — the optional numeric `level` field that powers edgerunner's
+  // signature animated bars. `level` is an OPTIONAL 0–100 integer; minimal/editorial
+  // keep rendering tier pills and IGNORE it (the Phase-3 "tier" decision and the
+  // Phase-13 "level" decision are scoped, not contradictory — see sections.ts comment).
+  describe('skills.level (D-09 — optional 0–100 int for rich-template bars)', () => {
+    const withLevel = (level: unknown) =>
+      validateSectionContent('skills', {
+        heading: 'Skills',
+        groups: [{ label: 'Tech Stack', items: [{ name: 'TS', level }] }],
+      });
+
+    it('accepts a valid in-range level (98) — level is a valid 0–100 int', () => {
+      expect(() => withLevel(98)).not.toThrow();
+    });
+
+    it('accepts the boundary levels 0 and 100', () => {
+      expect(() => withLevel(0)).not.toThrow();
+      expect(() => withLevel(100)).not.toThrow();
+    });
+
+    it('rejects a level over 100 (101)', () => {
+      expect(() => withLevel(101)).toThrow();
+    });
+
+    it('rejects a non-integer level (1.5)', () => {
+      expect(() => withLevel(1.5)).toThrow();
+    });
+
+    it('a skill item with NO level still validates (level is optional — backwards compatible)', () => {
+      expect(() =>
+        validateSectionContent('skills', {
+          heading: 'Skills',
+          groups: [{ label: 'Tech Stack', items: [{ name: 'TS' }] }],
+        }),
+      ).not.toThrow();
+    });
+  });
 });
 
 // ===========================================================================
