@@ -43,6 +43,7 @@ import './theme.css';
 
 import { orbitron, spaceGrotesk, vt323 } from './fonts';
 import { ScrollReveal, themeInitScript } from '../_kit';
+import { EdgerunnerEffects } from './effects';
 import { About } from './sections/about';
 import { Contact } from './sections/contact';
 import { Experience } from './sections/experience';
@@ -93,7 +94,13 @@ export default function EdgerunnerTemplate({ data }: { data: PortfolioData }) {
       */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: personLdHtml }} />
 
-      {/* (Task 3 mounts the reduced-motion-gated <EdgerunnerEffects/> island here — D-07.) */}
+      {/*
+        The reduced-motion + pointer-coarse gated synthwave a11y effects (D-07): a one-shot
+        CRT PowerOnFlash + the CursorTrail. A 'use client' island rendered by this Server
+        Component; it self-gates internally (the mount is NOT reduced-motion-conditional at
+        the RSC level). Zero animation-lib install (CSS/rAF only); cmdk dropped (D-07).
+      */}
+      <EdgerunnerEffects />
 
       {/* The 7 supported sections IN THE EXPORT'S SOURCE ORDER (Services + Blog dropped).
           ScrollReveal is wired here as template chrome so the per-section fade-up belongs
