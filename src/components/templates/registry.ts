@@ -24,6 +24,7 @@ import type { PortfolioData } from './types';
 import { minimalSpec, type TemplateSpec } from './minimal/spec';
 import { editorialSpec } from './editorial/spec';
 import { auroraSpec } from './aurora/spec';
+import { edgerunnerSpec } from './edgerunner/spec';
 
 /**
  * The slug → template map. The lazy import yields the template's default export
@@ -46,6 +47,13 @@ export const templateRegistry: Record<string, ComponentType<{ data: PortfolioDat
   // is `aurora/`) — required for proper per-template code-splitting (the ≤200kb chunk
   // budget). NEVER `{ ssr: false }` (build-forbidden on a Server-Component entry).
   aurora: dynamic(() => import('./aurora')),
+  // PIPE-09 / 13-05: the `edgerunner` template — the rich/viz-lane synthwave dogfood
+  // (the restricted/exclusive founder redesign). A PLAIN LITERAL `dynamic(() =>
+  // import('./edgerunner'))` (its folder is `edgerunner/`). NEVER `{ ssr: false }` here:
+  // the edgerunner ROOT (`edgerunner/index.tsx`) is a Server Component, so `{ ssr: false }`
+  // would be a build error. The WebGL `{ ssr: false }` lives DEEPER — inside
+  // `edgerunner/HoloShape.tsx` (a Client Component), the only sanctioned place for it.
+  edgerunner: dynamic(() => import('./edgerunner')),
   // Three.js / CLIENT-only templates (later) live inside a Client Component and may
   // use `{ ssr: false }` THERE — never on a Server-Component template entry above.
 };
@@ -77,6 +85,12 @@ const TEMPLATE_UUIDS = {
   // (…0002). It MUST equal the 010 seed migration's UUID exactly or `slugForTemplateId`
   // can't resolve and the public read falls back to minimal.
   aurora: '00000000-0000-4000-8000-000000000003',
+  // 13-05 / PIPE-09: the `edgerunner` template — the next pinned literal after aurora
+  // (…0003). It MUST equal the 015 seed migration's INSERT id exactly or
+  // `slugForTemplateId` can't resolve …0004 → edgerunner and the public read falls back
+  // to minimal (T-13-05-UUID). The migration row id and this literal are the single
+  // load-bearing pin.
+  edgerunner: '00000000-0000-4000-8000-000000000004',
 } as const;
 
 /** The inverse map (UUID → slug), derived from {@link TEMPLATE_UUIDS}. */
@@ -114,6 +128,7 @@ export const specRegistry: Record<string, TemplateSpec> = {
   minimal: minimalSpec,
   editorial: editorialSpec,
   aurora: auroraSpec,
+  edgerunner: edgerunnerSpec,
 };
 
 /**

@@ -64,6 +64,13 @@ export const templateMeta: Record<string, TemplateMeta> = {
     thumbnailAlt:
       'Aurora template preview — pale rose canvas with a gradient headline name and soft rounded cards',
   },
+  edgerunner: {
+    name: 'Edgerunner',
+    description:
+      'A dark synthwave single-scroll with neon accents, animated skill bars, and a live WebGL centerpiece.',
+    thumbnailAlt:
+      'Edgerunner template preview — dark synthwave canvas with neon magenta and cyan accents, a glowing WebGL shape, and animated skill bars',
+  },
 };
 
 /**
