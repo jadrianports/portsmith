@@ -28,6 +28,12 @@ import {
   contactContentSchema,
   blogPreviewContentSchema,
   skillsContentSchema,
+  // 5 marketer-vertical content schemas (11-04 Step C1)
+  educationContentSchema,
+  metricsContentSchema,
+  servicesContentSchema,
+  moodboardContentSchema,
+  certificationsContentSchema,
   // profile / username
   profileSchema,
   usernameSchema,
@@ -198,9 +204,10 @@ describe('section item schemas', () => {
 // ===========================================================================
 
 describe('section content schemas', () => {
-  it('registry has all 8 known section types', () => {
+  it('registry has all 13 known section types (8 base + 5 marketer-vertical, 11-04 Step C1)', () => {
     expect(Object.keys(sectionContentSchemas).sort()).toEqual(
       [
+        // 8 base types
         'about',
         'blog_preview',
         'contact',
@@ -209,6 +216,12 @@ describe('section content schemas', () => {
         'projects',
         'skills',
         'testimonials',
+        // 5 marketer-vertical types (11-04 Step C1) — additive, no Postgres migration (CMS-08)
+        'certifications',
+        'education',
+        'metrics',
+        'moodboard',
+        'services',
       ].sort(),
     );
   });
@@ -446,6 +459,233 @@ describe('skills content schema', () => {
 });
 
 // ===========================================================================
+// Marketer-vertical content schemas (the 5 NEW soft-enum branches — 11-04 Step C1)
+//   Each: a valid parse + an invalid-polarity rejection per documented constraint
+//   (over-long heading, too many items, the URL stored-XSS gate, the image alt-text
+//   refine, the palette hex constraint). Mirrors the skills-content block above.
+// ===========================================================================
+
+describe('education content schema (11-04 Step C1)', () => {
+  const validEducation = {
+    heading: 'Education',
+    items: [
+      {
+        id: 'edu1',
+        degree: 'B.S. Computer Science',
+        school: 'Berkeley',
+        year: '2010 - 2014',
+        achievements: ['Distinction'],
+      },
+      { id: 'edu2', degree: 'MBA', school: 'NYU Stern' }, // year/achievements optional
+    ],
+  };
+
+  it('accepts valid content (with and without optional year/achievements)', () => {
+    expect(educationContentSchema.safeParse(validEducation).success).toBe(true);
+  });
+
+  it('accepts an empty items array (heading-only is valid)', () => {
+    expect(educationContentSchema.safeParse({ heading: 'Education', items: [] }).success).toBe(true);
+  });
+
+  it('rejects an item missing a required degree', () => {
+    const bad = { heading: 'Education', items: [{ id: 'e', school: 'X' }] };
+    expect(educationContentSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it('rejects more than 20 items', () => {
+    const one = { id: 'e', degree: 'D', school: 'S' };
+    expect(
+      educationContentSchema.safeParse({ heading: 'Education', items: Array(21).fill(one) }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a heading > 100 chars', () => {
+    expect(
+      educationContentSchema.safeParse({ heading: 'x'.repeat(101), items: [] }).success,
+    ).toBe(false);
+  });
+});
+
+describe('metrics content schema (11-04 Step C1)', () => {
+  const validMetrics = {
+    heading: 'By the numbers',
+    subheading: 'Outcomes',
+    items: [
+      { id: 'm1', value: '5+', label: 'Years', icon: 'calendar' },
+      { id: 'm2', value: '10M+', label: 'Reach' }, // icon optional
+    ],
+  };
+
+  it('accepts valid content (subheading + icon optional)', () => {
+    expect(metricsContentSchema.safeParse(validMetrics).success).toBe(true);
+    expect(metricsContentSchema.safeParse({ heading: 'Stats', items: [] }).success).toBe(true);
+  });
+
+  it('rejects an item missing a required value or label', () => {
+    expect(
+      metricsContentSchema.safeParse({ heading: 'S', items: [{ id: 'm', label: 'L' }] }).success,
+    ).toBe(false);
+    expect(
+      metricsContentSchema.safeParse({ heading: 'S', items: [{ id: 'm', value: '5' }] }).success,
+    ).toBe(false);
+  });
+
+  it('rejects more than 12 items', () => {
+    const one = { id: 'm', value: '1', label: 'L' };
+    expect(
+      metricsContentSchema.safeParse({ heading: 'S', items: Array(13).fill(one) }).success,
+    ).toBe(false);
+  });
+});
+
+describe('services content schema (11-04 Step C1)', () => {
+  const validServices = {
+    heading: 'Services',
+    subheading: 'What I offer',
+    items: [
+      {
+        id: 's1',
+        title: 'Performance audits',
+        description: 'Find slow paths',
+        icon: 'gauge',
+        deliverables: ['Report', 'Fix list'],
+      },
+      { id: 's2', title: 'Reviews' }, // description/icon/deliverables optional
+    ],
+  };
+
+  it('accepts valid content (optional description/icon/deliverables)', () => {
+    expect(servicesContentSchema.safeParse(validServices).success).toBe(true);
+    expect(servicesContentSchema.safeParse({ heading: 'Services', items: [] }).success).toBe(true);
+  });
+
+  it('rejects an item missing a required title', () => {
+    const bad = { heading: 'Services', items: [{ id: 's', description: 'X' }] };
+    expect(servicesContentSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it('rejects more than 10 deliverables in an item', () => {
+    const bad = {
+      heading: 'Services',
+      items: [{ id: 's', title: 'T', deliverables: Array(11).fill('d') }],
+    };
+    expect(servicesContentSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it('rejects more than 20 items', () => {
+    const one = { id: 's', title: 'T' };
+    expect(
+      servicesContentSchema.safeParse({ heading: 'S', items: Array(21).fill(one) }).success,
+    ).toBe(false);
+  });
+});
+
+describe('moodboard content schema (11-04 Step C1)', () => {
+  const validMoodboard = {
+    heading: 'Brand aesthetic',
+    subheading: 'Visual style',
+    items: [
+      { id: 'i1', image: 'https://x.com/a.webp', image_alt: 'A grid', caption: 'Grids' },
+      { id: 'i2' }, // image/alt/caption all optional
+    ],
+    palette: [{ color: '#FFB6C1', name: 'Rose Pink' }, { color: '#0a0a0a' }],
+  };
+
+  it('accepts valid content (optional palette, optional per-item image)', () => {
+    expect(moodboardContentSchema.safeParse(validMoodboard).success).toBe(true);
+    expect(moodboardContentSchema.safeParse({ heading: 'M', items: [] }).success).toBe(true);
+  });
+
+  // --- alt-text refine: moodboard image ---
+  it('FAILS when an image is present but image_alt is empty (alt refine)', () => {
+    const res = moodboardContentSchema.safeParse({
+      heading: 'M',
+      items: [{ id: 'i', image: 'https://x.com/a.webp', image_alt: '' }],
+    });
+    expect(res.success).toBe(false);
+    expect(
+      res.success === false && res.error.issues.some((i) => i.path.includes('image_alt')),
+    ).toBe(true);
+  });
+
+  it('PASSES when neither image nor alt is present (alt refine)', () => {
+    expect(
+      moodboardContentSchema.safeParse({ heading: 'M', items: [{ id: 'i' }] }).success,
+    ).toBe(true);
+  });
+
+  // --- CR-01: the image URL is the shared stored-XSS gate ---
+  it('rejects a dangerous-scheme image URL (CR-01)', () => {
+    const bad = {
+      heading: 'M',
+      items: [{ id: 'i', image: 'javascript:alert(1)', image_alt: 'x' }],
+    };
+    expect(moodboardContentSchema.safeParse(bad).success).toBe(false);
+  });
+
+  // --- the palette color is a constrained hex (not a CSS-injection sink) ---
+  it('rejects a non-hex palette color', () => {
+    const bad = { heading: 'M', items: [], palette: [{ color: 'red' }] };
+    expect(moodboardContentSchema.safeParse(bad).success).toBe(false);
+    const bad2 = { heading: 'M', items: [], palette: [{ color: '#ZZZZZZ' }] };
+    expect(moodboardContentSchema.safeParse(bad2).success).toBe(false);
+  });
+});
+
+describe('certifications content schema (11-04 Step C1)', () => {
+  const validCerts = {
+    heading: 'Certifications',
+    items: [
+      {
+        id: 'c1',
+        title: 'AWS SAA',
+        issuer: 'AWS',
+        year: '2023',
+        description: 'Architecture',
+        url: 'https://example.com/cert',
+      },
+      { id: 'c2', title: 'CKA' }, // issuer/year/description/url optional
+    ],
+  };
+
+  it('accepts valid content (optional issuer/year/description/url)', () => {
+    expect(certificationsContentSchema.safeParse(validCerts).success).toBe(true);
+    expect(
+      certificationsContentSchema.safeParse({ heading: 'Certs', items: [] }).success,
+    ).toBe(true);
+  });
+
+  it('rejects an item missing a required title', () => {
+    const bad = { heading: 'Certs', items: [{ id: 'c', issuer: 'X' }] };
+    expect(certificationsContentSchema.safeParse(bad).success).toBe(false);
+  });
+
+  // --- CR-01: the cert url is the shared stored-XSS gate ---
+  it('rejects a dangerous-scheme cert url, accepts https/empty (CR-01)', () => {
+    expect(
+      certificationsContentSchema.safeParse({
+        heading: 'Certs',
+        items: [{ id: 'c', title: 'T', url: 'javascript:alert(1)' }],
+      }).success,
+    ).toBe(false);
+    expect(
+      certificationsContentSchema.safeParse({
+        heading: 'Certs',
+        items: [{ id: 'c', title: 'T', url: '' }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects more than 20 items', () => {
+    const one = { id: 'c', title: 'T' };
+    expect(
+      certificationsContentSchema.safeParse({ heading: 'C', items: Array(21).fill(one) }).success,
+    ).toBe(false);
+  });
+});
+
+// ===========================================================================
 // validateSectionContent (the gate)
 // ===========================================================================
 
@@ -474,6 +714,21 @@ describe('validateSectionContent gate', () => {
       validateSectionContent('skills', {
         heading: 'Skills',
         groups: [{ label: 'G', items: [{ name: 'X', tier: 'expert' }] }],
+      }),
+    ).toThrow();
+  });
+
+  it('parses valid content for a new "services" type (11-04 Step C1, no migration)', () => {
+    expect(
+      validateSectionContent('services', { heading: 'Services', items: [] }),
+    ).toEqual({ heading: 'Services', items: [] });
+  });
+
+  it('throws for a new "certifications" type with a dangerous-scheme url', () => {
+    expect(() =>
+      validateSectionContent('certifications', {
+        heading: 'Certs',
+        items: [{ id: 'c', title: 'T', url: 'javascript:alert(1)' }],
       }),
     ).toThrow();
   });
