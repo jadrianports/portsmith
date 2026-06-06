@@ -38,6 +38,7 @@ import { redirect } from 'next/navigation';
 import { EditorShell } from '@/components/editor/editor-shell';
 import { ensurePortfolio } from '@/lib/cms/bootstrap-portfolio';
 import { getPortfolioOwnerByUsername } from '@/lib/portfolio/get-portfolio-owner';
+import { getAvailableTemplates } from '@/lib/templates/available-templates';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 
 /** The dashboard is owner-private + always reflects last-saved (unpublished) state. */
@@ -98,6 +99,25 @@ export default async function DashboardPage() {
   if (!data) redirect('/login');
   const templateSlug = data.templateSlug; // the current template (→ the picker marker).
 
+  // 4a) GATE-02 (D-P12-14): resolve the caller's ALLOWED templates (public ∪
+  //     granted-to-me) at the DATA LAYER under the authenticated RLS client — NOT
+  //     hidden in the UI. `getAvailableTemplates()` is `server-only`; the result is
+  //     PLAIN serializable `{ slug, restricted }[]` threaded into the (zod-free)
+  //     picker as a prop, so zod/DB never reach the public/client bundle (D-25). Read
+  //     `portfolios.template_fallback_at` (a DASHBOARD-ONLY signal, owner-scoped under
+  //     RLS) — a non-null value means a prior auto-fallback fired, so surface the
+  //     one-time "pick another" notice (D-P12-10); the notice clears on dismiss via
+  //     `clearTemplateFallbackNotice`. The public ISR page never reads this column, so
+  //     no public-path change (D-22 untouched).
+  const allowedTemplates = await getAvailableTemplates();
+  const { data: fallbackRow } = await supabase
+    .from('portfolios')
+    .select('template_fallback_at')
+    .eq('user_id', sub)
+    .maybeSingle();
+  const showFallbackNotice =
+    (fallbackRow as { template_fallback_at?: string | null } | null)?.template_fallback_at != null;
+
   // 5) Unread-message count for the inbox nav badge (06-05 / CONT-02). A cheap
   //    head-count under RLS via the AUTHENTICATED client (NEVER supabaseAdmin) —
   //    the `messages own select` policy scopes it to the owner's portfolio, so
@@ -117,6 +137,12 @@ export default async function DashboardPage() {
       unreadMessageCount={unreadCount ?? 0}
       // 07-05: the owner's CURRENT template slug → the TemplatePicker "● Current" mark.
       currentTemplateSlug={templateSlug}
+      // 12-04 / GATE-02: the data-layer allowed-list (public ∪ granted-to-me) — the
+      // picker renders one card per allowed slug; `restricted` drives the "Exclusive"
+      // marker. Plain serializable data (no zod) → stays off the public/client bundle.
+      allowedTemplates={allowedTemplates}
+      // 12-04 / D-P12-10: surface the one-time post-fallback "pick another" notice.
+      showFallbackNotice={showFallbackNotice}
     />
   );
 }

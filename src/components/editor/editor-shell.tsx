@@ -39,14 +39,16 @@
  * the panel is never a cramped two-pane.
  */
 import Link from 'next/link';
-import { ArrowLeft, ExternalLink, Mail } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { ArrowLeft, ExternalLink, Mail, X } from 'lucide-react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { cmsKeys } from '@/lib/query/cms-keys';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { deriveCompleteness } from '@/lib/cms/completeness';
+import { clearTemplateFallbackNotice } from '@/lib/cms/clear-template-fallback-action';
 import type { OwnerPortfolioData } from '@/lib/portfolio/get-portfolio-owner';
+import type { AllowedTemplate } from '@/lib/templates/available-templates';
 
 import { CompletenessChecklist } from './completeness-checklist';
 import { ItemManager, type ItemSectionType } from './item-card';
@@ -131,6 +133,20 @@ export interface EditorShellProps {
    * `data.templateSlug` when omitted.
    */
   currentTemplateSlug?: string;
+  /**
+   * 12-04 / GATE-02 — the data-layer allowed-list (public ∪ granted-to-me), resolved
+   * by the dashboard RSC via `getAvailableTemplates()` and threaded here as a PLAIN
+   * serializable prop (no zod, no DB type — stays off the public/client bundle, D-25).
+   * The TemplatePicker renders ONE card per allowed slug; `restricted` drives the
+   * copper "Exclusive" marker (D-P12-09).
+   */
+  allowedTemplates: AllowedTemplate[];
+  /**
+   * 12-04 / D-P12-10 — true when `portfolios.template_fallback_at` is non-null (a prior
+   * auto-fallback fired). Surfaces the one-time "your previous template is no longer
+   * available — pick another" notice; dismissing it calls `clearTemplateFallbackNotice`.
+   */
+  showFallbackNotice?: boolean;
 }
 
 export function EditorShell({
@@ -140,6 +156,8 @@ export function EditorShell({
   storageUsedBytes,
   unreadMessageCount = 0,
   currentTemplateSlug,
+  allowedTemplates,
+  showFallbackNotice = false,
 }: EditorShellProps) {
   const queryClient = useQueryClient();
 
@@ -147,6 +165,20 @@ export function EditorShell({
   const setActiveSectionId = useUIStore((s) => s.setActiveSectionId);
   const dirty = useUIStore((s) => s.dirty);
   const guardedNavigate = useGuardedNavigate();
+
+  // 12-04 / D-P12-10: the one-time post-fallback notice. Local UI-only state (NOT
+  // Zustand, NOT server data) — it gates the chrome banner's visibility. Dismiss
+  // optimistically hides the banner and fires the owner action to clear the stamp; a
+  // failed clear leaves the banner hidden for this session (it re-appears on next
+  // load, which is correct — the stamp is still set).
+  const [noticeDismissed, setNoticeDismissed] = useState(false);
+  const [, startDismiss] = useTransition();
+  function dismissFallbackNotice() {
+    setNoticeDismissed(true);
+    startDismiss(() => {
+      void clearTemplateFallbackNotice();
+    });
+  }
 
   const username = data.profile.username ?? '';
   const published = data.profile.published ?? false;
@@ -325,6 +357,40 @@ export function EditorShell({
         </div>
       </header>
 
+      {/* ── One-time post-fallback notice (12-04 / D-P12-10) ──────────────────
+          Surfaces ONLY when a prior auto-fallback fired (template_fallback_at set)
+          and the user has not dismissed it this session. Chrome tokens only (no
+          template `.tmpl-*` token, no inline hex). The accent is reserved — this is
+          an informational surface, so it uses a calm surface-muted band with a
+          hairline, NOT the copper accent (which stays for current/selected/exclusive).
+          Dismiss clears the stamp via the owner action so it does not return. */}
+      {showFallbackNotice && !noticeDismissed ? (
+        <div
+          role="status"
+          className="flex items-start gap-3 border-b border-border bg-surface-muted px-4 py-3 sm:px-6"
+        >
+          <p className="flex-1 text-sm leading-snug text-foreground">
+            Your previous template is no longer available — pick another below in the{' '}
+            <span className="font-semibold">Template</span> panel. Your content is
+            unchanged.
+          </p>
+          <button
+            type="button"
+            onClick={dismissFallbackNotice}
+            aria-label="Dismiss notice"
+            className={
+              'inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md px-2 text-sm ' +
+              'font-semibold text-muted-foreground outline-none transition-colors ' +
+              'hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+              'focus-visible:outline-ring motion-reduce:transition-none'
+            }
+          >
+            <X aria-hidden="true" className="size-4" />
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       {/* ── Body: rail + panel (desktop) / master-detail (tablet+mobile) ── */}
       <div className="flex flex-1 flex-col lg:flex-row">
         {/* SECTION-LIST RAIL. On mobile/tablet it hides once a section is picked
@@ -401,7 +467,11 @@ export function EditorShell({
               // cards navigate to the enable route (prefetch={false}) to open the
               // preview-before-commit flow; the rail entry just surfaces the gallery
               // in the existing two-pane shell (the recommended placement).
-              <TemplatePicker key={TEMPLATE_PANEL_ID} currentSlug={activeTemplateSlug} />
+              <TemplatePicker
+                key={TEMPLATE_PANEL_ID}
+                currentSlug={activeTemplateSlug}
+                allowed={allowedTemplates}
+              />
             ) : profileActive ? (
               // WR-02: the PROFILE / IDENTITY editor — the UI caller for
               // saveProfileAction (CMS-02 / D-P4-05).

@@ -42,6 +42,12 @@ export interface TemplateCardProps {
   thumbnailAlt: string;
   /** Whether this template is the portfolio's CURRENT one (→ the "● Current" mark). */
   isCurrent: boolean;
+  /**
+   * 12-04 / D-P12-09 — whether this is a GRANTED restricted template (→ the copper
+   * "Exclusive" marker). RUNTIME data from the allowed-list, never static meta. The
+   * marker render lands with this prop's consumer; defaults to `false` (public).
+   */
+  restricted?: boolean;
 }
 
 export function TemplateCard({

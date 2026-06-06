@@ -4,34 +4,48 @@
  * TemplatePicker / TemplatePickerGallery (07-05 / UI-SPEC B.5 #1) — the template
  * gallery surfaced in the dashboard editor's "Template" rail entry.
  *
- * It lists every switchable template as an EQUAL option (D-P7-14) — one `TemplateCard`
- * per registry template (`minimal` + `editorial` in v1) — and marks whichever the
- * portfolio currently uses with the copper "● Current" tag. Selecting a card opens the
+ * It renders ONE `TemplateCard` per ALLOWED template (12-04 / GATE-02) — the data-layer
+ * allowed-list (`public ∪ granted-to-me`) the dashboard RSC resolves via
+ * `getAvailableTemplates()` and threads in as the `allowed` prop. It marks whichever
+ * the portfolio currently uses with the copper "● Current" tag, and a granted-restricted
+ * template carries the copper "Exclusive" marker (D-P12-09). Selecting a card opens the
  * preview-before-commit flow (the card navigates to the Draft-Mode enable route).
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ `minimal` is a NORMAL equal peer — NO "Founder"/"exclusive" badge, no hiding │
- * │ (D-P7-14). The ONLY differentiated state is the "● Current" marker.          │
+ * │ GATE-02 (D-P12-14): ONLY allowed templates are shown — NO locked/upsell      │
+ * │ cards for templates the caller may not use. The narrowing is a UX nicety;    │
+ * │ the SOLE authority is the 12-03 write-time grant gate in switchTemplateAction │
+ * │ (a forged switch to a non-offered restricted template is rejected            │
+ * │ server-side regardless of what this picker renders).                          │
+ * │ "Exclusive" (D-P12-09, supersedes D-P7-14) rides the `restricted` flag from   │
+ * │ the allowed-list — RUNTIME data, never static meta.                           │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * TWO-LAYER ISOLATION (D-17 / SHARED-5): PLATFORM CHROME — Evergreen & Copper
  * `--color-*` tokens + `--font-sans` (Inter) ONLY; NO template token / `.tmpl-*` class.
  */
-// Import from the zod-free metadata module, NOT '@/components/templates/registry'
-// (a registry import drags zod into this client chunk — see template-meta.ts / D-25).
-import { listTemplates } from '@/components/templates/template-meta';
+// Import display copy from the zod-free metadata module, NOT
+// '@/components/templates/registry' (a registry import drags zod into this client
+// chunk — see template-meta.ts / D-25). The `allowed` slugs + `restricted` flags are
+// PLAIN serializable props from the server (no zod), so nothing here needs the registry.
+import { resolveTemplateMeta } from '@/components/templates/template-meta';
 
 import { TemplateCard } from './template-card';
 
 export interface TemplatePickerProps {
   /** The portfolio's CURRENT template slug — the card marked "● Current". */
   currentSlug: string;
+  /**
+   * 12-04 / GATE-02 — the data-layer allowed-list (`public ∪ granted-to-me`), resolved
+   * by the dashboard RSC. One card is rendered per allowed slug; `restricted` drives the
+   * "Exclusive" marker (D-P12-09). PLAIN serializable data — no zod, no registry import.
+   */
+  allowed: { slug: string; restricted: boolean }[];
   /** When true, render the loading skeleton instead of the cards. */
   loading?: boolean;
 }
 
-export function TemplatePicker({ currentSlug, loading = false }: TemplatePickerProps) {
-  const templates = listTemplates();
+export function TemplatePicker({ currentSlug, allowed, loading = false }: TemplatePickerProps) {
 
   return (
     <section
@@ -71,19 +85,25 @@ export function TemplatePicker({ currentSlug, loading = false }: TemplatePickerP
         </ul>
       ) : (
         // The gallery: 1 col mobile → 2 cols tablet → 2–3 cols desktop, md/lg gutters.
-        // One card per template; both equal peers (D-P7-14); current marked.
+        // ONE card per ALLOWED slug (GATE-02 — no locked/upsell cards); current marked;
+        // granted-restricted carries the "Exclusive" marker (D-P12-09). Display copy is
+        // looked up from the zod-free `resolveTemplateMeta` (never registry.ts / D-25).
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
-          {templates.map(({ slug, meta }) => (
-            <li key={slug} className="flex">
-              <TemplateCard
-                slug={slug}
-                name={meta.name}
-                description={meta.description}
-                thumbnailAlt={meta.thumbnailAlt}
-                isCurrent={slug === currentSlug}
-              />
-            </li>
-          ))}
+          {allowed.map(({ slug, restricted }) => {
+            const meta = resolveTemplateMeta(slug);
+            return (
+              <li key={slug} className="flex">
+                <TemplateCard
+                  slug={slug}
+                  name={meta.name}
+                  description={meta.description}
+                  thumbnailAlt={meta.thumbnailAlt}
+                  isCurrent={slug === currentSlug}
+                  restricted={restricted}
+                />
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
