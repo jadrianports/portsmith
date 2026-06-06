@@ -204,3 +204,90 @@ describe('GATE-04 — admin grant/revoke + auto-fallback + flip-keeps-grants (GR
       .eq('id', MINIMAL_UUID);
   });
 });
+
+// Gap-closure (post-UAT, commits cc7724e + 014) — regressions for two runtime bugs the
+// action-level tests above could not catch: the /admin panel READ (getTemplateGating's
+// grants embed) and the revoke-confirm impact semantics (D-P12-11).
+describe('GATE-04 gap-closure — grants-embed disambiguation + revoke-aware impact', () => {
+  afterAll(async () => {
+    await admin.from('template_grants').delete().eq('template_id', MINIMAL_UUID).eq('user_id', ctx.userA.id);
+    await admin.from('portfolios').update({ template_id: EDITORIAL_UUID }).eq('user_id', ctx.userA.id);
+  });
+
+  it('grants embed disambiguates the grantee FK; the bare profiles(...) embed is ambiguous', async () => {
+    // Seed one grant so there is a row to embed.
+    await admin.from('template_grants').delete().eq('template_id', MINIMAL_UUID).eq('user_id', ctx.userA.id);
+    await adminUser.client
+      .from('template_grants')
+      .insert({ template_id: MINIMAL_UUID, user_id: ctx.userA.id });
+
+    // (a) the DISAMBIGUATED embed getTemplateGating() uses — pins the GRANTEE FK
+    //     (template_grants has TWO FKs to profiles: user_id + granted_by). Returns the
+    //     grantee profile. This is the exact shape the /admin/templates panel renders.
+    const ok = await adminUser.client
+      .from('template_grants')
+      .select('template_id, user_id, granted_at, profiles!template_grants_user_id_fkey(username, email)')
+      .eq('template_id', MINIMAL_UUID)
+      .eq('user_id', ctx.userA.id);
+    expect(ok.error).toBeNull();
+    const row = (ok.data ?? [])[0] as { profiles: { username: string } | null } | undefined;
+    expect(row?.profiles?.username).toBe(ctx.userA.username);
+
+    // (b) the AMBIGUOUS bare embed (the pre-fix form) MUST error — PostgREST cannot
+    //     pick between the user_id and granted_by relationships. This is the bug that
+    //     silently collapsed the admin panel to an empty list.
+    const ambiguous = await adminUser.client
+      .from('template_grants')
+      .select('template_id, profiles(username)')
+      .eq('template_id', MINIMAL_UUID);
+    expect(ambiguous.error).not.toBeNull();
+  });
+
+  it('count_orphaned_if_revoked counts the revokee that count_ungranted_on_template misses', async () => {
+    // userA: granted minimal AND on minimal → revoking their grant WOULD orphan them.
+    // userB: explicitly on editorial → never a confound in the minimal orphan set.
+    await admin.from('template_grants').delete().eq('template_id', MINIMAL_UUID).eq('user_id', ctx.userA.id);
+    await adminUser.client
+      .from('template_grants')
+      .insert({ template_id: MINIMAL_UUID, user_id: ctx.userA.id });
+    await admin.from('portfolios').update({ template_id: MINIMAL_UUID }).eq('user_id', ctx.userA.id);
+    await admin.from('portfolios').update({ template_id: EDITORIAL_UUID }).eq('user_id', ctx.userB.id);
+
+    // OLD read (currently-ungranted set, read PRE-revoke): userA is still granted →
+    // NOT counted → 0. This is exactly why the revoke confirm was skipped.
+    const ungranted = await adminUser.client.rpc('count_ungranted_on_template', {
+      p_template_id: MINIMAL_UUID,
+    });
+    expect(ungranted.error).toBeNull();
+    expect(Number(((ungranted.data ?? [])[0] as { n: number })?.n)).toBe(0);
+
+    // NEW read (post-revoke orphan set): userA IS counted (they'd be orphaned) and
+    // returned by username → the confirm now fires.
+    const orphaned = await adminUser.client.rpc('count_orphaned_if_revoked', {
+      p_template_id: MINIMAL_UUID,
+      p_user_id: ctx.userA.id,
+    });
+    expect(orphaned.error).toBeNull();
+    const oRow = (orphaned.data ?? [])[0] as { n: number; usernames: string[] };
+    expect(Number(oRow?.n)).toBeGreaterThanOrEqual(1);
+    expect(oRow?.usernames).toContain(ctx.userA.username);
+
+    // Revoking userB (NOT on minimal) orphans no one on minimal — userB never appears.
+    const forB = await adminUser.client.rpc('count_orphaned_if_revoked', {
+      p_template_id: MINIMAL_UUID,
+      p_user_id: ctx.userB.id,
+    });
+    expect(forB.error).toBeNull();
+    expect(((forB.data ?? [])[0] as { usernames: string[] })?.usernames ?? []).not.toContain(
+      ctx.userB.username,
+    );
+  });
+
+  it('a NON-admin invoking count_orphaned_if_revoked is REJECTED (inner is_admin() self-gate)', async () => {
+    const { error } = await ctx.clientB.rpc('count_orphaned_if_revoked', {
+      p_template_id: MINIMAL_UUID,
+      p_user_id: ctx.userB.id,
+    });
+    expect(error).not.toBeNull();
+  });
+});

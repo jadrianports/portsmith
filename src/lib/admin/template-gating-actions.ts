@@ -271,6 +271,40 @@ export async function templateImpactCount(
 }
 
 /**
+ * Read the impact count for a REVOKE confirm (D-P12-11). Admin-only.
+ *
+ * Distinct from `templateImpactCount`: that counts users CURRENTLY ungranted-on-T,
+ * which is read BEFORE the revoke (when the target is still granted) and so misses
+ * the very user being revoked. This counts the POST-revoke orphan set — portfolios on
+ * T whose owner is ungranted OR is `userId` (the grant about to be removed) — via the
+ * `count_orphaned_if_revoked` DEFINER RPC (014). A count of 0 means the revoke orphans
+ * no one (the user isn't on this template), so the panel skips the confirm.
+ */
+export async function revokeImpactCount(
+  slug: string,
+  userId: string,
+): Promise<{ ok: true; count: number; usernames: string[] } | { ok: false }> {
+  if (!(await callerIsAdmin())) return { ok: false };
+
+  const slugParsed = templateSlugSchema.safeParse(slug);
+  if (!slugParsed.success) return { ok: false };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('count_orphaned_if_revoked', {
+    p_template_id: uuidForSlug(slugParsed.data),
+    p_user_id: userId,
+  });
+  if (error) return { ok: false };
+
+  const row = ((data ?? []) as { n: number; usernames: string[] }[])[0];
+  return {
+    ok: true,
+    count: row?.n ?? 0,
+    usernames: row?.usernames ?? [],
+  };
+}
+
+/**
  * Resolve an email OR username to an existing account for granting (D-P12-06).
  * Admin-only.
  *

@@ -218,6 +218,19 @@ export async function setOwnerPublished(owner: TestOwner, published: boolean): P
   }
 }
 
+/**
+ * Promote an owner to `admin` via the service-role API (role is a protected column;
+ * service-role bypasses the protected-columns trigger the same way the founder seed
+ * does). Setup only — used by the /admin gating spec to reach the is_admin() surface.
+ */
+export async function promoteToAdmin(owner: TestOwner): Promise<void> {
+  const admin = adminClient();
+  const { error } = await admin.from('profiles').update({ role: 'admin' }).eq('id', owner.id);
+  if (error) {
+    throw new Error(`[e2e] promoteToAdmin failed for ${owner.username}: ${error.message}`);
+  }
+}
+
 /** Delete the created owner (cascades to profile/portfolio/sections). Best-effort. */
 export async function deleteOwner(owner: TestOwner | undefined): Promise<void> {
   if (!owner) return;

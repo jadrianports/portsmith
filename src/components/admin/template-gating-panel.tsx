@@ -56,6 +56,7 @@ import {
   grantTemplate,
   lookupUser,
   revokeGrant,
+  revokeImpactCount,
   setTemplateVisibility,
   templateImpactCount,
 } from '@/lib/admin/template-gating-actions';
@@ -201,13 +202,17 @@ export function TemplateGatingPanel({ initial }: TemplateGatingPanelProps) {
    */
   async function handleRevoke(t: TemplateGating, userId: string, grantee: string) {
     setActionError(null);
-    const impact = await templateImpactCount(t.slug);
+    // Revoke-aware impact (D-P12-11 fix): count the POST-revoke orphan set, which
+    // INCLUDES this user if they're currently on the template. templateImpactCount
+    // (read pre-revoke, when the target is still granted) would miss them → count 0 →
+    // no confirm → silent orphan. revokeImpactCount asks "who is orphaned IF I revoke?".
+    const impact = await revokeImpactCount(t.slug, userId);
     if (!impact.ok) {
       setActionError(ACTION_ERROR);
       return;
     }
-    // The impact count is template-wide (users who'd fall back if revoked-from). If
-    // the template is public OR no user is at risk, proceed without a confirm.
+    // If the template is public OR the revoke orphans no one (the user isn't on it),
+    // proceed without a confirm.
     if (impact.count === 0 || t.visibility === 'public') {
       revokeMutation.mutate({ slug: t.slug, userId });
       return;

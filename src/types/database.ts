@@ -913,6 +913,13 @@ export type Database = {
         Args: { p_blog_post_id: string }
         Returns: boolean
       }
+      count_orphaned_if_revoked: {
+        Args: { p_template_id: string; p_user_id: string }
+        Returns: {
+          n: number
+          usernames: string[]
+        }[]
+      }
       count_ungranted_on_template: {
         Args: { p_template_id: string }
         Returns: {
