@@ -223,6 +223,138 @@ export const skillsContentSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Marketer-vertical soft-enum types (11-04 Step C1, CMS-08 — NO migration)
+// ---------------------------------------------------------------------------
+//
+// The five NET-NEW soft-enum types added to support the `aurora` marketer template
+// (the second real exercise of CMS-08's "new type, no Postgres migration" promise,
+// after `skills`). `sections.type` is TEXT with no enumerating CHECK and `content` is
+// schemaless JSONB — so each new type is purely a new key in `sectionContentSchemas`
+// below + its schema here; the `validateSectionContent` gate, the `SectionType` union,
+// and the `@/lib/validations` barrel all pick them up automatically.
+//
+// PROFESSION-AGNOSTIC by construction: the field shapes were modeled from the marketer
+// export's section components but kept generic — `education` fits a developer's degrees
+// as well as a marketer's; `metrics` is any "by the numbers" stat block; `services` is
+// any offering list; `moodboard` is any captioned image gallery + optional palette;
+// `certifications` is any credential list. Most-optional-where-reasonable, item-based
+// (arrays of objects) mirroring `skills`/`projects`/`experience`. Every URL field uses
+// the shared `httpUrlOrEmptyOptional` stored-XSS gate (CR-01); every image field carries
+// the `altTextOk` refine.
+
+/**
+ * EducationItem — a degree / programme entry. `year` is a free-form label
+ * ('2016 - 2020', '2022', 'In progress') NOT a strict YYYY-MM (educations are commonly
+ * stated as ranges/years on a portfolio, so the experience date regex is too strict here).
+ * `achievements` is an optional bullet list.
+ */
+export const educationItemSchema = z.object({
+  id: z.string().min(1),
+  degree: z.string().min(1).max(150),
+  school: z.string().min(1).max(150),
+  year: z.string().max(60).optional(),
+  achievements: z.array(z.string().max(200)).max(10).optional(),
+});
+
+export const educationContentSchema = z.object({
+  heading: z.string().max(100),
+  items: z.array(educationItemSchema).max(20),
+});
+
+/**
+ * MetricItem — one headline stat. `value` is a free-form display string ('5+', '10M+',
+ * '98%') so it carries its own units/sign; `label` describes it; `icon` is an optional
+ * free-form simple-icons / lucide slug (kept a bare string ⇒ profession-neutral).
+ */
+export const metricItemSchema = z.object({
+  id: z.string().min(1),
+  value: z.string().min(1).max(40),
+  label: z.string().min(1).max(120),
+  icon: z.string().max(60).optional(),
+});
+
+export const metricsContentSchema = z.object({
+  heading: z.string().max(100),
+  subheading: z.string().max(300).optional(),
+  items: z.array(metricItemSchema).max(12),
+});
+
+/**
+ * ServiceItem — one offering. `deliverables` is an optional bullet list of what the
+ * service includes; `icon` is an optional free-form slug.
+ */
+export const serviceItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1).max(120),
+  description: z.string().max(500).optional(),
+  icon: z.string().max(60).optional(),
+  deliverables: z.array(z.string().max(200)).max(10).optional(),
+});
+
+export const servicesContentSchema = z.object({
+  heading: z.string().max(100),
+  subheading: z.string().max(300).optional(),
+  items: z.array(serviceItemSchema).max(20),
+});
+
+/**
+ * MoodboardImage — one captioned gallery image. `image` is http(s)-gated (CR-01) and,
+ * when present, REQUIRES a non-empty `image_alt` (the `altTextOk` refine — critical
+ * rule #4, same idiom as project/testimonial/about images). `caption` is an optional
+ * display label rendered over the image.
+ */
+export const moodboardImageSchema = z
+  .object({
+    id: z.string().min(1),
+    image: urlOrEmptyOptional,
+    image_alt: z.string().optional(),
+    caption: z.string().max(120).optional(),
+  })
+  .refine((v) => altTextOk(v.image, v.image_alt), {
+    error: 'Alt text is required when an image is present',
+    path: ['image_alt'],
+  });
+
+/**
+ * PaletteSwatch — an optional brand-colour swatch. `color` is a hex (`#RGB` / `#RRGGBB`,
+ * case-insensitive) — a constrained literal, NOT a URL/free-string — so it can be set as
+ * an inline `background-color` style WITHOUT being a CSS-injection sink. `name` is an
+ * optional label ('Rose Pink').
+ */
+export const paletteSwatchSchema = z.object({
+  color: z
+    .string()
+    .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, { error: 'color must be a #RGB or #RRGGBB hex' }),
+  name: z.string().max(60).optional(),
+});
+
+export const moodboardContentSchema = z.object({
+  heading: z.string().max(100),
+  subheading: z.string().max(300).optional(),
+  items: z.array(moodboardImageSchema).max(24),
+  palette: z.array(paletteSwatchSchema).max(12).optional(),
+});
+
+/**
+ * CertificationItem — one credential. `url` (an optional verification / badge link) is
+ * http(s)-gated (CR-01) since it feeds an `href`. `issuer`/`year`/`description` are
+ * optional display fields.
+ */
+export const certificationItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1).max(150),
+  issuer: z.string().max(120).optional(),
+  year: z.string().max(60).optional(),
+  description: z.string().max(300).optional(),
+  url: urlOrEmptyOptional,
+});
+
+export const certificationsContentSchema = z.object({
+  heading: z.string().max(100),
+  items: z.array(certificationItemSchema).max(20),
+});
+
+// ---------------------------------------------------------------------------
 // Soft-enum registry + the gate function
 // ---------------------------------------------------------------------------
 
@@ -240,6 +372,14 @@ export const sectionContentSchemas = {
   contact: contactContentSchema,
   blog_preview: blogPreviewContentSchema,
   skills: skillsContentSchema, // CMS-08: additive new type — no Postgres migration (D-08)
+  // 11-04 Step C1: the five marketer-vertical types for the `aurora` template. Additive,
+  // profession-agnostic, NO Postgres migration (CMS-08) — same one-line-per-type idiom as
+  // `skills`. The closed soft-enum set is now 13.
+  education: educationContentSchema,
+  metrics: metricsContentSchema,
+  services: servicesContentSchema,
+  moodboard: moodboardContentSchema,
+  certifications: certificationsContentSchema,
 } as const;
 
 /** The currently-known section types (derived from the registry keys). */
@@ -277,3 +417,17 @@ export type ExperienceContent = z.infer<typeof experienceContentSchema>;
 export type ContactContent = z.infer<typeof contactContentSchema>;
 export type BlogPreviewContent = z.infer<typeof blogPreviewContentSchema>;
 export type SkillsContent = z.infer<typeof skillsContentSchema>;
+
+// 11-04 Step C1 — marketer-vertical item + content types.
+export type EducationItem = z.infer<typeof educationItemSchema>;
+export type MetricItem = z.infer<typeof metricItemSchema>;
+export type ServiceItem = z.infer<typeof serviceItemSchema>;
+export type MoodboardImage = z.infer<typeof moodboardImageSchema>;
+export type PaletteSwatch = z.infer<typeof paletteSwatchSchema>;
+export type CertificationItem = z.infer<typeof certificationItemSchema>;
+
+export type EducationContent = z.infer<typeof educationContentSchema>;
+export type MetricsContent = z.infer<typeof metricsContentSchema>;
+export type ServicesContent = z.infer<typeof servicesContentSchema>;
+export type MoodboardContent = z.infer<typeof moodboardContentSchema>;
+export type CertificationsContent = z.infer<typeof certificationsContentSchema>;
