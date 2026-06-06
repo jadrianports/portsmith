@@ -176,19 +176,28 @@ sanity cap measures. RESEARCH §1 measured ~**235.4 kB gz** via esbuild and reco
 | REAL Turbopack chunk (`.next/`) | **RESERVED** — fill from the post-build measurement |
 | public First Load JS (must hold ≤ 200 kB gz) | **RESERVED** — confirm via `check:bundle` that edgerunner did not raise it (standard-lane baseline 156.7 kB gz) |
 
-## Parity — RESERVED (Plan 13-02..)
+## Parity — FROZEN-FRAME (Plan 13-07, Task 1)
 
-Source-parity is expected **DEFERRED** for edgerunner (the export is a multi-page TanStack-Start app
-collapsed to a single scroll — exactly the aurora precedent; ship a self-baseline golden only). The
-animated WebGL canvas is captured deterministically under emulated `prefers-reduced-motion` (the Phase-8
-harness static-first-frame). The frozen-frame-vs-masked-canvas choice (RESEARCH §4) is recorded here once
-made.
+Source-parity is **DEFERRED** for edgerunner (the export is a multi-page TanStack-Start app collapsed to
+a single scroll — exactly the aurora precedent; ships a self-baseline golden only). The WebGL scene is
+captured deterministically under the global emulated `prefers-reduced-motion: reduce` — the Scene's `Wire`
+is `paused` (D-04) so it renders ONE static first frame, and the parity spec waits for the lazy `{ssr:false}`
+Scene chunk's canvas (`.tmpl-edgerunner canvas`, guarded so the wait is inert on the standard lane) + a
+short settle BEFORE the screenshot, so the capture never races the lazy chunk's first frame.
+
+**Capture choice = FROZEN-FRAME (no canvas mask needed).** Tried frozen-frame FIRST per RESEARCH §4 / OQ4:
+the baseline was captured with `--update-snapshots` on the founder machine, then the parity diff was run
+WITHOUT `--update-snapshots` **three consecutive times** — all three passed clean at the global
+`maxDiffPixelRatio: 0.01` (same-GPU baseline+diff, no driver variance). The static reduced-motion frame is
+stable, so the mask-fallback was NOT needed. Source-parity stays SKIPPED (no `edgerunner-source.png`,
+exactly like aurora).
 
 | Field | Value |
 |-------|-------|
-| self-baseline `maxDiffPixelRatio` | `0.01` (global) — `edgerunner-golden.png` |
-| capture approach (frozen-frame vs masked canvas) | **RESERVED** — try frozen-frame first; mask the canvas only if it flakes >0.01 (RESEARCH §4) |
-| source-parity | expected **DEFERRED** (SPA/multi-page → single-scroll; self-baseline only) — confirm at gate |
+| self-baseline `maxDiffPixelRatio` | `0.01` (global) — `e2e/__screenshots__/template-visual-parity.spec.ts/edgerunner-golden.png` |
+| capture approach (frozen-frame vs masked canvas) | **FROZEN-FRAME** — static reduced-motion first frame; 3/3 clean self-diffs at 0.01, mask NOT needed |
+| first-frame wait | guarded `.tmpl-edgerunner canvas` attach (≤8 s) + 1.5 s settle in `e2e/template-visual-parity.spec.ts` (inert on minimal/editorial/aurora — no canvas) |
+| source-parity | **DEFERRED** — SPA/multi-page → single-scroll; self-baseline only (SKIPPED, no source PNG) |
 
 ## Migration & Seed — APPLIED (Plan 13-05)
 

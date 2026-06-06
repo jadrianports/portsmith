@@ -113,6 +113,29 @@ for (const slug of SLUGS) {
     // `.tmpl-<slug>` visible + `document.fonts.ready` + hides the dev overlay.
     await renderFixture(page, slug, { variant: 'full' });
 
+    // RICH-LANE WEBGL FIRST-FRAME WAIT (13-07 Task 1 — guarded; no-op on standard-lane).
+    // edgerunner's HoloShape is a lazy `dynamic(() => import('./Scene'), { ssr:false })`
+    // island: `renderFixture` returns once `.tmpl-edgerunner` + fonts are ready, but the
+    // Scene chunk loads AFTER paint and R3F draws its first frame asynchronously. Under the
+    // global `reducedMotion:'reduce'` that first frame is STATIC (the Wire is `paused`, D-04),
+    // so it is deterministic — but a screenshot taken before it draws would race the lazy
+    // chunk. So: if a `<canvas>` appears inside the scoped root (R3F mounted a GL context),
+    // wait for it to be attached + a short settle so the static first frame is painted before
+    // the capture. The guard makes this INERT for minimal/editorial/aurora (no canvas: in
+    // headless Chromium with no GL context R3F renders its `fallback` div instead, and the
+    // poll simply times out fast and the deterministic CSS backdrop is captured — the parity
+    // gate then proves SECTION LAYOUT, RESEARCH §4 mask-equivalent). See INGEST-MANIFEST.md
+    // for the recorded capture choice + threshold.
+    const sceneCanvas = page.locator(`.tmpl-${slug} canvas`).first();
+    const canvasPresent = await sceneCanvas
+      .waitFor({ state: 'attached', timeout: 8_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (canvasPresent) {
+      // Settle the WebGL first frame (R3F's rAF draw) before the deterministic capture.
+      await page.waitForTimeout(1_500);
+    }
+
     // Self-baseline `<slug>-golden.png` under snapshotPathTemplate
     // (e2e/__screenshots__/template-visual-parity.spec.ts/). The Turnstile mask is the shared
     // convention (no-op on __fixture — there is no Turnstile widget here). Drift beyond
