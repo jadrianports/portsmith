@@ -48,6 +48,10 @@
  * Run command: `npx playwright test e2e/template-visual-parity.spec.ts` (npm: `gate:parity`).
  * First capture:  `npx playwright test e2e/template-visual-parity.spec.ts --update-snapshots`.
  */
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { expect, test } from '@playwright/test';
 
 import { renderFixture, TURNSTILE_SLOT_SELECTOR } from './helpers/render-fixture';
@@ -88,24 +92,49 @@ for (const slug of SLUGS) {
 }
 
 /**
- * PHASE-11 SOURCE-PARITY SLOT (D-P10-04 — skipped placeholder). Phase 10 ships the slot + the
- * self-baseline above; Phase 11 fills `e2e/__source-reference__/<slug>-source.png` (the
- * operator's Lovable source-design screenshot at the golden-fixture content + the same
- * viewport) and FLIPS this `skip` to a real diff that asserts the ingested template render
- * matches the source design (the translate-not-redesign parity — a drift is a FINDING the gate
- * catches, not a render to trust). See `e2e/__source-reference__/README.md`.
+ * PHASE-11 SOURCE-PARITY SLOT (D-P10-04 — FILE-EXISTENCE GUARDED). Phase 10 shipped the slot +
+ * the self-baseline above; Phase 11 makes the source-parity case CONDITIONAL on a committed
+ * `e2e/__source-reference__/<slug>-source.png` existing on disk: the case RUNS a real
+ * translate-not-redesign diff (ingested render vs. the operator's Lovable source screenshot)
+ * ONLY for a slug whose source PNG is committed, and stays SKIPPED otherwise.
+ *
+ * WHY GUARDED, NOT FLIPPED (D-P11-10 / 11-04-ADDENDUM): minimal + editorial are bespoke,
+ * self-baseline-only templates with no source PNG — they STAY skipped. `aurora` (the Wave-C
+ * marketer dogfood, the marketing-girl export) deliberately DEFERS source-parity: the source
+ * is an SPA multi-page Lovable design and aurora collapses it to a single-scroll template, so a
+ * full-page source-PNG diff would not be a translate-not-redesign signal. Aurora ships on its
+ * own committed golden SELF-baseline (the loop above) only; its source-parity case stays
+ * SKIPPED via this file-existence guard (no `aurora-source.png` is committed). When a FUTURE
+ * single-scroll ingest drops in a real `<slug>-source.png`, this case activates automatically
+ * at the tuned `maxDiffPixelRatio` (start ~0.04 — looser than the 0.01 self-baseline to absorb
+ * anti-aliasing + RSC-vs-React render + Lovable paraphrase). See `__source-reference__/README.md`.
  */
+const SOURCE_REF_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '__source-reference__');
 for (const slug of SLUGS) {
-  test.skip(`${slug} — source-design parity (Phase 11 — fill __source-reference__/${slug}-source.png)`, async ({
+  const sourcePng = path.join(SOURCE_REF_DIR, `${slug}-source.png`);
+  const hasSourceRef = existsSync(sourcePng);
+  test(`${slug} — source-design parity (file-existence guarded — __source-reference__/${slug}-source.png)`, async ({
     page,
   }) => {
-    // Phase 11: render the ingested template over the golden fixture, then diff against the
-    // operator's committed source screenshot. Kept SKIPPED in Phase 10 (no source ref yet).
-    //   await renderFixture(page, slug, { variant: 'full' });
-    //   await expect(page).toHaveScreenshot(`../__source-reference__/${slug}-source.png`, {
-    //     fullPage: true,
-    //     mask: [page.locator(TURNSTILE_SLOT_SELECTOR)],
-    //   });
-    expect(slug).toBeTruthy();
+    // FILE-EXISTENCE GUARD (D-P11-10): skip unless the operator committed `<slug>-source.png`.
+    // minimal/editorial (no source PNG, self-baseline only) and aurora (source-parity DEFERRED,
+    // SPA→single-scroll, no source PNG committed) all stay skipped here. A future single-scroll
+    // ingest with a committed source PNG activates this diff automatically.
+    test.skip(
+      !hasSourceRef,
+      `no committed e2e/__source-reference__/${slug}-source.png — source-parity not applicable for "${slug}" ` +
+        `(self-baseline only / deferred). Drop in the source screenshot to activate this diff.`,
+    );
+    // Render the ingested template over the golden fixture, then diff against the operator's
+    // committed source screenshot (translate-not-redesign — a drift is a FINDING, not trusted).
+    await renderFixture(page, slug, { variant: 'full' });
+    await expect(page).toHaveScreenshot(`../__source-reference__/${slug}-source.png`, {
+      fullPage: true,
+      // Looser than the 0.01 self-baseline: anti-aliasing + RSC-vs-React render + Lovable
+      // paraphrase. Tune DOWN if it passes a visibly-divergent render; UP only with a
+      // documented anti-aliasing reason (record the chosen ratio in the INGEST-MANIFEST).
+      maxDiffPixelRatio: 0.04,
+      mask: [page.locator(TURNSTILE_SLOT_SELECTOR)],
+    });
   });
 }
