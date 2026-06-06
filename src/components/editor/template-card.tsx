@@ -22,14 +22,20 @@
  * `--color-*` tokens + `--font-sans` (Inter) ONLY; NO template token, NO `.tmpl-*`
  * class, NO inline hex. The thumbnail is a static same-origin `public/` image, not a
  * live template-token surface. Accent (copper) is used ONLY for the "● Current" tag +
- * its `circle-check` glyph (the inherited reserved-for list); the candidate-selected
+ * its `circle-check` glyph AND the "Exclusive" tag + its `sparkles` glyph (the
+ * inherited reserved-for list — current/selected/exclusive); the candidate-selected
  * cue uses BRAND (mirrors the section-row active marker), never a button fill.
  *
- * `minimal` is a NORMAL equal option — NO "Founder"/"exclusive" label (D-P7-14).
+ * EXCLUSIVE MARKER (12-04 / D-P12-09, supersedes D-P7-14): a GRANTED restricted
+ * template carries a subtle copper "Exclusive" tag — exclusivity reads as VALUE, so the
+ * glyph is `Sparkles` (NOT a `Lock`, which would read as restriction). It is RUNTIME-
+ * driven by the `restricted` prop (from the allowed-list), never static meta. The
+ * "Exclusive" and "● Current" tags may COEXIST on the same card (the founder's minimal
+ * card shows both).
  */
 import Link from 'next/link';
 import Image from 'next/image';
-import { CircleCheck } from 'lucide-react';
+import { CircleCheck, Sparkles } from 'lucide-react';
 
 export interface TemplateCardProps {
   /** The template slug (drives the enable-route candidate + the thumbnail path). */
@@ -56,6 +62,7 @@ export function TemplateCard({
   description,
   thumbnailAlt,
   isCurrent,
+  restricted = false,
 }: TemplateCardProps) {
   // The a11y label per UI-SPEC B.5 #2: the Current card invites a re-preview; the
   // others invite a preview. Color-independent (the word "current" carries the state).
@@ -97,21 +104,35 @@ export function TemplateCard({
         />
       </span>
 
-      {/* META — name + description + (when current) the copper "● Current" tag. */}
+      {/* META — name + description + (when applicable) the copper "Exclusive" and/or
+          "● Current" tags. The two markers may COEXIST (the founder's minimal card),
+          so they live in a small wrapping flex group on the right. */}
       <span className="flex flex-1 flex-col gap-1 p-3">
         <span className="flex items-center justify-between gap-2">
           <span className="text-sm font-semibold text-foreground">{name}</span>
-          {isCurrent ? (
-            // The CURRENT marker: copper dot + word + circle-check glyph — the
-            // inherited accent reserved-for "current/selected state" use. Word +
-            // glyph make it color-independent. The card is NOT disabled (re-previewable).
-            <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold text-accent">
-              <CircleCheck aria-hidden="true" className="size-4" />
-              <span>
-                <span aria-hidden="true">● </span>Current
+          <span className="inline-flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
+            {restricted ? (
+              // The EXCLUSIVE marker (D-P12-09): copper word + sparkles glyph — the
+              // inherited accent reserved-for "exclusive" use. Exclusivity reads as
+              // VALUE (Sparkles), never restriction (no Lock). Word + glyph make it
+              // color-independent. RUNTIME-driven by `restricted`, never static meta.
+              <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold text-accent">
+                <Sparkles aria-hidden="true" className="size-4" />
+                <span>Exclusive</span>
               </span>
-            </span>
-          ) : null}
+            ) : null}
+            {isCurrent ? (
+              // The CURRENT marker: copper dot + word + circle-check glyph — the
+              // inherited accent reserved-for "current/selected state" use. Word +
+              // glyph make it color-independent. The card is NOT disabled (re-previewable).
+              <span className="inline-flex shrink-0 items-center gap-1 text-[13px] font-semibold text-accent">
+                <CircleCheck aria-hidden="true" className="size-4" />
+                <span>
+                  <span aria-hidden="true">● </span>Current
+                </span>
+              </span>
+            ) : null}
+          </span>
         </span>
         <span className="text-[13px] leading-snug text-muted-foreground">{description}</span>
       </span>

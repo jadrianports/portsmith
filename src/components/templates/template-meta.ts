@@ -21,8 +21,13 @@
  * Per-template CHROME presentation metadata for the Surface-B switcher (07-05): the
  * human-readable name, a short description, and the REQUIRED descriptive alt for the
  * static thumbnail (D-P7-07 — never empty, never "thumbnail"). This is CHROME copy (the
- * picker is platform chrome) — NOT a template token, no `.tmpl-*` styling. `minimal` is
- * a normal equal option with NO "Founder"/"exclusive" label (D-P7-14).
+ * picker is platform chrome) — NOT a template token, no `.tmpl-*` styling.
+ *
+ * This module stays ZOD-FREE and stores NO `restricted`/visibility flag (D-P12-09,
+ * supersedes D-P7-14). The picker's "Exclusive" marker is driven by the RUNTIME
+ * `restricted` flag from the allowed-list (`getAvailableTemplates()`), NOT static meta —
+ * a stored flag would go stale the moment the operator flips a template's visibility in
+ * /admin. So `TemplateMeta` carries display copy ONLY.
  */
 export interface TemplateMeta {
   /** The display name shown on the card + in the confirm/preview copy ("Minimal"). */
@@ -34,10 +39,11 @@ export interface TemplateMeta {
 }
 
 /**
- * The slug-keyed display metadata. `minimal` and `editorial` only in v1 — both equal
- * peers (D-P7-14); the differentiator is the runtime "● Current" marker, NOT the copy.
- * A new template adds its display copy HERE and its `dynamic()` line in `registry.ts`
- * (registry.ts asserts the two key sets match so they cannot drift).
+ * The slug-keyed display metadata. Display COPY only — no visibility/`restricted` flag
+ * (D-P12-09, supersedes D-P7-14): the differentiators are the RUNTIME markers ("● Current"
+ * from the owner's current slug, "Exclusive" from the allowed-list's `restricted` flag),
+ * NOT the copy. A new template adds its display copy HERE and its `dynamic()` line in
+ * `registry.ts` (registry.ts asserts the two key sets match so they cannot drift).
  */
 export const templateMeta: Record<string, TemplateMeta> = {
   minimal: {
@@ -76,10 +82,12 @@ export function resolveTemplateMeta(slug: string): TemplateMeta {
 }
 
 /**
- * The ordered list of switchable templates for the picker gallery — `[slug, meta]`
- * pairs derived from `templateMeta` keys (so a 3rd template auto-appears once its copy
- * is added). Each is an EQUAL option (D-P7-14); the gallery marks the current one at
- * render time.
+ * The ordered list of every template's display copy — `[slug, meta]` pairs derived from
+ * `templateMeta` keys. NOTE (12-04 / GATE-02): the picker gallery NO LONGER sources from
+ * here — it renders one card per ALLOWED slug from the data-layer allowed-list
+ * (`getAvailableTemplates()` → the `allowed` prop), looking up copy via
+ * `resolveTemplateMeta`. This helper remains for server-side / full-catalog consumers
+ * (it lists ALL templates regardless of visibility, so it must NOT drive the picker).
  */
 export function listTemplates(): { slug: string; meta: TemplateMeta }[] {
   return Object.keys(templateMeta).map((slug) => ({
