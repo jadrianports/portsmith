@@ -42,7 +42,11 @@
 import { revalidatePath } from 'next/cache';
 
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
-import { templateVisibilitySchema, uuidForSlug } from '@/components/templates/registry';
+import {
+  templateSlugSchema,
+  templateVisibilitySchema,
+  uuidForSlug,
+} from '@/components/templates/registry';
 
 /**
  * The shared admin-action outcome. `{ ok: true }` on success; `{ ok: false }` on a
@@ -132,7 +136,12 @@ export async function setTemplateVisibility(
   // 1+2) Verified identity + admin re-check (T-06-18). A non-admin never writes.
   if (!(await callerIsAdmin())) return { ok: false };
 
-  // 3) Zod re-parse — the only accepted values are the soft-enum members.
+  // 3) Zod re-parse — slug AND visibility. The slug gate (CR-01) is load-bearing:
+  //    `uuidForSlug` falls back to `minimal` for an unknown slug (registry.ts), so a
+  //    crafted/typo'd slug would otherwise mis-target the step-5 fallback at the
+  //    `minimal` template. Mirrors switchTemplateAction's Zod-before-uuidForSlug gate.
+  const slugParsed = templateSlugSchema.safeParse(slug);
+  if (!slugParsed.success) return { ok: false };
   const parsed = templateVisibilitySchema.safeParse(visibility);
   if (!parsed.success) return { ok: false };
 
@@ -141,13 +150,13 @@ export async function setTemplateVisibility(
   const { error } = await supabase
     .from('templates')
     .update({ visibility: parsed.data })
-    .eq('slug', slug);
+    .eq('slug', slugParsed.data);
   if (error) return { ok: false };
 
   // 5) On flip→restricted ONLY: auto-fallback the now-ungranted users + revalidate
   //    each. flip→public keeps grants and needs no fallback (D-P12-15).
   if (parsed.data === 'restricted') {
-    await runFallbackAndRevalidate(supabase, uuidForSlug(slug));
+    await runFallbackAndRevalidate(supabase, uuidForSlug(slugParsed.data));
   }
 
   return { ok: true };
@@ -168,6 +177,11 @@ export async function grantTemplate(
   // 1+2) Verified identity + admin re-check.
   if (!(await callerIsAdmin())) return { ok: false };
 
+  // CR-01: validate the slug before uuidForSlug — its `?? minimal` default would
+  //    otherwise grant the WRONG template on a crafted/typo'd slug.
+  const slugParsed = templateSlugSchema.safeParse(slug);
+  if (!slugParsed.success) return { ok: false };
+
   const sub = await callerSub();
   if (!sub) return { ok: false };
 
@@ -176,7 +190,7 @@ export async function grantTemplate(
   const supabase = await createClient();
   const { error } = await supabase
     .from('template_grants')
-    .insert({ template_id: uuidForSlug(slug), user_id: userId, granted_by: sub });
+    .insert({ template_id: uuidForSlug(slugParsed.data), user_id: userId, granted_by: sub });
   if (error && error.code !== '23505') return { ok: false };
 
   return { ok: true };
@@ -199,7 +213,12 @@ export async function revokeGrant(
   // 1+2) Verified identity + admin re-check.
   if (!(await callerIsAdmin())) return { ok: false };
 
-  const templateId = uuidForSlug(slug);
+  // CR-01: validate the slug before uuidForSlug — its `?? minimal` default would
+  //    otherwise delete the WRONG template's grant + mis-target the fallback.
+  const slugParsed = templateSlugSchema.safeParse(slug);
+  if (!slugParsed.success) return { ok: false };
+
+  const templateId = uuidForSlug(slugParsed.data);
 
   // 3) Admin-RLS DELETE (authenticated client only), scoped to the composite key.
   const supabase = await createClient();
@@ -231,9 +250,14 @@ export async function templateImpactCount(
 ): Promise<{ ok: true; count: number; usernames: string[] } | { ok: false }> {
   if (!(await callerIsAdmin())) return { ok: false };
 
+  // CR-01: validate the slug before uuidForSlug — a bad slug would otherwise count
+  //    the WRONG template's impact in the confirm dialog.
+  const slugParsed = templateSlugSchema.safeParse(slug);
+  if (!slugParsed.success) return { ok: false };
+
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('count_ungranted_on_template', {
-    p_template_id: uuidForSlug(slug),
+    p_template_id: uuidForSlug(slugParsed.data),
   });
   if (error) return { ok: false };
 

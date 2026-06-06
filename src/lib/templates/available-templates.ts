@@ -34,7 +34,7 @@
  */
 import 'server-only';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 
 /**
  * One entry in the GATE-02 allowed-list. `slug` is a template the caller may switch
@@ -61,6 +61,12 @@ interface GrantRow {
  * read error.
  */
 export async function getAvailableTemplates(): Promise<AllowedTemplate[]> {
+  // CR-04 / AUTH-05: verify identity before any read. The sole caller is the
+  // auth-gated dashboard RSC, but an unauthenticated call would otherwise run as the
+  // anon role and silently return the public templates as a "valid" allowed-list.
+  const claims = await getVerifiedClaims();
+  if (!claims) return [];
+
   const supabase = await createClient();
 
   // 1) Public templates — visible to any authenticated caller (`templates public
