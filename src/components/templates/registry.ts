@@ -137,6 +137,18 @@ export const templateSlugSchema = z.enum(
   Object.keys(templateRegistry) as [string, ...string[]],
 );
 
+/**
+ * The visibility soft-enum gate (GATE-01 / D-P12-01 / CMS-08). Zod is the SOURCE OF
+ * TRUTH for `templates.visibility` — the column is `TEXT NOT NULL DEFAULT 'restricted'`
+ * with NO Postgres CHECK (the same CMS-08 posture as `sections.type`, so a future
+ * visibility lane needs no migration). The 12-03 switch gate compares against
+ * `'restricted'` and the 12-05 admin `setTemplateVisibility` action re-parses through
+ * THIS enum. Like `templateSlugSchema`, it imports zod, so it stays SERVER-side — the
+ * client picker imports display copy from `template-meta.ts`, NEVER this file (D-25,
+ * the :140-153 isolation rule below). Do NOT export it from any client-imported barrel.
+ */
+export const templateVisibilitySchema = z.enum(['public', 'restricted']);
+
 // CHROME presentation metadata (TemplateMeta / templateMeta / resolveTemplateMeta /
 // listTemplates) is the zod-free, next/dynamic-free half of the registry — it now lives
 // in `./template-meta` and is re-exported here so SERVER consumers (page.tsx) keep
