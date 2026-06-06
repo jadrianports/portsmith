@@ -109,6 +109,12 @@ function buildSections(): { type: string; content: unknown; visible: boolean }[]
   return [
     { type: 'hero', content: heroContent, visible: true },
     { type: 'about', content: s.about, visible: true },
+    // PIPE-09 / 13-05 (D-10 seed-first): the founder's `metrics` "by the numbers" block.
+    // edgerunner's spec supports `metrics` (the export's `profile.stats` → the metrics
+    // soft-enum type, 11-04 Step C1); minimal/editorial don't render it but the content
+    // round-trips losslessly across a switch (the section is hidden where unsupported, the
+    // data is preserved). Gated by the SAME validateSectionContent (`metricsContentSchema`).
+    { type: 'metrics', content: s.metrics, visible: true },
     { type: 'skills', content: s.skills, visible: true },
     { type: 'projects', content: s.projects, visible: true },
     { type: 'experience', content: s.experience, visible: true },
@@ -324,6 +330,43 @@ async function main(): Promise<void> {
     fail(`founder→minimal template_grants upsert failed: ${grantError.message}`);
   }
   log('founder→minimal template_grants upserted (self-healing, D-P12-04/OQ-1).');
+
+  // --- 4c. Self-healing founder→edgerunner grant (PIPE-09 / 13-05, T-13-05-ORDER). ---
+  // Phase 13 makes `edgerunner` the founder's RESTRICTED/exclusive live template. The 015
+  // migration grants it by deriving the founder FROM the data (the portfolio on the minimal
+  // UUID, BEFORE it switches that portfolio to edgerunner — the grant-then-switch order). But
+  // on a FRESH DB, if THIS seed script runs AFTER 015, no portfolio is on minimal at migration
+  // time → 015's INSERT…SELECT matches zero rows → the founder is ungranted-restricted on his
+  // OWN live template and GATE-03 would auto-fallback him to editorial. So we ALSO upsert the
+  // edgerunner grant here, order-independently — the SAME belt-and-suspenders idiom as the
+  // founder→minimal grant above (4b / OQ-1). We resolve the edgerunner template id by slug
+  // (mirroring the minimal lookup at step 3); if the row is absent (015 not yet applied) we
+  // skip silently — the migration's Step 2 will create the grant when it runs. `onConflict` on
+  // the composite PK with `ignoreDuplicates` makes a re-run (or a 015-already-ran DB) a no-op.
+  const { data: edgerunnerTemplate, error: edgerunnerLookupError } = await admin
+    .from('templates')
+    .select('id')
+    .eq('slug', 'edgerunner')
+    .maybeSingle();
+  if (edgerunnerLookupError) {
+    fail(`edgerunner template lookup failed: ${edgerunnerLookupError.message}`);
+  }
+  if (edgerunnerTemplate) {
+    const { error: edgerunnerGrantError } = await admin.from('template_grants').upsert(
+      {
+        template_id: edgerunnerTemplate.id,
+        user_id: userId,
+        granted_by: null,
+      },
+      { onConflict: 'template_id,user_id', ignoreDuplicates: true },
+    );
+    if (edgerunnerGrantError) {
+      fail(`founder→edgerunner template_grants upsert failed: ${edgerunnerGrantError.message}`);
+    }
+    log('founder→edgerunner template_grants upserted (self-healing, PIPE-09/T-13-05-ORDER).');
+  } else {
+    log('edgerunner template row not present yet — skipping founder→edgerunner grant (migration 015 will create it).');
+  }
 
   // --- 5. Upsert portfolio_settings (UNIQUE on portfolio_id → idempotent). ----
   // Theme is forced dark + toggle-on; presets explicit (D-15/D-16).

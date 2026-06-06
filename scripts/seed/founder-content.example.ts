@@ -36,6 +36,7 @@ import type {
   HeroContent,
   AboutContent,
   SkillsContent,
+  MetricsContent,
   ProjectsContent,
   ExperienceContent,
   ContactContent,
@@ -102,6 +103,11 @@ export interface FounderContent {
   sections: {
     hero: HeroContent;
     about: AboutContent;
+    // PIPE-09 / 13-05: the "by the numbers" stat block edgerunner renders (the export's
+    // `profile.stats` → the `metrics` soft-enum type). minimal/editorial ignore it; the
+    // content round-trips losslessly across a template switch. `value` is a free-form
+    // display string ('5+', '10M+', '98%') so it carries its own units/sign.
+    metrics: MetricsContent;
     skills: SkillsContent;
     projects: ProjectsContent;
     experience: ExperienceContent;
@@ -165,31 +171,50 @@ export const FOUNDER: FounderContent = {
       avatar_alt: undefined, // set a non-empty alt iff `avatar` is a non-empty URL (alt-text refine)
     },
 
+    // Metrics — PIPE-09 / 13-05: the "by the numbers" stat block edgerunner renders
+    // (the export's `profile.stats`). `value` is a free-form display string so it carries
+    // its own units/sign ('5+', '10M+', '98%'); `label` describes it; `icon` is optional.
+    // minimal/editorial ignore this section (lossless across a switch). Replace the values
+    // with James's real numbers in the gitignored copy.
+    metrics: {
+      heading: 'REPLACE: By the numbers', // e.g. "By the numbers"
+      subheading: undefined, // optional — a short line under the heading, or omit
+      items: [
+        { id: 'metric-1', value: 'REPLACE: 5+', label: 'REPLACE: Years shipping products' },
+        { id: 'metric-2', value: 'REPLACE: 20+', label: 'REPLACE: Projects delivered' },
+        { id: 'metric-3', value: 'REPLACE: 100%', label: 'REPLACE: Focus on real products' },
+      ],
+    },
+
     // Skills — grouped (D-09): Core Competencies / Tech Stack (simple-icons slugs) /
-    // Currently Learning. Tier labels (core/proficient/learning), NEVER % gauges.
+    // Currently Learning. Tier labels (core/proficient/learning) drive minimal/editorial;
+    // the OPTIONAL `level` (0–100 int, Phase-13 D-09) drives edgerunner's signature animated
+    // bars — minimal/editorial IGNORE `level` (lossless across a switch). NEVER % gauges on
+    // the standard templates. The server re-parse (`skillItemSchema.level`) is the 0–100/int
+    // gate; a level absent simply renders edgerunner's tier-pill fallback.
     skills: {
       heading: 'REPLACE: Skills', // e.g. "What I work with"
       groups: [
         {
           label: 'Core Competencies', // D-09 group label
           items: [
-            { name: 'REPLACE: Full-stack Web Development', tier: 'core' },
-            { name: 'REPLACE: API Design', tier: 'core' },
+            { name: 'REPLACE: Full-stack Web Development', tier: 'core', level: 90 },
+            { name: 'REPLACE: API Design', tier: 'core', level: 85 },
           ],
         },
         {
           label: 'Tech Stack', // D-09 — items carry simple-icons slugs (dots → "dot")
           items: [
-            { name: 'TypeScript', icon: 'typescript', tier: 'core' }, // simple-icons slug
-            { name: 'React', icon: 'react', tier: 'core' },
-            { name: 'Next.js', icon: 'nextdotjs', tier: 'proficient' }, // dots → "dot"
-            { name: 'Node.js', icon: 'nodedotjs', tier: 'proficient' },
-            { name: 'PostgreSQL', icon: 'postgresql', tier: 'proficient' },
+            { name: 'TypeScript', icon: 'typescript', tier: 'core', level: 95 }, // simple-icons slug
+            { name: 'React', icon: 'react', tier: 'core', level: 90 },
+            { name: 'Next.js', icon: 'nextdotjs', tier: 'proficient', level: 85 }, // dots → "dot"
+            { name: 'Node.js', icon: 'nodedotjs', tier: 'proficient', level: 80 },
+            { name: 'PostgreSQL', icon: 'postgresql', tier: 'proficient', level: 75 },
           ],
         },
         {
           label: 'Currently Learning', // D-09 group label
-          items: [{ name: 'REPLACE: a thing James is learning', tier: 'learning' }],
+          items: [{ name: 'REPLACE: a thing James is learning', tier: 'learning', level: 40 }],
         },
       ],
     },
