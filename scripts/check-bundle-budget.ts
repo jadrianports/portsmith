@@ -367,6 +367,29 @@ export function assertAsyncIslandWithinCap(gzippedBytes: number, label: string):
 /** The rich-lane Scene source-path marker (matched against the manifest keys). */
 const ASYNC_SCENE_MODULE_MARKER = /\/components\/templates\/([A-Za-z0-9_-]+)\/Scene\.[jt]sx?\b/;
 
+/**
+ * SECOND DISCOVERY PATH (13-07 — MOUNT-GATED LAZY scenes). The `clientModules` scan above
+ * only records a `{ ssr: false }` module in a page's client-reference manifest when it is
+ * part of that page's STATIC RSC reference graph. edgerunner's `HoloShape` MOUNT-GATES its
+ * `dynamic(() => import('./Scene'), { ssr: false })` behind a `useEffect` + `mounted` flag
+ * (it returns `null` until the client mounts), so at static-prerender time the Scene client
+ * module is NOT in the `/[username]` page's `clientModules` — that scan legitimately finds
+ * nothing for it (verified on the real Turbopack build). The chunk is STILL fully code-split
+ * (NOT in the route's First Load JS), but it is recorded in the canonical `next/dynamic`
+ * lazy-module manifest instead: `react-loadable-manifest.json` (one per page), whose entries
+ * carry the lazy module's `files: ["static/chunks/*.js", ...]`. Those keys are NUMERIC module
+ * IDs (no source path), so the rich-lane Scene chunk is identified by CONTENT — a chunk that
+ * actually imports `three`/`@react-three/*` (the rich/viz-lane runtime fingerprint). This
+ * locates a mount-gated scene chunk so the cap is asserted against the REAL chunk (not a
+ * silent `[]` no-op). It is ADDITIVE: a non-mount-gated `{ ssr: false }` Scene is still caught
+ * by the `clientModules` source-path path; the two are deduped by abs-path.
+ */
+const RICH_LANE_CHUNK_SIGNATURE =
+  /@react-three\/fiber|react-three-fiber|new WebGLRenderer|three\.module|Icosahedron|WebGLRenderer/;
+
+/** The per-page `next/dynamic` lazy-module manifest filename. */
+const REACT_LOADABLE_MANIFEST = 'react-loadable-manifest.json';
+
 /** All page client-reference manifests Turbopack emits under `.next/server/app`. */
 const APP_SERVER_DIR = path.join(NEXT_DIR, 'server', 'app');
 
@@ -414,12 +437,63 @@ function parseClientModules(
   }
 }
 
+/** Recursively collect every `react-loadable-manifest.json` under `.next/server`. */
+function findReactLoadableManifests(dir: string, acc: string[] = []): string[] {
+  if (!existsSync(dir)) return acc;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) findReactLoadableManifests(full, acc);
+    else if (entry.isFile() && entry.name === REACT_LOADABLE_MANIFEST) acc.push(full);
+  }
+  return acc;
+}
+
+/**
+ * SECOND DISCOVERY PATH (13-07) — locate a MOUNT-GATED rich-lane Scene chunk via the
+ * `react-loadable-manifest.json` (the canonical `next/dynamic` lazy-module manifest). Each
+ * entry is `{ id, files: ["static/chunks/*.js", ...] }`; the keys are numeric module IDs
+ * (no source path), so a candidate JS chunk is confirmed as a rich-lane Scene island by
+ * CONTENT — it must carry the `three`/`@react-three/*` runtime signature. Adds confirmed
+ * chunks to `byAbs` (deduped with the `clientModules` path) labeled `richviz/Scene`.
+ */
+function collectLoadableSceneChunks(byAbs: Map<string, string>): void {
+  const serverDir = path.join(NEXT_DIR, 'server');
+  for (const manifestFile of findReactLoadableManifests(serverDir)) {
+    let manifest: Record<string, { files?: string[] }>;
+    try {
+      manifest = JSON.parse(readFileSync(manifestFile, 'utf8')) as Record<
+        string,
+        { files?: string[] }
+      >;
+    } catch {
+      continue; // unreadable/odd shape — the gate simply finds no chunk in this file
+    }
+    for (const entry of Object.values(manifest)) {
+      const files = Array.isArray(entry.files) ? entry.files : [];
+      for (const file of files) {
+        if (!file.endsWith('.js')) continue;
+        const rel = file.replace(/^\/_next\//, '').replace(/^\//, '');
+        const abs = path.join(NEXT_DIR, rel);
+        if (byAbs.has(abs)) continue; // already found via the clientModules path
+        if (!existsSync(abs) || !statSync(abs).isFile()) continue;
+        // CONTENT confirmation: only a chunk that actually pulls in three/R3F is a
+        // rich-lane Scene island (keeps an unrelated future lazy chunk from tripping the cap).
+        const content = readFileSync(abs, 'utf8');
+        if (!RICH_LANE_CHUNK_SIGNATURE.test(content)) continue;
+        byAbs.set(abs, 'richviz/Scene');
+      }
+    }
+  }
+}
+
 function discoverAsyncSceneChunks(): { abs: string; label: string }[] {
   // Map a normalized chunk abs-path → its template-scoped label so the same chunk
   // discovered across multiple page manifests (or via the `<module evaluation>`
   // duplicate keys) is measured once.
   const byAbs = new Map<string, string>();
 
+  // PATH 1 — the page client-reference manifests (`clientModules`, source-path keyed).
+  // Catches a `{ ssr: false }` Scene that is in a page's STATIC RSC reference graph.
   for (const manifestFile of findClientRefManifests(APP_SERVER_DIR)) {
     const clientModules = parseClientModules(manifestFile);
     if (!clientModules) continue;
@@ -439,6 +513,10 @@ function discoverAsyncSceneChunks(): { abs: string; label: string }[] {
       }
     }
   }
+
+  // PATH 2 — the react-loadable manifests (mount-gated lazy scenes, content-confirmed).
+  // Catches edgerunner's `HoloShape`-mount-gated `{ ssr: false }` Scene that PATH 1 misses.
+  collectLoadableSceneChunks(byAbs);
 
   return [...byAbs.entries()].map(([abs, label]) => ({ abs, label }));
 }

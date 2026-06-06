@@ -161,20 +161,42 @@ inline-handler**. Disposition for ALL: **eliminated by translation downstream**;
 **No MDX must-strips reached the scan as code** — the MDX blog chain is OUT by D-01 (T-13-01-MDX) and is
 never carried into the template.
 
-## Async-Island Cap — RESERVED (Plan 13-02..)
+## Async-Island Cap — MEASURED ON REAL BUILD (Plan 13-07, Task 2 — must_resolve #1)
 
 The rich-lane Scene chunk (`three` + R3F + drei) is the heavy `{ssr:false}` import the async-island
-sanity cap measures. RESEARCH §1 measured ~**235.4 kB gz** via esbuild and recommends raising
-`ASYNC_ISLAND_CAP_BYTES` to **320 kB gz** (measured floor + ~36% headroom; still well under the D-05
-~350 ceiling). The MANDATORY verify-on-real-build task (read the ACTUAL gzipped Turbopack chunk from
-`.next/`) lands in a downstream plan.
+sanity cap measures. RESEARCH §1 estimated ~**235.4 kB gz** via esbuild; the MANDATORY verify-on-real-build
+task read the ACTUAL gzipped Turbopack chunk from `.next/` after a real `next build`.
+
+**ACTUAL Turbopack Scene chunk = 227.5 kB gz** (863.1 kB raw, `static/chunks/0wmg-ire2kixs.js`) — the
+real shipped number is ~8 kB UNDER the esbuild estimate, so three.js core (~234 kB) + R3F + drei's named
+tree-shaken helpers land comfortably below the cap. **The 320 kB cap is confirmed COMFORTABLE (~40 % / ~92.5 kB
+headroom over the real chunk)** — the cap is NOT raised toward 350 (the real chunk is well under ~290, so the
+D-05 320 band holds; no `import * from 'three'` audit needed — the chunk is the expected three-core size, and
+the named-imports-only discipline in `Scene.tsx` is intact). `ASYNC_ISLAND_CAP_BYTES` stays **320 × 1024**.
+
+**No First Load JS regression from the island.** `/[username]` First Load JS = **164.4 kB gz** (budget 200 kB),
+and the 227.5 kB Scene chunk is NOT among the route's First Load JS chunks (verified: none of the route chunks
+carries three/R3F — the `{ssr:false}` boundary held; Pitfall 2 leak did NOT occur). The figure sits a touch
+above the historical ~156.7 kB standard-lane baseline due to unrelated corpus growth (P11/P12 client code), NOT
+edgerunner's island — the scene chunk is fully code-split behind the lazy boundary.
+
+**Discovery fix (Rule 1, T-13-07-DISCOVERY).** `discoverAsyncSceneChunks()` originally scanned ONLY the page
+client-reference manifests' `clientModules` (source-path keyed). Because `HoloShape` MOUNT-GATES its
+`dynamic(() => import('./Scene'), {ssr:false})` behind a `useEffect`+`mounted` flag, the Scene module is NOT in
+the prerendered `/[username]` page's static RSC reference graph, so `clientModules` discovery returned `[]` —
+the cap would have silently no-op'd against the real chunk (a false GREEN). Added a SECOND discovery path:
+scan the canonical `next/dynamic` lazy-module manifest (`react-loadable-manifest.json`, one per page) and
+CONTENT-confirm each candidate chunk carries the `three`/`@react-three/*` signature before bounding it.
+Discovery now finds the chunk (`richviz/Scene` = 227.5 kB gz, not `[]`) and the cap is asserted against the
+REAL chunk. Additive + deduped — a non-mount-gated `{ssr:false}` Scene is still caught by the source-path path.
 
 | Field | Value |
 |-------|-------|
-| measured (esbuild, RESEARCH §1) | ~235.4 kB gz (three core dominates; drei helpers ~0.5 kB) |
-| recommended `ASYNC_ISLAND_CAP_BYTES` | 320 × 1024 (320 kB gz) — tune after the real `.next/` chunk is read |
-| REAL Turbopack chunk (`.next/`) | **RESERVED** — fill from the post-build measurement |
-| public First Load JS (must hold ≤ 200 kB gz) | **RESERVED** — confirm via `check:bundle` that edgerunner did not raise it (standard-lane baseline 156.7 kB gz) |
+| estimated (esbuild, RESEARCH §1) | ~235.4 kB gz |
+| **REAL Turbopack chunk (`.next/`)** | **227.5 kB gz** (863.1 kB raw) — `static/chunks/0wmg-ire2kixs.js`, found via the react-loadable-manifest content-confirmed path |
+| `ASYNC_ISLAND_CAP_BYTES` decision | **320 × 1024 — CONFIRMED comfortable** (~40 % headroom; NOT raised toward 350) |
+| public First Load JS | **164.4 kB gz** (budget 200) — Scene chunk NOT in it (no leak; `{ssr:false}` boundary held) |
+| route SSG/ISR posture (D-22) | **● SSG/ISR** — `/jadrianports` prerendered, `revalidate=3600s`; `route-table-ssg.test.ts` 3/3 green |
 
 ## Parity — FROZEN-FRAME (Plan 13-07, Task 1)
 
