@@ -97,3 +97,68 @@ export async function teardownTwoUsers(users: Partial<TwoUsers>): Promise<void> 
   );
   await cleanupTestUsers(...ids);
 }
+
+/**
+ * An admin test user — the GATE-04 (Phase-12) admin-action tests need a user whose
+ * `profiles.role = 'admin'` so the `is_admin()` SECURITY DEFINER helper (002:232)
+ * evaluates TRUE for them and the `*_admin all` RLS policies admit their writes.
+ *
+ * The suite currently has only `setupTwoUsers` — two NORMAL (`role='user'`) users —
+ * so admin-RLS reads/writes + the `is_admin()`-gated auto-fallback RPC have no caller
+ * to assert against. This fills that gap.
+ */
+export interface AdminUser {
+  user: TestUser;
+  /**
+   * An anon-key signed-in client for the admin user (RLS-scoped, carrying the real
+   * JWT subject) — so `is_admin()` evaluates against `auth.uid()`. NOT the
+   * service-role `adminClient` (which bypasses RLS entirely and would prove nothing
+   * about the admin-RLS policy path).
+   */
+  client: SupabaseClient;
+}
+
+/**
+ * Provision ONE confirmed user and promote them to `role='admin'`, then return the
+ * user plus an anon-key signed-in client for them.
+ *
+ * `role` is a PROTECTED profile column — the `enforce_protected_profile_columns`
+ * trigger (Plan 01-06) blocks any UPDATE of `role` from a normal client, and the
+ * anon role can never write it. The promotion therefore goes through the
+ * service-role `adminClient`, which bypasses BOTH RLS and the protected-columns
+ * trigger (the trigger's service-role short-circuit, 002:55) — this is the
+ * test-only equivalent of `scripts/promote-admin.ts`, inlined for the suite.
+ *
+ * `prefix` keeps the username unique per test file; `run` is the collision-proof
+ * per-run token (`crypto.randomUUID().slice(0, 8)`). LOCAL STACK ONLY —
+ * `*@example.test` is a reserved test domain.
+ */
+export async function setupAdminUser(prefix: string, run: string): Promise<AdminUser> {
+  await sweepLeftoverTestUsers();
+  const name = `${prefix}adm${run}`.slice(0, 30);
+
+  const user = await createTestUser({
+    email: `${name}@example.test`,
+    password: 'Test-Password-123!',
+    username: name,
+    display_name: `${prefix} Admin`,
+  });
+
+  // Promote to admin via the SERVICE-ROLE admin client — the only sanctioned path
+  // to set `role` (bypasses the protected-columns trigger; the anon client cannot).
+  const { error } = await adminClient()
+    .from('profiles')
+    .update({ role: 'admin' })
+    .eq('id', user.id);
+  expect(error).toBeNull();
+
+  // Return an ANON-KEY signed-in client (NOT the service-role adminClient) so
+  // `is_admin()` evaluates against this user's real JWT subject under RLS.
+  const client = await signedInClient(user);
+  return { user, client };
+}
+
+/** Tear down the admin user (cascades to their profile/portfolio rows). */
+export async function teardownAdminUser(admin?: AdminUser): Promise<void> {
+  if (admin?.user?.id) await cleanupTestUsers(admin.user.id);
+}
