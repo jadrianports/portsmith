@@ -53,6 +53,7 @@ import { expect, test } from '@playwright/test';
 import type { TemplateSpec } from '@/components/templates/minimal/spec';
 import { minimalSpec } from '@/components/templates/minimal/spec';
 import { editorialSpec } from '@/components/templates/editorial/spec';
+import { auroraSpec } from '@/components/templates/aurora/spec';
 import { goldenFixture } from '@/lib/fixtures/lovable-scaffold-golden';
 
 import { renderFixture } from './helpers/render-fixture';
@@ -70,6 +71,7 @@ import { renderFixture } from './helpers/render-fixture';
 const SPEC_BY_SLUG: Record<string, TemplateSpec> = {
   minimal: minimalSpec,
   editorial: editorialSpec,
+  aurora: auroraSpec,
 };
 
 /** Every registered template slug — the corpus the conformance gate generalizes over. */

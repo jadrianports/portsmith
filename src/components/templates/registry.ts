@@ -23,6 +23,7 @@ import { z } from 'zod';
 import type { PortfolioData } from './types';
 import { minimalSpec, type TemplateSpec } from './minimal/spec';
 import { editorialSpec } from './editorial/spec';
+import { auroraSpec } from './aurora/spec';
 
 /**
  * The slug → template map. The lazy import yields the template's default export
@@ -39,6 +40,12 @@ export const templateRegistry: Record<string, ComponentType<{ data: PortfolioDat
   // `{ ssr: false }` (the prohibition documented above — it triggers a build error
   // on a Server-Component entry; it is reserved for FUTURE Three.js CLIENT templates).
   editorial: dynamic(() => import('./editorial')),
+  // TMPL / 11-04 Wave-C: the `aurora` ("Aurora Rose") marketer template — the third
+  // public template, the real Lovable→Portsmith dogfood ship (the `marketing-girl`
+  // export, translated). A PLAIN LITERAL `dynamic(() => import('./aurora'))` (its folder
+  // is `aurora/`) — required for proper per-template code-splitting (the ≤200kb chunk
+  // budget). NEVER `{ ssr: false }` (build-forbidden on a Server-Component entry).
+  aurora: dynamic(() => import('./aurora')),
   // Three.js / CLIENT-only templates (later) live inside a Client Component and may
   // use `{ ssr: false }` THERE — never on a Server-Component template entry above.
 };
@@ -66,6 +73,10 @@ export function resolveTemplate(slug: string): ComponentType<{ data: PortfolioDa
 const TEMPLATE_UUIDS = {
   minimal: '00000000-0000-4000-8000-000000000001',
   editorial: '00000000-0000-4000-8000-000000000002',
+  // 11-04 Wave-C: the `aurora` template — the next pinned literal after editorial
+  // (…0002). It MUST equal the 010 seed migration's UUID exactly or `slugForTemplateId`
+  // can't resolve and the public read falls back to minimal.
+  aurora: '00000000-0000-4000-8000-000000000003',
 } as const;
 
 /** The inverse map (UUID → slug), derived from {@link TEMPLATE_UUIDS}. */
@@ -102,6 +113,7 @@ export function uuidForSlug(slug: string): string {
 export const specRegistry: Record<string, TemplateSpec> = {
   minimal: minimalSpec,
   editorial: editorialSpec,
+  aurora: auroraSpec,
 };
 
 /**

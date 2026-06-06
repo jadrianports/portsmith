@@ -52,6 +52,12 @@ export const templateMeta: Record<string, TemplateMeta> = {
     thumbnailAlt:
       'Editorial template preview — light ivory canvas, large serif headline, ruled sections',
   },
+  aurora: {
+    name: 'Aurora',
+    description: 'A warm, rosy single-scroll with gradient accents and soft glass cards.',
+    thumbnailAlt:
+      'Aurora template preview — pale rose canvas with a gradient headline name and soft rounded cards',
+  },
 };
 
 /**
