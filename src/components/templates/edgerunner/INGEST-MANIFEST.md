@@ -70,6 +70,38 @@ stripped/converted to the kit + scoped CSS; the ONE WebGL file becomes the lazy 
 `services` and `blog_preview` are `supported:false`. Confirm the exact list when `edgerunner/spec.ts` is
 authored.
 
+### CONFIRMED at generation (Plan 13-04)
+
+**Final supported set (7) — locked in `edgerunner/spec.ts`:** `hero, about, metrics, experience,
+projects, skills, contact` (rendered IN THIS source order by `index.tsx`). `services` + `blog_preview`
+are `supported:false` (D-01 → 13.2). The exact section order in the RSC root is: Hero (→ mounts the
+`<HoloShape>` WebGL centerpiece + the CSS sky/sun/grid backdrop, D-04) → About → Metrics
+(`profile.stats → metrics`, D-08) → Experience (the "timeline" render-style, D-08) → Projects (reuses
+`ProjectsWithModal`, reading `item.description` — A4 resolved, no `longDescription`) → Skills (the
+animated `level` bars, the D-09 signature) → Contact → Footer.
+
+**react-icons → simple-icons translation (T-13-04-ORIGIN):** the export's `src/data/tools.ts` imported
+~24 brand logos from `react-icons/si` (NOT on the D-15 allowlist). These were re-authored to the in-repo
+`simple-icons` `.path` server-render pattern in `edgerunner/sections/icons.ts` — a curated ≤15 NAMED-import
+set (`react/typescript/nextdotjs/tailwindcss/nodedotjs/python/graphql/go/postgresql/supabase/prisma/
+docker/vercel/cloudflare`) covering the founder's Tools stack. NAMED individual imports only (the
+tree-shaking guarantee — a namespace/barrel import is forbidden); a slug absent from the map renders no
+logo (the skill name + bar still render). Zero client JS (Server-Component `<svg><path d></svg>`).
+
+**Stripped / dropped decisions (confirmed shipped):**
+- **`ThemeToggle` DROPPED** (D-06 dark-only) — `index.tsx` injects `themeInitScript('dark')` + hardcodes
+  `data-template-theme="dark"` and does NOT import/mount the kit `ThemeToggle` (the single structural
+  deviation from minimal/aurora; the kit toggle stays intact for the other templates).
+- **`cmdk` CommandPalette DROPPED** (D-07) — pointless on a single scroll; not carried in, not installed.
+- **`services` / `blog_preview` DEFERRED → 13.2** (D-01) — `supported:false` in `spec.ts`.
+- **The 2 sanctioned `dangerouslySetInnerHTML` producers ONLY** survive (`themeInitScript` FOUC guard +
+  `personLdScriptHtml` JSON-LD); the export's danger-html (chart.tsx) + inline-handler (error-page) +
+  external-origin (data layer) + external-font-origin (runtime Google-Fonts link) must-strips are all gone
+  with the stripped files (fonts self-hosted via `next/font/google` in `edgerunner/fonts.ts`).
+- **`framer-motion` DROPPED** — the entrance reveals are the kit `ScrollReveal`; the CSS synthwave layer
+  (`@keyframes tmpl-edgerunner-*`) replaces the decorative motion; the kept effects (PowerOnFlash +
+  CursorTrail) are re-authored zero-install (CSS/rAF) in `edgerunner/effects.tsx` (Plan 13-04 Task 3).
+
 ## Dependency Decisions
 
 **The Task-1 (13-01) `ingest:scan` surfaced 186 advisory unknown-dependency FLAGs** (the export's
