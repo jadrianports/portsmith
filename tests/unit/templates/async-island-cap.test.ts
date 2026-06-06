@@ -28,13 +28,17 @@ import {
 } from '../../../scripts/check-bundle-budget';
 
 describe('async-island cap reject predicate (B2 / D-P10-02 — PIPE-08 / CONTRACT §5)', () => {
-  it('the cap is the CONTRACT §5 starting figure (250 kB gz)', () => {
-    expect(ASYNC_ISLAND_CAP_BYTES).toBe(250 * 1024);
+  it('the cap is the Phase-13 tuned figure (320 kB gz — D-05 / RESEARCH §1)', () => {
+    // Phase 10 shipped 250 kB as a starting figure; Phase 13 (the first rich-lane
+    // template, edgerunner) tuned it to 320 kB gz = the measured ~235 kB esbuild
+    // floor + ~36% headroom, inside the D-05 ~300–350 band (provisional pending the
+    // plan-07 real-Turbopack-chunk re-evaluation).
+    expect(ASYNC_ISLAND_CAP_BYTES).toBe(320 * 1024);
   });
 
   // --- RED: the real reject path, exercised NOW against a synthetic over-cap input ---
   it('THROWS on a synthetic over-cap scene chunk AND names the over-cap construct', () => {
-    const overCap = ASYNC_ISLAND_CAP_BYTES + 1; // strictly over the 250 kB gz cap
+    const overCap = ASYNC_ISLAND_CAP_BYTES + 1; // strictly over the 320 kB gz cap
     const label = 'richviz/scene-island';
 
     expect(() => assertAsyncIslandWithinCap(overCap, label)).toThrow();
@@ -43,7 +47,7 @@ describe('async-island cap reject predicate (B2 / D-P10-02 — PIPE-08 / CONTRAC
     // "too big" without the offending construct would not let an operator find it.
     expect(() => assertAsyncIslandWithinCap(overCap, label)).toThrow(/richviz\/scene-island/);
     // ...and state that it EXCEEDS the cap (the magnitude vs the cap).
-    expect(() => assertAsyncIslandWithinCap(overCap, label)).toThrow(/OVER the 250 kB/);
+    expect(() => assertAsyncIslandWithinCap(overCap, label)).toThrow(/OVER the 320 kB/);
   });
 
   it('THROWS on a grossly-over-cap chunk (e.g. a 1 MB un-tree-shaken three.js import)', () => {

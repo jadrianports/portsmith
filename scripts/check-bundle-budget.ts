@@ -16,16 +16,18 @@
  *       Pitfall 3 (the `simple-icons` bundle-leak risk: a non-tree-shaken barrel
  *       or a whole-set import ballooning the client chunk).
  *
- *   (3) a per-template **async-island scene chunk exceeds 250 kB gzipped** — the
- *       Phase-10 ADDITION (PIPE-08 / CONTRACT §5). The rich/viz lane ships a lazy
+ *   (3) a per-template **async-island scene chunk exceeds the async-island cap
+ *       (`ASYNC_ISLAND_CAP_BYTES`, 320 kB gz — Phase 13 tune; was 250 in P10)** —
+ *       the Phase-10 ADDITION (PIPE-08 / CONTRACT §5). The rich/viz lane ships a lazy
  *       `{ ssr: false }` scene island (Three.js / R3F) that, by construction,
  *       appears in NEITHER the route's `rootMainFiles` NOR the page
- *       client-reference-manifest (CONTRACT §5), so the First-Load-JS gate above
- *       genuinely cannot see it — it needs its OWN measurement path governed by a
- *       SEPARATE async-island sanity cap (`ASYNC_ISLAND_CAP_BYTES = 250 kB gz`, a
- *       starting figure Phase 13 tunes). The standard-lane templates (`minimal` /
- *       `editorial`) ship NO async scene chunk, so the live `.next/` scan
- *       legitimately NO-OPS on the current corpus ("no async scene chunk → pass").
+ *       client-reference-manifest's EAGER set (CONTRACT §5), so the First-Load-JS
+ *       gate above genuinely cannot see it — it needs its OWN measurement path
+ *       governed by a SEPARATE async-island sanity cap. The standard-lane templates
+ *       (`minimal` / `editorial`) ship NO async scene chunk, so the live `.next/`
+ *       scan legitimately NO-OPS on a pre-edgerunner corpus ("no async scene chunk
+ *       → pass"); once `edgerunner` is built, `discoverAsyncSceneChunks()` locates
+ *       its lazy Scene chunk via the client-reference manifests and bounds it.
  *       The reject LOGIC is still proven NOW: the cap predicate is EXPORTED
  *       (`assertAsyncIslandWithinCap`) and unit-exercised against a synthetic
  *       over-cap input by `tests/unit/templates/async-island-cap.test.ts` (B2 /
@@ -73,7 +75,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { gzipSync } from 'node:zlib';
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -84,13 +86,31 @@ const FIRST_LOAD_JS_BUDGET_BYTES = 200 * 1024; // 200 kB gzipped (D-25)
  * The per-template async-island sanity cap (PIPE-08 / CONTRACT §5). The rich/viz
  * lane's lazy `{ ssr: false }` scene chunk (Three.js / R3F) is NOT counted in the
  * route's First Load JS (it appears in neither `rootMainFiles` nor the page
- * client-reference-manifest), so it is bounded by THIS separate cap. 250 kB gz is a
- * STARTING FIGURE — Phase 13 (the first rich-lane template) tunes it against a real
- * measured scene chunk. The standard-lane corpus (minimal/editorial) ships no async
- * scene chunk, so the live scan no-ops; the cap's REJECT path is unit-proven NOW
- * against a synthetic over-cap input (B2 / D-P10-02).
+ * client-reference-manifest), so it is bounded by THIS separate cap. The
+ * standard-lane corpus (minimal/editorial) ships no async scene chunk, so the live
+ * scan no-ops; the cap's REJECT path is unit-proven against a synthetic over-cap
+ * input (B2 / D-P10-02).
+ *
+ * ── Phase 13 tune (D-05, RESEARCH §1 [HEADLINE]) ─────────────────────────────────
+ * Raised from the Phase-10 starting figure (250 kB) to 320 kB gz. The first
+ * rich-lane template (`edgerunner`) measured an esbuild floor of ~235.4 kB gz for
+ * the real `HoloShape` scene (three@0.184.0 + @react-three/fiber@9.6.1 +
+ * @react-three/drei@10.7.7, react/react-dom external, gzip -9) — three.js core
+ * (~234 kB) dominates and does not tree-shake; drei's named helpers add ~0.5 kB.
+ * 320 kB = measured 235 + ~36% headroom: it absorbs Turbopack chunking overhead, a
+ * future minor `three` bump, and the D-03 "3D amplification" follow-up, while still
+ * catching the real failure modes (a 1 MB texture dump or `import * from 'three'`
+ * would blow well past 320, and 350 is the D-05 ceiling so a regression toward it
+ * still signals). The 235 kB figure is from esbuild, NOT Next/Turbopack.
+ *
+ * MANDATORY plan-07 re-evaluation: 320 is PROVISIONAL. After `edgerunner` is
+ * registered + a real `next build` runs, the LIVE `discoverAsyncSceneChunks()` below
+ * reads the ACTUAL gzipped `.next/` Scene chunk. Plan 07 records that real number in
+ * INGEST-MANIFEST.md and, if it exceeds ~290 kB (i.e. eats most of the 320 headroom),
+ * re-evaluates the cap UPWARD toward 350 (still in the D-05 band) AND audits for an
+ * accidental `import * from 'three'`. Do NOT assume 235 is the shipped number.
  */
-export const ASYNC_ISLAND_CAP_BYTES = 250 * 1024; // 250 kB gzipped (CONTRACT §5)
+export const ASYNC_ISLAND_CAP_BYTES = 320 * 1024; // 320 kB gzipped (D-05 / RESEARCH §1; was 250 in P10)
 
 /** Repo-relative paths (the script is run from the repo root by the npm script). */
 const NEXT_DIR = path.resolve('.next');
@@ -330,18 +350,97 @@ export function assertAsyncIslandWithinCap(gzippedBytes: number, label: string):
  * the SAME `gzipSync(readFileSync(abs), { level: 9 }).length` mechanic
  * `collectRouteClientChunks` uses for First Load JS, so the two measurements agree.
  *
- * Discovery: a rich-lane template's scene island compiles to a Turbopack chunk that
- * carries an `ssr:false`/scene marker. Until such a template exists there is no such
- * chunk to find — `discoverAsyncSceneChunks()` returns `[]` and the loop is empty.
+ * Discovery (Phase 13 — LIVE): a rich-lane template's lazy `{ ssr: false }` scene
+ * island is recorded in the page client-reference manifests. Each page emits a
+ * `*_client-reference-manifest.js` that assigns `globalThis.__RSC_MANIFEST[page] = {
+ * clientModules: { "[project]/<src module path>": { chunks: [...] }, ... } }`. A
+ * `dynamic(() => import('./Scene'), { ssr: false })` lazy module appears in that
+ * `clientModules` map keyed by its source path (e.g.
+ * `[project]/src/components/templates/edgerunner/Scene.tsx`), with its `chunks` array
+ * pointing at the on-disk `static/chunks/*.js`. `discoverAsyncSceneChunks()` scans
+ * every page manifest, matches the rich-lane Scene module by source path, resolves +
+ * dedupes its chunk files, and returns them. It returns `[]` when no such module is
+ * found — a pre-edgerunner build or the standard lane — so the live scan still
+ * no-ops and never false-fails on absence.
  */
+
+/** The rich-lane Scene source-path marker (matched against the manifest keys). */
+const ASYNC_SCENE_MODULE_MARKER = /\/components\/templates\/([A-Za-z0-9_-]+)\/Scene\.[jt]sx?\b/;
+
+/** All page client-reference manifests Turbopack emits under `.next/server/app`. */
+const APP_SERVER_DIR = path.join(NEXT_DIR, 'server', 'app');
+
+/** Recursively collect every `*_client-reference-manifest.js` under `.next/server/app`. */
+function findClientRefManifests(dir: string, acc: string[] = []): string[] {
+  if (!existsSync(dir)) return acc;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) findClientRefManifests(full, acc);
+    else if (entry.isFile() && entry.name.endsWith('_client-reference-manifest.js')) acc.push(full);
+  }
+  return acc;
+}
+
+/**
+ * Parse the `clientModules` map out of a `*_client-reference-manifest.js` file. The
+ * file is a `globalThis.__RSC_MANIFEST[page] = {...JSON...};` assignment; extract the
+ * `{...}` object literal (it is plain JSON) and JSON.parse it. Returns `null` if the
+ * shape is unexpected (the gate then simply finds no scene chunk in that file).
+ */
+function parseClientModules(
+  manifestFile: string,
+): Record<string, { chunks?: string[] }> | null {
+  let raw: string;
+  try {
+    raw = readFileSync(manifestFile, 'utf8');
+  } catch {
+    return null;
+  }
+  // The assignment is `...__RSC_MANIFEST[...] = { ... };` — slice from the first `{`
+  // after the `=` to the matching trailing `}` (the object is the rest of the line
+  // before the final `;`). The payload is JSON (double-quoted keys), so JSON.parse it.
+  const eq = raw.indexOf('=');
+  if (eq === -1) return null;
+  const objStart = raw.indexOf('{', eq);
+  const objEnd = raw.lastIndexOf('}');
+  if (objStart === -1 || objEnd === -1 || objEnd <= objStart) return null;
+  try {
+    const parsed = JSON.parse(raw.slice(objStart, objEnd + 1)) as {
+      clientModules?: Record<string, { chunks?: string[] }>;
+    };
+    return parsed.clientModules ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function discoverAsyncSceneChunks(): { abs: string; label: string }[] {
-  // Phase 10: NO rich-lane template exists, so there is no lazy { ssr: false } scene
-  // chunk in `.next/` to measure. When a Phase-13 async-island template ships, its
-  // scene chunk is discovered + returned here (e.g. by matching the template's
-  // dynamic-import chunk-group manifest); for now this is an intentional empty set so
-  // the live scan no-ops on the standard lane. The REJECT predicate above is the
-  // Phase-10 proof (unit-exercised), per A5 (implementing-but-no-op-now matches scope).
-  return [];
+  // Map a normalized chunk abs-path → its template-scoped label so the same chunk
+  // discovered across multiple page manifests (or via the `<module evaluation>`
+  // duplicate keys) is measured once.
+  const byAbs = new Map<string, string>();
+
+  for (const manifestFile of findClientRefManifests(APP_SERVER_DIR)) {
+    const clientModules = parseClientModules(manifestFile);
+    if (!clientModules) continue;
+    for (const [moduleKey, mod] of Object.entries(clientModules)) {
+      const m = ASYNC_SCENE_MODULE_MARKER.exec(moduleKey);
+      if (!m) continue; // not a rich-lane Scene module
+      const slug = m[1]; // e.g. "edgerunner"
+      const chunks = Array.isArray(mod.chunks) ? mod.chunks : [];
+      for (const chunk of chunks) {
+        // Manifest chunks are emitted as `/_next/static/chunks/*.js`; the on-disk
+        // path drops the leading `/_next/` and is rooted at `.next/`. Only JS chunks
+        // contribute to the scene's JS weight (CSS is measured elsewhere).
+        if (!chunk.endsWith('.js')) continue;
+        const rel = chunk.replace(/^\/_next\//, '').replace(/^\//, '');
+        const abs = path.join(NEXT_DIR, rel);
+        byAbs.set(abs, `${slug}/Scene`);
+      }
+    }
+  }
+
+  return [...byAbs.entries()].map(([abs, label]) => ({ abs, label }));
 }
 
 function assertTemplateAsyncIslandsWithinCap(): void {
