@@ -73,11 +73,12 @@ export function Contact({ section }: SectionProps) {
   // The public-email mailto is render-if-present (Option A — sourced from
   // settings.email_public through the seed). Absent/empty ⇒ no mailto element. The
   // email is validated by `z.email()` (well-behaved), but the `href` is still built
-  // through the shared guard with `allowMailto` (CR-01 belt-and-suspenders) and the
-  // address is `encodeURIComponent`-escaped before interpolation into the URL.
+  // through the shared guard with `allowMailto` (CR-01 belt-and-suspenders). The address
+  // is interpolated literally — the `@` MUST stay literal (percent-encoding it breaks the
+  // recipient in many mail clients); z.email() + the safeHref mailto guard are the gates.
   const emailPublic = present(content.email_public) ? content.email_public : null;
   const mailtoHref = emailPublic
-    ? safeHref(`mailto:${encodeURIComponent(emailPublic)}`, { allowMailto: true })
+    ? safeHref(`mailto:${emailPublic}`, { allowMailto: true })
     : undefined;
 
   return (

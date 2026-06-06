@@ -45,7 +45,7 @@ export function Contact({ section }: SectionProps) {
     : "Have an idea in mind? Let's create marketing magic together.";
   const emailPublic = present(content.email_public) ? content.email_public : null;
   const mailtoHref = emailPublic
-    ? safeHref(`mailto:${encodeURIComponent(emailPublic)}`, { allowMailto: true })
+    ? safeHref(`mailto:${emailPublic}`, { allowMailto: true })
     : undefined;
 
   return (

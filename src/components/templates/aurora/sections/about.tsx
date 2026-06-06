@@ -17,7 +17,7 @@ import Image from 'next/image';
 import type { SectionProps } from './types';
 import type { AboutContent } from '@/lib/validations';
 import { isHttpImageSrc } from '@/lib/safe-image';
-import { hairlineStyle, headingStyle, kickerStyle, present, sectionShellStyle } from './shared';
+import { hairlineStyle, kickerStyle, present, sectionShellStyle } from './shared';
 
 export function About({ section }: SectionProps) {
   const content = (section?.content ?? null) as AboutContent | null;
