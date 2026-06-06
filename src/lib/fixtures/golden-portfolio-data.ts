@@ -25,17 +25,32 @@ import type { PortfolioData, PublicProfile, PublicSection, PublicSettings } from
 import { goldenFixture } from '@/lib/fixtures/lovable-scaffold-golden';
 
 /**
- * The canonical render ORDER of the dev section types (D-05) — the SAME order both
- * template roots wrap their `<ScrollReveal as="section">` sections in. The golden
- * `PortfolioData.sections` array is emitted in this order with ascending `sort_order`.
+ * The canonical render ORDER of the golden section types — the 7 dev sections (D-05)
+ * PLUS the 5 marketer-vertical types (11-04 Step C1: education/metrics/services/
+ * moodboard/certifications). The golden `PortfolioData.sections` array is emitted in this
+ * order with ascending `sort_order`.
+ *
+ * ORDER (the `aurora` template's section order — the source `marketing-girl/Index.tsx`,
+ * minus the dropped Blog): a supporting template renders the sections it declares
+ * supported; `minimal`/`editorial` OMIT the 5 marketer types from their specs (a Partial
+ * spec record ⇒ treated as unsupported) AND render only their own 7 hardcoded
+ * `<ScrollReveal>` sections by `sectionOfType` — so the extra marketer rows in this array
+ * are simply IGNORED by those two roots (their golden parity baselines stay
+ * byte-identical). The new keys exist so `aurora` (which supports all 12) renders its full
+ * section set over the `/__fixture/aurora` route (the conformance / a11y / parity gates).
  */
 const GOLDEN_SECTION_ORDER = [
   'hero',
   'about',
-  'skills',
-  'projects',
+  'education',
   'experience',
+  'metrics',
+  'projects',
+  'services',
+  'skills',
   'testimonials',
+  'moodboard',
+  'certifications',
   'contact',
 ] as const satisfies ReadonlyArray<keyof typeof goldenFixture>;
 

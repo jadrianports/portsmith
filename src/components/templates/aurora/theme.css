@@ -1,0 +1,427 @@
+/*
+ * Scoped theme tokens for the `aurora` template — "Aurora Rose" (11-04 Wave-C, the
+ * marketer dogfood ship). The translated identity of the `lovable-exports/marketing-girl/`
+ * design: a soft, rosy, gradient-forward glamour aesthetic (LIGHT-default "Rose Day"),
+ * inverting to a neon-pink near-black ("Blackpink Night") in dark mode — the source's own
+ * two palettes, re-expressed in the scoped token vocabulary.
+ *
+ * TWO-LAYER UI ISOLATION (D-17, SHARED-D, Threat T-11-04-ISOLATE):
+ * This file declares the template's OWN tokens scoped to the `.tmpl-aurora` root. It
+ * shares NOTHING with the platform-chrome design tokens in `src/app/globals.css`
+ * (Evergreen/Copper, CMS-only) AND NOTHING with `minimal`'s (Midnight Outrun) or
+ * `editorial`'s (Newsprint) tokens. There is deliberately:
+ *   - no Tailwind at-rule theme block (chrome owns that; the template uses plain scoped
+ *     CSS custom properties). The source's shadcn `--background`/`--primary`/`--ring`
+ *     HSL vars + `@tailwind base/components/utilities` are CONVERTED to the scoped
+ *     18-token vocabulary here (Task 2 translation).
+ *   - no reference to any chrome color custom property (the `--color-*` prefixed ones).
+ *   - no chrome UI font (Inter is forbidden inside any template, D-17). The source used
+ *     Inter for body; aurora's own faces (Poppins / Plus Jakarta Sans / Space Mono) are
+ *     bound via next/font in `fonts.ts`.
+ * Every other aurora file reads `var(--token)` — this file is the SOLE token source, so
+ * it is the ONLY place hardcoded hex values live in the template.
+ *
+ * GRADIENT IDENTITY (the source's signature, re-hosted as a template-private token):
+ * the source's `--gradient-primary` (pink → blush) drives the hero name's gradient-clip
+ * and the section-accent flourishes. It is a template-PRIVATE extra (NOT one of the 18
+ * required tokens — those are the cross-template intersection); allowed per contract.ts
+ * "template-private extras are ALLOWED".
+ *
+ * CHROME-GUTTER FIX: the `.tmpl-aurora` root sets `background: var(--bg)` + `min-height:
+ * 100vh` so the template paints its OWN full-bleed canvas; the `(portfolio)` route-group
+ * layout already neutralizes the chrome `body` background for that group only.
+ *
+ * AA NOTE: the primary rose `#D6336C` computes ~4.6:1 on the pale rose `--bg` (PASS body
+ * text); white-on-rose for the CTA = ~4.9:1 (PASS). The dark-mode neon pink `#FF5BA8`
+ * computes ~6.1:1 on the near-black `--bg`. Body/heading text uses the deep plum ink, not
+ * the accent, so no essential text depends on a low-contrast pairing.
+ */
+
+/* ============================================================================
+ * LIGHT — "Rose Day" (primary / default). aurora defaults LIGHT (the source's
+ * default palette is the pale-rose day theme).
+ * ========================================================================== */
+.tmpl-aurora {
+  /* Surfaces — pale rose paper (warm, NOT pure white; distinct from chrome + the
+     other two templates' canvases). */
+  --bg: #fdf6f9; /* page canvas — pale rose-white */
+  --surface: #ffffff; /* elevated card / glass panel */
+  --surface-muted: #f8e9f0; /* inset fills, chips, metric panels, zebra */
+
+  /* Foreground — deep plum ink (warm, reads as "ink" not pure black). */
+  --fg: #2a1622; /* primary text — deep plum (13.9:1 on bg) */
+  --muted-fg: #6f5763; /* lead/meta/dates/captions — muted mauve (5.3:1 on bg) */
+
+  /* Borders — soft rose hairlines (decorative, low-contrast by design — WCAG
+     1.4.11 exempt). */
+  --border: #f1d9e4;
+  --border-strong: #e3b9cd;
+
+  /* Accent — the ONE rose, used for CTAs, links, "Core" markers, accent flourishes.
+     Deep enough for AA as text/fill. */
+  --accent: #d6336c; /* rose-magenta — CTA fill, link-hover, accent marks */
+  --ring: #d6336c; /* focus ring = accent (PASS UI >=3:1 on every surface) */
+
+  /* Functional semantic colors (NOT part of the accent budget). */
+  --success: #2e7d52; /* 4.8:1 on surface — success copy on the white panel */
+  --destructive: #c2304b; /* 5.1:1 on surface — error copy on the form panel */
+
+  /* SIGNATURE GRADIENT (template-private extra — the source's identity): pink → blush
+     → coral. Drives the hero name gradient-clip + accent flourishes. */
+  --aurora-gradient: linear-gradient(135deg, #d6336c 0%, #f06595 45%, #ffa8a8 100%);
+
+  /* Shared report-dialog COMPLETE-VALUE tokens (DEF-07-03-01 — the SAME `<ReportDialog>`
+     island mounts under aurora and reads THESE per-template tokens; the island carries
+     NO hardcoded hex). Each token is the WHOLE CSS value for one dialog property.
+     Aurora = the rosy gradient identity: a gradient top-hairline, a soft rose bloom
+     backdrop, and a rose ring + soft rose glow drop (the source's glow vibe, restrained). */
+  --tmpl-modal-hairline: var(--aurora-gradient);
+  --tmpl-modal-backdrop: radial-gradient(
+      120% 80% at 50% 120%,
+      rgba(214, 51, 108, 0.08) 0%,
+      rgba(240, 101, 149, 0.05) 35%,
+      transparent 70%
+    ),
+    color-mix(in srgb, var(--bg) 82%, transparent);
+  --tmpl-modal-shadow: 0 0 0 1px var(--accent),
+    0 18px 44px -22px rgba(214, 51, 108, 0.32), 0 0 60px -34px rgba(240, 101, 149, 0.4);
+  --tmpl-modal-cta-shadow: 0 8px 28px -12px rgba(214, 51, 108, 0.36);
+
+  /* Radius — the template's OWN scale (SOFT + rounded, matching the source's `--radius:
+     1rem` glamour vibe — the opposite of editorial's near-square). */
+  --radius-sm: 10px; /* chips, small inputs, tier pills */
+  --radius-md: 14px; /* buttons, form fields */
+  --radius-lg: 22px; /* cards, panels, contact shell */
+  --radius-full: 9999px; /* avatar, status dot, toggle knob, pill buttons */
+
+  /* The template owns its full-bleed canvas (no chrome gutter behind the scroll). */
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+
+  /* SELF-CONTAINED BODY FONT (D-17 two-layer isolation / D-01). Anchor the template
+     ROOT to its OWN body face (Plus Jakarta Sans, `--font-body`, injected onto this
+     same element via `fontVars` in index.tsx) so every `ch`/`em` measure resolves
+     against the template's own font, independent of any host root (NOT the chrome
+     Inter — the leak the 08-03 minimal fix hardened against). Display headings stay
+     explicitly set on their own elements (`--font-display`). */
+  font-family: var(--font-body);
+}
+
+/* ============================================================================
+ * DARK — "Blackpink Night" (first-class designed inversion, not a fallback). A near-
+ * black ground with neon-pink accents + warm rose-white type — the source's own dark
+ * palette. Activated by the `data-template-theme='dark'` attribute. Only color
+ * variables swap — radius, fonts, and layout do not change.
+ * ========================================================================== */
+.tmpl-aurora[data-template-theme='dark'] {
+  --bg: #0a0708; /* near-black ground (warm-tinted) */
+  --surface: #161013; /* elevated card */
+  --surface-muted: #221820; /* inset fills, chips */
+
+  --fg: #fbeef4; /* warm rose-white type (16.1:1 on bg) */
+  --muted-fg: #c4a7b6; /* lead/meta (8.2:1 on bg) */
+
+  --border: #2c2027; /* decorative hairline (1.4.11 exempt) */
+  --border-strong: #40303a; /* hover/focus-adjacent (decorative) */
+
+  /* Neon pink for the dark ground (the source's "Blackpink" accent), lightened to
+     stay AA. 6.1:1 on bg — PASS body; text ON the accent fill uses white. */
+  --accent: #ff5ba8;
+  --ring: #ff5ba8;
+
+  --success: #5fcf93; /* 8.1:1 on bg */
+  --destructive: #ff7d92; /* 7.0:1 on bg */
+
+  /* Dark-mode signature gradient — neon pink → hot pink → warm pink. */
+  --aurora-gradient: linear-gradient(135deg, #ff5ba8 0%, #ff7eb6 50%, #ffa8c5 100%);
+
+  /* Report-dialog tokens in DARK: the hairline + ring auto-inherit the neon `--accent`
+     / `--aurora-gradient`; the backdrop scrim auto-uses the dark `--bg`. The glow drop
+     deepens for the dark ground. */
+  --tmpl-modal-shadow: 0 0 0 1px var(--accent),
+    0 18px 44px -22px rgba(0, 0, 0, 0.55), 0 0 60px -34px rgba(255, 91, 168, 0.4);
+  --tmpl-modal-cta-shadow: 0 8px 28px -12px rgba(255, 91, 168, 0.4);
+}
+
+/* ============================================================================
+ * CONTENT SHELL — ONE shared, responsive centered column applied to every section's
+ * content + the footer content (mirrors minimal/editorial's `.tmpl-shell`). Decorative
+ * full-bleed layers (the hero glow backdrop) stay OUTSIDE the shell.
+ *   - max-width 72rem (1152px) — centered via `margin-inline: auto`.
+ *   - padding-inline clamp(1.5rem, 5vw, 4rem) — ≈24px mobile gutter → ~64px desktop.
+ *   - width 100% + box-sizing border-box so the gutter is padding (no overflow).
+ * ========================================================================== */
+.tmpl-aurora .tmpl-shell {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.5rem, 5vw, 4rem);
+}
+
+/* The aurora reading measure for long-form prose. */
+.tmpl-aurora .tmpl-measure {
+  max-width: 40rem;
+}
+
+/* ============================================================================
+ * ABOVE-THE-FOLD HERO LOAD-REVEAL (TMPL-04 LCP <= 2.5s). The Hero NAME is the page's
+ * LCP element and is ALWAYS in view, so it must NOT be gated by the JS
+ * IntersectionObserver opacity:0 reveal (the "entrance animation on the LCP element"
+ * anti-pattern that defers measured LCP). The Hero wrapper (`.tmpl-load-reveal`,
+ * rendered STATIC server-side by ScrollReveal's `priority` branch) paints at its FINAL
+ * position from frame 1 — ZERO entrance motion, CLS = 0. (Identical contract to
+ * minimal/editorial; the source's framer-motion hero entrance is DROPPED — the kit
+ * ScrollReveal + CSS replace it, and the LCP element gets no entrance.)
+ * ========================================================================== */
+.tmpl-aurora .tmpl-load-reveal {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+/* ============================================================================
+ * Hero glow backdrop (the source's signature soft bloom — re-hosted as CSS-only,
+ * decorative, perf-cheap radial gradients; NO framer-motion). Pure atmosphere behind
+ * the hero content, always visible (a static glow is not "motion" — reduced-motion
+ * exempt, like minimal's hero glow). Scoped to `.tmpl-aurora`.
+ * ========================================================================== */
+.tmpl-aurora .tmpl-hero-glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 50% at 18% 22%, rgba(214, 51, 108, 0.16) 0%, transparent 70%),
+    radial-gradient(46% 56% at 82% 78%, rgba(255, 168, 168, 0.18) 0%, transparent 70%);
+}
+.tmpl-aurora[data-template-theme='dark'] .tmpl-hero-glow {
+  background:
+    radial-gradient(40% 50% at 18% 22%, rgba(255, 91, 168, 0.22) 0%, transparent 70%),
+    radial-gradient(46% 56% at 82% 78%, rgba(255, 126, 182, 0.18) 0%, transparent 70%);
+}
+
+/* The hero name's gradient-clip (the source's `gradient-text` signature). The text is
+   painted with the signature gradient via background-clip; a solid `--fg` fallback is
+   set on the element inline so the name is never invisible if clip is unsupported. */
+.tmpl-aurora .tmpl-hero-name {
+  background: var(--aurora-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* ============================================================================
+ * Theme toggle (shared-kit `ThemeToggle` island styling hook). The island carries
+ * only the universal 44px hit-area + glyph centering inline; ALL per-template visual
+ * styling lives HERE (D-01/D-03). Aurora = fixed top-right, full-radius pill, soft
+ * rose surface.
+ * ========================================================================== */
+.tmpl-aurora .tmpl-theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 50;
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.tmpl-aurora .tmpl-theme-toggle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+ * Cards — soft glass-lift + glow on hover (the source's glassmorphism vibe, restrained).
+ * Inline styles cannot express `:hover`, and the sections are Server Components, so the
+ * interactive treatment lives here, scoped to `.tmpl-aurora` (D-17). All values read
+ * scoped tokens (low-alpha rose glow is the documented decorative exemption, same as
+ * minimal's card glow). Used by project cards, metric cards, service cards, etc.
+ * ========================================================================== */
+.tmpl-aurora .tmpl-project-card {
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+.tmpl-aurora .tmpl-project-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 1px var(--accent), 0 16px 40px -22px rgba(214, 51, 108, 0.4);
+  transform: translateY(-3px);
+}
+.tmpl-aurora[data-template-theme='dark'] .tmpl-project-card:hover {
+  box-shadow: 0 0 0 1px var(--accent), 0 16px 40px -22px rgba(255, 91, 168, 0.45);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tmpl-aurora .tmpl-project-card:hover {
+    transform: none;
+  }
+}
+
+/* Links — rose hover with a soft underline-grow. */
+.tmpl-aurora .tmpl-project-link {
+  position: relative;
+  color: var(--fg);
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+.tmpl-aurora .tmpl-project-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transform-origin: left center;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+.tmpl-aurora .tmpl-project-link:hover {
+  color: var(--accent);
+}
+.tmpl-aurora .tmpl-project-link:hover::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+/* ============================================================================
+ * Contact — form-field focus ring + the live-submit spinner/success classes. The
+ * Contact section hosts the LIVE `<ContactForm>` island (Phase-6 complete,
+ * template-agnostic). That island reads scoped `var(--token)` + the SHARED class hooks
+ * below — so this template MUST define them scoped to `.tmpl-aurora` (the rose focus
+ * ring). All values read scoped tokens.
+ * ========================================================================== */
+.tmpl-aurora .tmpl-contact-field {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.tmpl-aurora .tmpl-contact-field:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ring);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tmpl-aurora .tmpl-contact-spinner {
+    animation: tmpl-aurora-contact-spin 0.7s linear infinite;
+  }
+  .tmpl-aurora .tmpl-contact-success-pulse {
+    animation: tmpl-aurora-contact-success 420ms cubic-bezier(0.2, 0, 0, 1) 1;
+  }
+}
+
+@keyframes tmpl-aurora-contact-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A soft rose → success glow pulse on the confirmation panel. */
+@keyframes tmpl-aurora-contact-success {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent), 0 0 28px -6px var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 1px var(--success), 0 0 0 0 transparent;
+  }
+}
+
+/* ============================================================================
+ * Report dialog (DEF-07-03-01) — the shared `<ReportDialog>` island mounts in the
+ * aurora FOOTER under the `.tmpl-aurora` root, so it needs THESE scoped `.tmpl-modal-*`
+ * / `.tmpl-project-modal-*` hooks (the island references them by name). The entrance
+ * keyframes mirror minimal's STRUCTURE (backdrop fade + dialog scale/translate + the
+ * top-hairline clip-reveal) in the aurora rose-glow treatment. The clip reveal is
+ * MOTION (zeroed under reduced-motion by the blanket reset below). D-17 two-layer
+ * isolation: aurora paints from its OWN tokens.
+ * ========================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+  .tmpl-aurora .tmpl-modal-backdrop-enter {
+    animation: tmpl-aurora-modal-backdrop-in 140ms ease-out 1;
+  }
+  .tmpl-aurora .tmpl-project-modal-enter {
+    animation: tmpl-aurora-project-modal-in 200ms cubic-bezier(0.2, 0, 0, 1) 1;
+  }
+  .tmpl-aurora .tmpl-project-modal-enter .tmpl-modal-hairline {
+    animation: tmpl-aurora-modal-hairline-sweep 240ms cubic-bezier(0.2, 0, 0, 1) 1;
+  }
+}
+
+@keyframes tmpl-aurora-modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tmpl-aurora-project-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes tmpl-aurora-modal-hairline-sweep {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+
+/* The 44px close button — rose `:focus-visible` ring + a hover tint (mirrors the
+   contact-field ring). */
+.tmpl-aurora .tmpl-modal-close {
+  transition:
+    color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.tmpl-aurora .tmpl-modal-close:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.tmpl-aurora .tmpl-modal-close:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ring);
+}
+
+/* ============================================================================
+ * Reduced-motion contract (HARD requirement — mirrors minimal/editorial). Under
+ * `prefers-reduced-motion: reduce`, ALL animation/transition inside the template is
+ * zeroed; content is NEVER hidden behind motion (the scroll-reveal island also
+ * short-circuits to fully-visible, and the `.tmpl-reveal` CSS fallback forces the
+ * revealed state). Hover glows (not motion) remain. Scoped to `.tmpl-aurora *`.
+ * ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .tmpl-aurora *,
+  .tmpl-aurora *::before,
+  .tmpl-aurora *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  .tmpl-aurora .tmpl-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
