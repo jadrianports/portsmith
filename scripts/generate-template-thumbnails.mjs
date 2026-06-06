@@ -52,7 +52,7 @@ const BASE_URL = 'http://127.0.0.1:3000';
 // `tests/unit/templates/slugs-anchor.test.ts` reads THIS literal from source and asserts it
 // equals `Object.keys(templateRegistry)`, so a Phase-11 template addition fails loudly until
 // this line is updated.
-const SLUGS = ['minimal', 'editorial'];
+const SLUGS = ['minimal', 'editorial', 'aurora'];
 const WEBP_QUALITY = 0.82;
 
 /**
