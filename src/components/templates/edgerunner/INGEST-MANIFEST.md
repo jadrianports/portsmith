@@ -247,8 +247,38 @@ minimal`) reverted the migration's founder→edgerunner switch on every re-run. 
 the live `template_id` on an existing portfolio (refresh `updated_at` only) and sets `minimal` ONLY when
 creating the portfolio fresh. Verified idempotent: re-running the seed keeps the founder on edgerunner …0004.
 
-## Gate Results — RESERVED (Plan 13-07 umbrella)
+## Gate Results — GREEN (Plan 13-07 umbrella)
 
-`npm run gate:template -- edgerunner` (the CICD-01 umbrella: tsc → static → build → render) is run by the
-downstream gate plan; the all-green table + the local migration-applied / thumbnail records are filled
-there (mirroring `aurora/INGEST-MANIFEST.md`).
+`npm run gate:template` (the CICD-01 umbrella: tsc → static → next build → build-artifact → render) was run
+to GREEN end-to-end with edgerunner auto-included (registry/slugs membership — no umbrella edit). The
+DEF-13-01-TSC P12 cast was fixed FIRST (the umbrella's Tier-0 `tsc --noEmit` cannot pass while it exists);
+after that tsc is fully clean.
+
+| Tier | Gate | Result |
+|------|------|--------|
+| 0 | `tsc --noEmit` (W5) | ✅ exits 0 (DEF-13-01-TSC fixed first) |
+| 1 | `gate:security` (D-13/14 — no danger-html beyond the 2 sanctioned, no external origins, deps ⊆ allowlist over edgerunner/**) | ✅ |
+| 1 | `gate:isolation` (D-17 — scoped `.tmpl-edgerunner` 18 tokens, zero chrome tokens/font) + token-conformance | ✅ |
+| 1 | `gate:registry` (CICD-03 — 4-surface registry consistency) | ✅ |
+| 1 | async-island-cap unit (B2 reject-predicate RED proof) | ✅ 7/7 |
+| 2 | `next build` (real Turbopack, once) | ✅ |
+| 3 | `check:bundle --skip-build` (≤200 kB First Load JS + ● SSG/ISR + async-island cap) | ✅ First Load JS 164.4 kB; Scene chunk 227.5 kB ≤ 320 |
+| 3 | `route-table-ssg` (D-22 /[username] ● SSG/ISR) | ✅ 3/3 |
+| 4 | `gate:conformance` (PIPE-05 — 7 sections render 1:1 on full + all-null, no null leak) | ✅ |
+| 4 | `gate:a11y` (axe serious/critical = 0; PowerOnFlash reduced-motion-gated, no >3-flash/sec) | ✅ |
+| 4 | `gate:parity` (PIPE-11 golden-fixture self-baseline) | ✅ edgerunner-golden.png diffs clean at 0.01 |
+
+**Lossless-switch (D-08) — GREEN.** `npx vitest run tests/integration/templates/lossless-switch.test.ts`
+against the live local stack (migration 015 applied): 3/3. skills.level (98/94/60) + the metrics section
+survive an away-to-editorial-and-back round-trip BYTE-IDENTICALLY (`after.equals(before)`); the switch
+mutates only `portfolios.template_id`.
+
+**Thumbnail (PIPE-06, outside the umbrella) — GENERATED.** `node scripts/generate-template-thumbnails.mjs`
+wrote `public/templates/edgerunner.webp` (1280×800 / 16:10, 21652 bytes, real golden-fixture render under
+the reduced-motion path, B4 fail-closed validity check passed). The thumbnail SLUGS literal now includes
+`edgerunner` (closing the second `slugs-anchor.test.ts` case — 2/2 green).
+
+**All 3 ROADMAP Success Criteria PROVEN:** (1) the WebGL scene ships as a lazy `{ssr:false}` island
+(227.5 kB gz) with no three/R3F in the RSC root — bounded by the async-island cap; (2) `/[username]` stays
+● SSG/ISR + First Load JS protected (164.4 kB) on a real build; (3) the full contract + gates + the gating
+lossless path are green.
