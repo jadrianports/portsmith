@@ -16,6 +16,6 @@
  * (a11y spec, parity spec, thumbnail generator, preview command) and the anchor guard pick it
  * up from this one place.
  */
-export const TEMPLATE_SLUGS = ['minimal', 'editorial', 'aurora'] as const;
+export const TEMPLATE_SLUGS = ['minimal', 'editorial', 'aurora', 'edgerunner'] as const;
 
 export type TemplateSlug = (typeof TEMPLATE_SLUGS)[number];

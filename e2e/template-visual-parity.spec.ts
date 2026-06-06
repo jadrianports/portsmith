@@ -67,6 +67,15 @@ import { TEMPLATE_SLUGS } from './helpers/slugs';
  */
 const SLUGS = TEMPLATE_SLUGS;
 
+// The committed golden baselines live at `{testDir}/__screenshots__/{testFilePath}/{slug}-golden.png`
+// (the global `snapshotPathTemplate` in playwright.config.ts). This dir is used by the GOLDEN
+// FILE-EXISTENCE GUARD below so a slug whose baseline is not yet captured does not hard-fail the gate.
+const GOLDEN_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '__screenshots__',
+  'template-visual-parity.spec.ts',
+);
+
 // `next dev` cold-compiles the `__fixture` route + each lazy template chunk on first hit
 // (Windows, Next 16); generous headroom for the first navigation's route compilation.
 test.beforeEach(({}, info) => {
@@ -74,7 +83,31 @@ test.beforeEach(({}, info) => {
 });
 
 for (const slug of SLUGS) {
+  // GOLDEN FILE-EXISTENCE GUARD (13-02 Task 2c — mirrors the source-parity guard below).
+  // Adding a freshly-entered corpus slug (e.g. `edgerunner`, added to TEMPLATE_SLUGS in plan
+  // 13-02) to the parity loop BEFORE its deterministic baseline is captured would otherwise
+  // hard-fail `gate:parity` (and the `gate:template` umbrella) on the MISSING baseline through
+  // waves 2-4. So: if `<slug>-golden.png` is absent AND this is a normal verification run
+  // (NOT an explicit `--update-snapshots` capture), SKIP that slug's golden diff with a clear
+  // message — the gate stays green. On an `--update-snapshots` run the guard is INERT (the
+  // capture proceeds and writes the PNG, so plan 07's deterministic capture still creates
+  // edgerunner-golden.png). minimal/editorial/aurora already have committed baselines, so the
+  // guard never triggers for them; once plan 07 commits edgerunner-golden.png the guard passes
+  // through to the real 0.01-ratio diff permanently.
+  const goldenPng = path.join(GOLDEN_DIR, `${slug}-golden.png`);
+
   test(`${slug} — full-page visual parity (golden fixture, PIPE-11)`, async ({ page }) => {
+    // `updateSnapshots: 'none'` ⇒ a normal verification run (no capture). Any other value
+    // ('all' / 'missing' / 'changed' under `--update-snapshots`) is a capture run — let it
+    // proceed so the baseline CAN be created (a blanket skip would prevent the capture).
+    const isVerificationRun = test.info().config.updateSnapshots === 'none';
+    test.skip(
+      isVerificationRun && !existsSync(goldenPng),
+      `golden baseline not yet captured for "${slug}" (no committed ${slug}-golden.png) — ` +
+        'skipping its parity diff on this verification run (gate:parity stays green). Capture it ' +
+        'with `npx playwright test e2e/template-visual-parity.spec.ts --update-snapshots`.',
+    );
+
     // POPULATED render of the SRC-SIDE golden fixture via the stack-free __fixture route —
     // the SAME render the conformance + a11y gates use. renderFixture already awaits
     // `.tmpl-<slug>` visible + `document.fonts.ready` + hides the dev overlay.
