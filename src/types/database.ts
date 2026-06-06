@@ -296,6 +296,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          template_fallback_at: string | null
           template_id: string
           updated_at: string
           user_id: string
@@ -303,6 +304,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          template_fallback_at?: string | null
           template_id: string
           updated_at?: string
           user_id: string
@@ -310,6 +312,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          template_fallback_at?: string | null
           template_id?: string
           updated_at?: string
           user_id?: string
@@ -559,6 +562,63 @@ export type Database = {
           },
         ]
       }
+      template_grants: {
+        Row: {
+          granted_at: string
+          granted_by: string | null
+          template_id: string
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string
+          granted_by?: string | null
+          template_id: string
+          user_id: string
+        }
+        Update: {
+          granted_at?: string
+          granted_by?: string | null
+          template_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_grants_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_grants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_grants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       templates: {
         Row: {
           created_at: string
@@ -571,6 +631,7 @@ export type Database = {
           spec: Json
           three_js_enabled: boolean
           thumbnail_url: string | null
+          visibility: string
         }
         Insert: {
           created_at?: string
@@ -583,6 +644,7 @@ export type Database = {
           spec: Json
           three_js_enabled?: boolean
           thumbnail_url?: string | null
+          visibility?: string
         }
         Update: {
           created_at?: string
@@ -595,6 +657,7 @@ export type Database = {
           spec?: Json
           three_js_enabled?: boolean
           thumbnail_url?: string | null
+          visibility?: string
         }
         Relationships: []
       }
@@ -849,6 +912,19 @@ export type Database = {
       blog_post_is_public: {
         Args: { p_blog_post_id: string }
         Returns: boolean
+      }
+      count_ungranted_on_template: {
+        Args: { p_template_id: string }
+        Returns: {
+          n: number
+          usernames: string[]
+        }[]
+      }
+      fallback_ungranted_to_editorial: {
+        Args: { p_template_id: string }
+        Returns: {
+          username: string
+        }[]
       }
       initialize_portfolio: { Args: never; Returns: string }
       is_admin: { Args: never; Returns: boolean }

@@ -134,7 +134,15 @@ export interface AdminUser {
  * `*@example.test` is a reserved test domain.
  */
 export async function setupAdminUser(prefix: string, run: string): Promise<AdminUser> {
-  await sweepLeftoverTestUsers();
+  // NOTE (12-02 Rule-1 fix): do NOT call `sweepLeftoverTestUsers()` here. Both
+  // callers (`template-grants-rls.test.ts`, `template-gating-admin.test.ts`) invoke
+  // `setupAdminUser` IMMEDIATELY AFTER `setupTwoUsers` in the same `beforeAll`, and
+  // `setupTwoUsers` already swept at its start (line 68). The sweep deletes EVERY
+  // `*@example.test` user — so a SECOND sweep here would wipe userA/userB that
+  // `setupTwoUsers` just created, leaving the admin grant INSERT to FK-violate on a
+  // now-deleted `profiles(id)` (`template_grants_user_id_fkey`). The leftover-cleanup
+  // responsibility belongs to the FIRST setup call in a `beforeAll`; this admin setup
+  // must NOT re-sweep the live fixture out from under itself.
   const name = `${prefix}adm${run}`.slice(0, 30);
 
   const user = await createTestUser({
