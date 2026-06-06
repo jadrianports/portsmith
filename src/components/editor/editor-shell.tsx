@@ -55,6 +55,7 @@ import { ItemManager, type ItemSectionType } from './item-card';
 import { ProfileForm } from './profile-form';
 import { PublishToggle } from './publish-toggle';
 import { SectionForm, type SimpleSectionType } from './section-form';
+import { SkillsForm } from './skills-form';
 import { SectionList, type EditorSection } from './section-list-row';
 import { StorageMeter } from './storage-meter';
 import { TemplatePicker } from './template-picker';
@@ -641,8 +642,18 @@ function SectionPanel({
     );
   }
 
-  // Any other known type (e.g. skills) has no bespoke editor yet — surface a calm
-  // note rather than a void. (A dedicated skills editor is a later slice.)
+  // 13-06 (D-10): the skills type opens the NARROW skills-`level` editor (skills
+  // ONLY — every other unsupported type below keeps the "coming soon" placeholder;
+  // the systematic per-type-form overhaul is Phase 13.1). Routed BEFORE the
+  // fall-through note so skills never hits the placeholder.
+  if (type === 'skills') {
+    return (
+      <SkillsForm sectionId={sectionId} initialContent={content} username={username} />
+    );
+  }
+
+  // Any OTHER unsupported known type (e.g. metrics, education) has no bespoke editor
+  // yet — surface a calm note rather than a void. (The per-type forms are Phase 13.1.)
   return (
     <div className="flex flex-col gap-2">
       <h2 className="text-base font-semibold text-foreground">
