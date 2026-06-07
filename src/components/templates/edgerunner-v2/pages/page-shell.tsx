@@ -22,9 +22,11 @@ import '../theme.css';
 import type { ReactNode } from 'react';
 import { orbitron, spaceGrotesk, vt323 } from '../fonts';
 import { themeInitScript } from '../../_kit';
+import { CommandPalette, type CommandItem } from '../sections/command-palette';
 import { NavbarSubpage, type NavItem } from './navbar-subpage';
 import { Footer } from '../sections/footer';
 import { ScrollProgress } from '../sections/scroll-progress';
+import { safeHref } from '@/lib/safe-url';
 import type { PortfolioData } from '../../types';
 
 export interface EdgerunnerV2PageShellProps {
@@ -59,6 +61,36 @@ export function EdgerunnerV2PageShell({
     ...(has('blog_preview') ? [{ id: 'blog',       label: 'Blog',       href: `/${username}/blog`       }] : []),
     ...(has('contact')      ? [{ id: 'contact',    label: 'Contact',    href: `/${username}#contact`    }] : []),
   ];
+
+  // ── CommandPalette props ──────────────────────────────────────────────────
+  // On sub-pages, sections that are on the homepage use /${username}#anchor navigation;
+  // real routes (services, blog) keep their href.
+  const cmdItems: CommandItem[] = [
+    { label: 'Home',       anchor: 'hero'                                },
+    ...(has('about')        ? [{ label: 'About',      anchor: 'about'      }] : []),
+    ...(has('experience')   ? [{ label: 'Experience', anchor: 'experience' }] : []),
+    ...(has('projects')     ? [{ label: 'Projects',   anchor: 'projects'   }] : []),
+    ...(has('skills')       ? [{ label: 'Stack',      anchor: 'stack'      }] : []),
+    ...(has('services')     ? [{ label: 'Services',   href: `/${username}/services` }] : []),
+    ...(has('blog_preview') ? [{ label: 'Blog',       href: `/${username}/blog`     }] : []),
+    ...(has('contact')      ? [{ label: 'Contact',    anchor: 'contact'    }] : []),
+  ];
+
+  // Social links for the palette
+  const cmdSocials = (
+    [
+      { label: 'GitHub',   href: safeHref(data.settings.github_url)   },
+      { label: 'LinkedIn', href: safeHref(data.settings.linkedin_url) },
+      { label: 'X',        href: safeHref(data.settings.twitter_url)  },
+      { label: 'Dribbble', href: safeHref(data.settings.dribbble_url) },
+    ] as Array<{ label: string; href: string | undefined }>
+  ).filter((s): s is { label: string; href: string } => typeof s.href === 'string');
+
+  // Resume URL and email for the palette
+  const cmdResumeUrl = safeHref(
+    (sections.find((s) => s.type === 'hero')?.content as { resume_url?: string | null } | null)?.resume_url
+  ) ?? null;
+  const cmdEmail = data.settings.email_public ?? null;
 
   // logoText: last word of display_name uppercased (stem, Navbar appends ".dev")
   // badge: first-letter of each name word joined by '_'
@@ -98,6 +130,15 @@ export function EdgerunnerV2PageShell({
       <main>{children}</main>
 
       <Footer data={data} />
+
+      {/* ⌘K / Ctrl+K command palette — client island */}
+      <CommandPalette
+        username={username}
+        items={cmdItems}
+        resumeUrl={cmdResumeUrl}
+        email={cmdEmail}
+        socials={cmdSocials}
+      />
     </div>
   );
 }

@@ -23,6 +23,7 @@ import { orbitron, spaceGrotesk, vt323 } from './fonts';
 import { ScrollReveal, themeInitScript } from '../_kit';
 import { About, type StatItem } from './sections/about';
 import { BlogTeaser } from './sections/blog-teaser';
+import { CommandPalette, type CommandItem } from './sections/command-palette';
 import { Contact } from './sections/contact';
 import { Experience } from './sections/experience';
 import { Footer } from './sections/footer';
@@ -121,6 +122,28 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
     ...(sectionOfType(sections, 'blog_preview') ? [{ id: 'blog',       label: 'Blog'       }] : []),
     ...(sectionOfType(sections, 'contact')      ? [{ id: 'contact',    label: 'Contact'    }] : []),
   ];
+
+  // ── CommandPalette props ──────────────────────────────────────────────────
+  // Navigate items: anchor-based scroll items + href-based route items.
+  // Services/Blog get href (real sub-routes); all others get anchor (smooth-scroll).
+  const cmdItems: CommandItem[] = [
+    { label: 'Home',       anchor: 'hero'       },
+    ...(sectionOfType(sections, 'about')        ? [{ label: 'About',      anchor: 'about'      }] : []),
+    ...(sectionOfType(sections, 'experience')   ? [{ label: 'Experience', anchor: 'experience' }] : []),
+    ...(sectionOfType(sections, 'projects')     ? [{ label: 'Projects',   anchor: 'projects'   }] : []),
+    ...(sectionOfType(sections, 'skills')       ? [{ label: 'Stack',      anchor: 'stack'      }] : []),
+    ...(sectionOfType(sections, 'services')     ? [{ label: 'Services',   href: `/${profile.username ?? ''}/services` }] : []),
+    ...(sectionOfType(sections, 'blog_preview') ? [{ label: 'Blog',       href: `/${profile.username ?? ''}/blog`     }] : []),
+    ...(sectionOfType(sections, 'contact')      ? [{ label: 'Contact',    anchor: 'contact'    }] : []),
+  ];
+
+  // Social links for the palette (reuse heroSocials which are already safeHref-validated)
+  const cmdSocials = heroSocials.map(({ label, href }) => ({ label, href }));
+
+  // Resume URL for the palette
+  const cmdResumeUrl = safeHref(
+    (sectionOfType(sections, 'hero')?.content as { resume_url?: string | null } | null)?.resume_url
+  ) ?? null;
 
   // logoText: last word of display_name uppercased (stem only — Navbar appends ".dev")
   // badge: first letter of each word joined by '_', e.g. "Kai Nakamura" → "K_N"
@@ -239,6 +262,15 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
       </main>
 
       <Footer data={data} />
+
+      {/* ⌘K / Ctrl+K command palette — client island, portals above everything (z-200) */}
+      <CommandPalette
+        username={profile.username}
+        items={cmdItems}
+        resumeUrl={cmdResumeUrl}
+        email={emailPublic}
+        socials={cmdSocials}
+      />
     </div>
   );
 }

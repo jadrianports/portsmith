@@ -40,7 +40,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Command } from 'lucide-react';
 
 export interface NavItem {
   id: string;
@@ -193,8 +193,25 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
           })}
         </nav>
 
-        {/* Hamburger — VERBATIM from export (⌘K dropped) */}
+        {/* Right side: ⌘K hint + hamburger */}
         <div className="flex items-center gap-2">
+          {/* ⌘K hint badge — dispatches cmdk-open event, matches export kbd pill */}
+          <button
+            type="button"
+            aria-label="Open command palette"
+            title="Open command palette"
+            onClick={() => window.dispatchEvent(new CustomEvent('cmdk-open'))}
+            className="hidden items-center gap-1.5 rounded-md font-mono-retro text-xs uppercase tracking-wider md:inline-flex"
+            style={{
+              border: '1px solid color-mix(in oklab, var(--neon-cyan) 40%, transparent)',
+              background: 'color-mix(in srgb, var(--bg) 40%, transparent)',
+              color: 'var(--neon-cyan)',
+              padding: '4px 8px',
+              cursor: 'pointer',
+            }}
+          >
+            <Command className="h-3 w-3" aria-hidden="true" /> K
+          </button>
           <button
             aria-label="Toggle menu"
             onClick={() => setOpen((v) => !v)}
