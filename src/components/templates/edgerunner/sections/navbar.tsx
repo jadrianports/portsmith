@@ -59,6 +59,17 @@ function initials(text: string): string {
     .toUpperCase();
 }
 
+/**
+ * Derive the compact logo handle label: last word of logoText + ".dev".
+ * e.g. "Kai Nakamura" → "NAKAMURA" + ".dev"
+ *      "Portfolio"    → "PORTFOLIO" + ".dev"
+ * Returns { handle: string, tld: '.dev' }.
+ */
+function compactHandle(text: string): string {
+  const parts = text.trim().split(/\s+/);
+  return parts[parts.length - 1].toUpperCase();
+}
+
 export function Navbar({ items, logoText }: NavbarProps) {
   const [open, setOpen] = useState(false);
   // active = the section id currently in view, or null if none
@@ -101,6 +112,7 @@ export function Navbar({ items, logoText }: NavbarProps) {
   }, [items]);
 
   const badge = initials(logoText);
+  const handle = compactHandle(logoText);
 
   return (
     <header
@@ -161,6 +173,7 @@ export function Navbar({ items, logoText }: NavbarProps) {
           >
             {badge}
           </span>
+          {/* Compact handle: LASTNAME.dev — matches reference "NAKAMURA.dev" style */}
           <span
             style={{
               fontFamily: 'var(--font-display)',
@@ -171,7 +184,8 @@ export function Navbar({ items, logoText }: NavbarProps) {
               color: 'var(--fg)',
             }}
           >
-            {logoText}
+            {handle}
+            <span style={{ color: 'var(--neon-cyan)', letterSpacing: '0.05em' }}>.dev</span>
           </span>
         </a>
 

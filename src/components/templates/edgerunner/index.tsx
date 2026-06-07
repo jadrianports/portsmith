@@ -44,12 +44,13 @@ import { About } from './sections/about';
 import { Contact } from './sections/contact';
 import { Experience } from './sections/experience';
 import { Footer } from './sections/footer';
-import { Hero } from './sections/hero';
+import { Hero, type HeroSocialLink } from './sections/hero';
 import { Metrics } from './sections/metrics';
 import { Navbar } from './sections/navbar';
 import { Projects } from './sections/projects';
 import { Skills } from './sections/skills';
 import { NeonDivider } from './sections/ui/neon-divider';
+import { safeHref } from '@/lib/safe-url';
 import { personLdScriptHtml } from '@/lib/seo/person-jsonld';
 import type { PortfolioData, PublicSection } from '../types';
 
@@ -92,6 +93,23 @@ export default function EdgerunnerTemplate({ data }: { data: PortfolioData }) {
     .map(([id, label]) => ({ id, label }));
 
   const logoText = profile.display_name ?? profile.username ?? 'Portfolio';
+
+  // Build the hero socials array from settings social URLs.
+  // Only include URLs that pass safeHref (http/https only — no javascript: etc).
+  // Order matches the reference: GitHub → LinkedIn → X/Twitter → Dribbble → Website.
+  const heroSocials: HeroSocialLink[] = (
+    [
+      { label: 'GitHub',   href: safeHref(data.settings.github_url)   },
+      { label: 'LinkedIn', href: safeHref(data.settings.linkedin_url) },
+      { label: 'X',        href: safeHref(data.settings.twitter_url)  },
+      { label: 'Dribbble', href: safeHref(data.settings.dribbble_url) },
+      { label: 'Website',  href: safeHref(data.settings.website_url)  },
+    ] as Array<{ label: string; href: string | undefined }>
+  )
+    .filter((s): s is HeroSocialLink => typeof s.href === 'string');
+
+  // Public email from settings — separate from contact section (which is write-protected).
+  const heroEmail = data.settings.email_public ?? null;
 
   return (
     <div className={`tmpl-edgerunner ${fontVars}`} data-template-root data-template-theme="dark">
@@ -141,7 +159,11 @@ export default function EdgerunnerTemplate({ data }: { data: PortfolioData }) {
         {/* ── Hero (LCP — priority: static wrapper, zero entrance motion) ─────── */}
         <ScrollReveal as="section" priority data-section-type="hero">
           <div id="hero">
-            <Hero section={sectionOfType(sections, 'hero')} />
+            <Hero
+                section={sectionOfType(sections, 'hero')}
+                email={heroEmail}
+                socials={heroSocials}
+              />
           </div>
         </ScrollReveal>
 

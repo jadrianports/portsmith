@@ -67,31 +67,54 @@ export function CityScene() {
         style={{
           objectFit: 'cover',
           objectPosition: 'bottom',
-          filter: 'saturate(1.15) contrast(1.05)',
+          filter: 'saturate(1.45) contrast(1.1) brightness(0.95)',
         }}
       />
 
-      {/* ── Layer 2: soft sun / horizon glow pulse ── */}
+      {/* ── Layer 2: vibrant retro-sun / horizon glow bloom ── */}
       {/*
-       * Radial bloom centered at ~55% from top (horizon line of the city photo).
-       * Animates with tmpl-edgerunner-float (6s translateY bob) for a gentle breathing pulse.
-       * mixBlendMode: screen makes this additive — blends naturally over the photo.
-       * The color-mix values reproduce the export's 55% pink / 25% purple ellipse.
+       * Large radial bloom centered at ~52% from top (sun sits just above the horizon).
+       * Enlarged to 110%×75% and blur raised to 64px for a bigger, more vivid retro-sun.
+       * Core bloom: hot-pink 75% → purple 40% → transparent 72% reproduces the
+       * reference's bright saturated sunset corona.
+       * A second tighter ellipse adds an inner hot white-pink core for extra vibrancy.
+       * mixBlendMode: screen makes both additive over the city photo.
+       * Animates with tmpl-edgerunner-float (6s bob) for a gentle breathing pulse.
        */}
+      {/* Outer corona — big warm pink/purple bloom */}
       <div
         style={{
           position: 'absolute',
           left: '50%',
-          top: '55%',
-          width: '80%',
-          height: '55%',
+          top: '52%',
+          width: '110%',
+          height: '75%',
           transform: 'translate(-50%, -50%)',
           borderRadius: '50%',
-          filter: 'blur(48px)',
+          filter: 'blur(64px)',
           background:
-            'radial-gradient(ellipse at center, color-mix(in oklab, var(--neon-pink) 55%, transparent) 0%, color-mix(in oklab, var(--neon-purple) 25%, transparent) 45%, transparent 70%)',
+            'radial-gradient(ellipse at center, color-mix(in oklab, var(--neon-pink) 75%, transparent) 0%, color-mix(in oklab, var(--neon-magenta) 50%, transparent) 28%, color-mix(in oklab, var(--neon-purple) 40%, transparent) 52%, transparent 72%)',
           mixBlendMode: 'screen',
           animation: 'tmpl-edgerunner-float 6s ease-in-out infinite',
+          opacity: 0.95,
+        }}
+      />
+      {/* Inner core — tight bright-pink sun disc for the hot center */}
+      <div
+        style={{
+          position: 'absolute',
+          left: '50%',
+          top: '52%',
+          width: '40%',
+          height: '30%',
+          transform: 'translate(-50%, -50%)',
+          borderRadius: '50%',
+          filter: 'blur(24px)',
+          background:
+            'radial-gradient(ellipse at center, color-mix(in oklab, var(--neon-pink) 90%, transparent) 0%, color-mix(in oklab, var(--neon-magenta) 70%, transparent) 40%, transparent 80%)',
+          mixBlendMode: 'screen',
+          animation: 'tmpl-edgerunner-float 6s ease-in-out infinite',
+          opacity: 0.9,
         }}
       />
 

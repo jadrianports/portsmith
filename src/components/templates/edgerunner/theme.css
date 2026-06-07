@@ -752,6 +752,16 @@
 }
 
 /* ============================================================================
+ * Hero social icon button hover — neon-pink ring + glow on hover.
+ * Hover glows are NOT motion — reduced-motion-exempt (like tmpl-project-card).
+ * ========================================================================== */
+.tmpl-edgerunner .tmpl-social-icon-btn:hover {
+  border-color: var(--neon-pink);
+  color: var(--neon-pink);
+  box-shadow: 0 0 14px -4px color-mix(in oklab, var(--neon-pink) 55%, transparent);
+}
+
+/* ============================================================================
  * FOOTER QUICK-LINK + CHANNEL hover (Task-14) — neon-pink hover on quick-links /
  * neon-pink ring + glow hover on the channel icon buttons. Hover glows are NOT
  * motion — reduced-motion-exempt (like tmpl-project-card hover glow).
