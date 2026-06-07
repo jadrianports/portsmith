@@ -27,10 +27,10 @@
  *   9. NO platform branding (D-23 / TMPL-07).
  */
 import { ReportDialog } from '@/components/public/report-dialog';
+import { SocialIcon } from './ui/social-icon';
 
 import type { FooterProps } from './types';
 import type { PublicSettings } from '../../types';
-import { siteUrl } from '@/lib/url';
 import { safeHref } from '@/lib/safe-url';
 import { present } from './shared';
 
@@ -58,7 +58,7 @@ export function Footer({ data }: FooterProps) {
 
   const portfolioId = present(settings.portfolio_id) ? settings.portfolio_id : null;
 
-  // Derive initials from display_name
+  // Derive initials from display_name (badge in logo)
   const initials = name
     ? name
         .trim()
@@ -70,6 +70,13 @@ export function Footer({ data }: FooterProps) {
     : handle
       ? handle.slice(0, 2).toUpperCase()
       : '//';
+
+  // Compact wordmark: last word of display_name (or handle) uppercased + ".dev"
+  // e.g. "Kai Nakamura" → "NAKAMURA.dev" (matches export footer + navbar)
+  const nameParts = (name ?? handle ?? '').trim().split(/\s+/).filter(Boolean);
+  const wordmarkStem = nameParts.length > 0
+    ? nameParts[nameParts.length - 1].toUpperCase()
+    : 'PORTFOLIO';
 
   // Build social links
   const socials: { label: string; href: string }[] = [];
@@ -102,8 +109,7 @@ export function Footer({ data }: FooterProps) {
               className="font-display text-sm font-semibold uppercase tracking-[0.25em]"
               style={{ color: 'color-mix(in oklab, var(--fg) 90%, transparent)' }}
             >
-              {name ?? handle ?? 'Portfolio'}
-              <span className="text-neon-cyan">.dev</span>
+              {wordmarkStem}<span className="text-neon-cyan">.dev</span>
             </span>
           </div>
           <p
@@ -154,19 +160,14 @@ export function Footer({ data }: FooterProps) {
                 target="_blank"
                 rel="noreferrer"
                 aria-label={label}
-                className="grid h-10 w-10 place-items-center rounded-full transition-all hover:border-neon-pink hover:text-neon-pink hover:shadow-neon-pink"
+                className="grid h-10 w-10 place-items-center rounded-full transition-all tmpl-social-icon-btn"
                 style={{
                   border: '1px solid color-mix(in oklab, var(--neon-cyan) 30%, transparent)',
                   color: 'color-mix(in oklab, var(--fg) 80%, transparent)',
                   textDecoration: 'none',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '9px',
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
                 }}
               >
-                {label.slice(0, 2)}
+                <SocialIcon label={label} size={16} />
               </a>
             ))}
           </div>

@@ -373,12 +373,32 @@
 }
 
 /* ============================================================================
- * HERO social icon hover (matches export's hover:border-neon-pink hover:text-neon-pink hover:shadow-neon-pink)
+ * HERO + FOOTER social icon hover (matches export's hover:border-neon-pink hover:text-neon-pink hover:shadow-neon-pink)
  * ========================================================================== */
 .tmpl-edgerunner-v2 .tmpl-social-icon-btn:hover {
   border-color: var(--neon-pink);
   color: var(--neon-pink);
   box-shadow: 0 0 14px -4px color-mix(in oklab, var(--neon-pink) 55%, transparent);
+}
+
+/* ============================================================================
+ * NAVBAR hover states
+ * ========================================================================== */
+/* Desktop nav link hover — hover:text-neon-cyan */
+.tmpl-edgerunner-v2 .tmpl-nav-link:hover {
+  color: var(--neon-cyan) !important;
+  text-shadow: none !important;
+}
+
+/* Mobile nav link hover — hover:bg-neon-cyan/10 hover:text-neon-cyan */
+.tmpl-edgerunner-v2 .tmpl-nav-mobile-link:hover {
+  background: color-mix(in srgb, var(--neon-cyan) 10%, transparent) !important;
+  color: var(--neon-cyan) !important;
+}
+
+/* Hamburger button hover */
+.tmpl-edgerunner-v2 .tmpl-nav-hamburger:hover {
+  color: var(--neon-pink) !important;
 }
 
 /* ============================================================================

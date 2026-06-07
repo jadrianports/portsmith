@@ -26,6 +26,7 @@ import { Contact } from './sections/contact';
 import { Experience } from './sections/experience';
 import { Footer } from './sections/footer';
 import { Hero, type HeroSocialLink } from './sections/hero';
+import { Navbar, type NavItem } from './sections/navbar';
 import { Projects } from './sections/projects';
 import { Services } from './sections/services';
 import { Skills } from './sections/skills';
@@ -105,6 +106,31 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
   // ── Contact props ─────────────────────────────────────────────────────────
   const emailPublic = data.settings.email_public ?? null;
 
+  // ── Navbar props ──────────────────────────────────────────────────────────
+  // Home is always first; then one item per present section type (in page order).
+  // skills section → id='stack', label='Stack' (matches the export's section id).
+  const navItems: NavItem[] = [
+    { id: 'hero', label: 'Home' },
+    ...(sectionOfType(sections, 'about')      ? [{ id: 'about',      label: 'About'      }] : []),
+    ...(sectionOfType(sections, 'experience') ? [{ id: 'experience', label: 'Experience' }] : []),
+    ...(sectionOfType(sections, 'projects')   ? [{ id: 'projects',   label: 'Projects'   }] : []),
+    ...(sectionOfType(sections, 'skills')     ? [{ id: 'stack',      label: 'Stack'      }] : []),
+    ...(sectionOfType(sections, 'services')   ? [{ id: 'services',   label: 'Services'   }] : []),
+    ...(sectionOfType(sections, 'contact')    ? [{ id: 'contact',    label: 'Contact'    }] : []),
+  ];
+
+  // logoText: last word of display_name uppercased (stem only — Navbar appends ".dev")
+  // badge: first letter of each word joined by '_', e.g. "Kai Nakamura" → "K_N"
+  // e.g. "Kai Nakamura" → logoText="NAKAMURA", badge="K_N"
+  const displayName = (profile.display_name ?? profile.username ?? '').trim();
+  const nameParts = displayName.split(/\s+/).filter(Boolean);
+  const logoText = nameParts.length > 0
+    ? nameParts[nameParts.length - 1].toUpperCase()
+    : 'PORTFOLIO';
+  const logoBadge = nameParts.length >= 2
+    ? nameParts.map((w) => w[0].toUpperCase()).join('_')
+    : logoText.slice(0, 2);
+
   return (
     <div className={`tmpl-edgerunner-v2 ${fontVars}`} data-template-root data-template-theme="dark">
       {/* FOUC guard — hardcoded 'dark' (D-06) */}
@@ -112,6 +138,9 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
 
       {/* Person JSON-LD */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: personLdHtml }} />
+
+      {/* Sticky pill navbar — first child, above ambient bg + main */}
+      <Navbar items={navItems} logoText={logoText} badge={logoBadge} />
 
       {/* Page-wide ambient background */}
       <div aria-hidden="true" className="tmpl-ambient-bg" style={{ pointerEvents: 'none' }} />
