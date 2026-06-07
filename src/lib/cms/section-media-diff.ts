@@ -17,52 +17,90 @@
  * dropped URLs — so it is trivially unit-testable and safe to call inside the
  * server action between the RLS read and the `deleteStorageObject` loop.
  *
- * SCOPE (RESEARCH §WR-03 scope clarification): item images ONLY —
- * `projects.image` and `testimonials.avatar`. Section-level image fields
- * (`hero.background_image`, `about.avatar`) are NOT part of the WR-03 `deleteUrls`
- * surface and are NOT owned by `saveProfileAction` either; server-recomputing
- * those orphans is an ADDITIVE extension of this helper (add the fields to
- * `IMAGE_FIELDS`), NOT part of this closure.
+ * SCOPE (13.1-02 D-05 extension): item images AND section-level images. The
+ * original WR-03 surface was item-only (`projects.image`, `testimonials.avatar`);
+ * for D-05 (section delete frees media) this helper now ALSO covers the
+ * SECTION-LEVEL image fields (`about.avatar`, `hero.background_image`) and the
+ * `moodboard` item gallery (`items[].image`). The two field families are kept in
+ * SEPARATE maps because their content location differs: item fields live under
+ * `content.items[]`, section-level fields live directly on `content`. The original
+ * on-save item-image WR-03 diff behavior is unchanged (projects/testimonials/
+ * experience are item-only and have no section-level entry).
  *
  * Source: the field map + before/after set-diff from the prior client
  * `item-card.tsx` (184-217); the read-prior → diff-after shape from
  * `save-profile-action.ts`; the per-type image fields from
  * `@/lib/validations/sections.ts` (`projectItemSchema.image`,
- * `testimonialItemSchema.avatar`; `experienceItemSchema` has no image field).
+ * `testimonialItemSchema.avatar`, `moodboardImageSchema.image`;
+ * `aboutContentSchema.avatar`, `heroContentSchema.background_image` are
+ * section-level; `experienceItemSchema` has no image field).
  */
 
 /**
- * The image-bearing item fields per section type (the WR-03 surface). Projects
- * carry `image`; testimonials carry `avatar`; experience has none. An unregistered
- * type resolves to no fields, so it can never contribute a dropped URL (a non-item
- * or section-level type is a safe no-op here).
+ * The image-bearing ITEM fields per section type (walked under `content.items[]`).
+ * Projects carry `image`; testimonials carry `avatar`; moodboard gallery items
+ * carry `image`; experience has none. An unregistered type resolves to no fields,
+ * so it can never contribute a dropped URL (a non-item type is a safe no-op here).
  */
 const IMAGE_FIELDS: Record<string, readonly string[]> = {
   projects: ['image'],
   testimonials: ['avatar'],
   experience: [],
+  // 13.1-02 D-05: moodboard gallery images live in `content.items[].image`
+  // (the same item-level shape as projects/testimonials).
+  moodboard: ['image'],
 };
 
 /**
- * Collect the non-empty image/avatar URLs referenced by a section content's
- * `items[]` for the given type. Null-safe: a null / non-object content, a missing
- * or non-array `items`, a non-object item, or a blank/whitespace url value all
- * contribute nothing (no throw). Mirrors the client `imageUrlsOf` exactly, but
- * reads `.items` off the `content` shape instead of taking an `EditorItem[]`.
+ * The image-bearing SECTION-LEVEL fields per section type (read directly off
+ * `content`, NOT `content.items[]`). `about` carries a top-level `avatar`; `hero`
+ * carries a top-level `background_image`. These were the "ADDITIVE extension"
+ * noted in the original header — added here for D-05 so deleting an `about` /
+ * `hero` section frees its section-level media. A type with no entry contributes
+ * nothing at the section level (the item-only types stay item-only).
+ */
+const SECTION_LEVEL_IMAGE_FIELDS: Record<string, readonly string[]> = {
+  about: ['avatar'],
+  hero: ['background_image'],
+};
+
+/**
+ * Collect the non-empty image/avatar URLs referenced by a section's `content` for
+ * the given type — BOTH the item-level fields under `content.items[]` (the WR-03
+ * surface) AND the section-level fields directly on `content` (the D-05 extension).
+ * Null-safe: a null / non-object content, a missing or non-array `items`, a
+ * non-object item, or a blank/whitespace url value all contribute nothing (no
+ * throw). The original item-image walk is preserved byte-for-byte; the
+ * section-level walk is additive and only fires for types in
+ * `SECTION_LEVEL_IMAGE_FIELDS`.
  */
 function imageUrlsOf(type: string, content: unknown): Set<string> {
-  const items = (content as { items?: unknown } | null)?.items;
-  const fields = IMAGE_FIELDS[type] ?? [];
   const urls = new Set<string>();
-  if (!Array.isArray(items) || fields.length === 0) return urls;
-  for (const item of items) {
-    if (typeof item !== 'object' || item === null) continue;
-    const record = item as Record<string, unknown>;
-    for (const f of fields) {
+
+  // Item-level fields (the original WR-03 walk) — `content.items[]`.
+  const items = (content as { items?: unknown } | null)?.items;
+  const itemFields = IMAGE_FIELDS[type] ?? [];
+  if (Array.isArray(items) && itemFields.length > 0) {
+    for (const item of items) {
+      if (typeof item !== 'object' || item === null) continue;
+      const record = item as Record<string, unknown>;
+      for (const f of itemFields) {
+        const v = record[f];
+        if (typeof v === 'string' && v.trim() !== '') urls.add(v);
+      }
+    }
+  }
+
+  // Section-level fields (the D-05 extension) — read directly off `content`.
+  const sectionFields = SECTION_LEVEL_IMAGE_FIELDS[type] ?? [];
+  if (sectionFields.length > 0 && typeof content === 'object' && content !== null) {
+    const record = content as Record<string, unknown>;
+    for (const f of sectionFields) {
       const v = record[f];
       if (typeof v === 'string' && v.trim() !== '') urls.add(v);
     }
   }
+
   return urls;
 }
 
