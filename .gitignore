@@ -33,6 +33,12 @@ scripts/seed/founder-content.ts
 # The committed artifacts are the template output folder, <slug>-source.png, and INGEST-MANIFEST.md.
 lovable-exports/
 
+# stray verification screenshots dumped in repo root (Playwright MCP saves here when
+# given a bare filename) — keep them out of git; intentional assets live in /public or /src.
+/*.png
+/*.jpeg
+/*.jpg
+
 # vercel
 .vercel
 
