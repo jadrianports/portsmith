@@ -65,11 +65,30 @@ function nonEmptyString(v: unknown): boolean {
 }
 
 /**
- * Derive the five advisory completeness items from already-loaded rows. PURE —
- * no I/O, no DB, no new table. Returns the list only; it never implies a publish
- * block (D-P4-08).
+ * Derive the advisory completeness items from already-loaded rows. PURE — no I/O,
+ * no DB, no new table. Returns the list only; it never implies a publish block
+ * (D-P4-08).
+ *
+ * TEMPLATE-AWARE (D-17, 13.1-03): the OPTIONAL `supportedTypes` argument is the set
+ * of section types the ACTIVE template renders. When supplied, a section-typed item
+ * (one carrying a `sectionType`) whose type is NOT in that set is DROPPED — a user on
+ * `minimal` is never nagged to fill a section their template can't show. The argument
+ * is OPTIONAL and BACKWARD-COMPATIBLE: when omitted (every pre-existing single-arg
+ * caller), the full advisory list is returned exactly as before. Profile-level items
+ * (`name` / `avatar` — they carry NO `sectionType`) are template-INDEPENDENT and are
+ * never dropped regardless of the supported set.
+ *
+ * This NEVER touches `isPublishReady` (the SEPARATE SAFE-04 gate) — D-17 is the
+ * advisory list only.
+ *
+ * @param supportedTypes - OPTIONAL. The section types the active template renders
+ *   (e.g. `['about','projects','contact']`). Accepts any iterable of type strings.
+ *   Omit it for the full, template-agnostic list (the original behavior).
  */
-export function deriveCompleteness(data: CompletenessInput): ChecklistItem[] {
+export function deriveCompleteness(
+  data: CompletenessInput,
+  supportedTypes?: Iterable<string>,
+): ChecklistItem[] {
   const about = find(data.sections, 'about');
   const projects = find(data.sections, 'projects');
   const contact = find(data.sections, 'contact');
@@ -77,7 +96,7 @@ export function deriveCompleteness(data: CompletenessInput): ChecklistItem[] {
   const projectItems = projects?.items;
   const projectCount = Array.isArray(projectItems) ? projectItems.length : 0;
 
-  return [
+  const items: ChecklistItem[] = [
     { id: 'name', label: 'Add your name', done: nonEmptyString(data.displayName) },
     {
       id: 'about',
@@ -98,7 +117,18 @@ export function deriveCompleteness(data: CompletenessInput): ChecklistItem[] {
       sectionType: 'contact',
     },
     { id: 'avatar', label: 'Set an avatar', done: nonEmptyString(data.avatarUrl) },
-  ]; // advisory ONLY — never disables Publish (D-P4-08; the hard gate is P6 SAFE-04).
+  ];
+
+  // D-17: when the active template's supported set is supplied, drop section-typed
+  // items the template does NOT render. A null/blank `sectionType` (profile-level
+  // name/avatar) is never section-bound, so it always survives the filter.
+  if (supportedTypes === undefined) {
+    return items; // template-agnostic (original behavior) — advisory ONLY (D-P4-08).
+  }
+  const supported = new Set<string>(supportedTypes);
+  return items.filter(
+    (item) => item.sectionType === undefined || supported.has(item.sectionType),
+  ); // advisory ONLY — never disables Publish (D-P4-08; the hard gate is P6 SAFE-04).
 }
 
 /**
