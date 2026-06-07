@@ -77,7 +77,6 @@ export function TerminalCard({ lines, className }: TerminalCardProps) {
             'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
           WebkitMaskComposite: 'xor',
           maskComposite: 'exclude',
-          animation: 'tmpl-edgerunner-v2-spin 8s linear infinite',
           opacity: 0.55,
         }}
       />
