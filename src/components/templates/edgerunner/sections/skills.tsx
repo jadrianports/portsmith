@@ -5,22 +5,23 @@
  * (circular SVG gauges, grouped layout) + `TechMarquee.tsx` (infinite horizontal strip),
  * translated to the platform's data contract and conventions:
  *
- *   - R1  `motion/react` (not framer-motion); no `import *`.
+ *   - R1  `motion/react` not used (gauge is CSS-only — no motion library needed).
  *   - R2  Casts `section.content` to `SkillsContent`; null-guards throughout.
  *   - R3  ALL colors via scoped `var(--token)` — no hardcoded hex.
  *   - R5  SSR renders gauges at their FINAL fill level (strokeDashoffset = C*(1-level/100)).
- *         The inView fill animation (C → offset) is a progressive enhancement.
- *         Under `useReducedMotion()` the gauge stays at its final state immediately.
+ *         The fill animation (C → offset) is a CSS-only progressive enhancement via
+ *         `tmpl-gauge-arc` + `tmpl-edgerunner-gauge-fill` keyframe (theme.css).
  *         TechMarquee is CSS-only — no JS needed; static strip without animation.
- *   - R6  `'use client'` (useInView / useReducedMotion for gauge animation).
+ *   - R6  Server Component — no hooks, no event handlers, no browser-only APIs.
  *   - R7  Brand icons rendered as real `<svg><path d={path} />` — NOT dangerouslySetInnerHTML.
  *
  * GAUGE MATH (per export): R=32, C=2π*32≈201.06, viewBox="0 0 80 80" (cx=40 cy=40).
  *   - track circle: faint `var(--border)` fill.
  *   - progress circle: `var(--neon-cyan)` stroke, strokeDasharray=C,
  *     strokeDashoffset = C*(1 - level/100), rotate(-90 40 40), strokeLinecap="round".
- *   - SSR (no-JS-safe): offset is the FINAL value — never an empty gauge.
- *   - Animation: on inView, animate FROM C (empty) TO offset (filled); skip under reduced-motion.
+ *   - SSR (no-JS-safe): strokeDashoffset={offset} (the FILLED value) as the static
+ *     attribute — gauge is never empty. CSS animation plays C→offset on load; under
+ *     reduced-motion the blanket reset zeroes it, leaving the gauge statically filled.
  *
  * MARQUEE: doubles the flattened skill list (icon + name + "/" separator) for a
  * seamless loop, driven by `tmpl-edgerunner-marquee` (defined in theme.css). No JS.
@@ -28,10 +29,7 @@
  *
  * Items WITHOUT a numeric `level`: rendered as an icon+name pill (no gauge, no crash).
  */
-'use client';
 
-import { useRef } from 'react';
-import { motion, useInView, useReducedMotion } from 'motion/react';
 import type { SectionProps } from './types';
 import type { SkillsContent } from '@/lib/validations';
 import { TECH_ICONS } from './icons';
@@ -88,7 +86,7 @@ function SkillPill({
 }) {
   const isCore = tier === 'core';
   return (
-    <li
+    <div
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -140,19 +138,21 @@ function SkillPill({
           {tier}
         </span>
       ) : null}
-    </li>
+    </div>
   );
 }
 
 /**
  * A single circular SVG gauge for one skill item.
  *
- * SSR contract: strokeDashoffset = C*(1 - level/100) at render time — the gauge is
- * ALWAYS visible at its final fill when JS is absent or hydration is pending (R5).
+ * SSR contract (R5): strokeDashoffset={offset} (the FILLED value) is the static
+ * SVG attribute — SSR and no-JS both render the gauge filled to the skill's level.
  *
- * Animation: useInView fires once the element enters the viewport. If NOT
- * reduced-motion, `motion.circle` animates FROM `C` (empty) TO `offset` (filled).
- * Under reduced-motion the `initial` === `animate` (both `offset`) → instant final state.
+ * Animation: CSS-only via `tmpl-gauge-arc` class + `tmpl-edgerunner-gauge-fill`
+ * keyframe in theme.css. The keyframe animates FROM `var(--gauge-c)` (empty) to the
+ * element's own `strokeDashoffset` (offset/filled). Under `prefers-reduced-motion`,
+ * the blanket reset in theme.css zeroes the animation — gauge stays statically filled.
+ * No JS, no hooks, no IntersectionObserver required.
  *
  * Center content: brand icon (if slug known) + name + level% label (monochrome, readable).
  */
@@ -165,19 +165,10 @@ function Gauge({
   iconSlug: string | null;
   level: number;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-60px' });
-  const prefersReduced = useReducedMotion();
-
   const offset = C * (1 - level / 100);
-  // Under reduced-motion: both initial and animate are the FINAL offset — instant, no flash.
-  // Under normal motion: initial = C (empty), animate to offset when inView.
-  const initialOffset = prefersReduced ? offset : C;
-  const animatedOffset = prefersReduced || inView ? offset : C;
 
   return (
     <div
-      ref={ref}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -201,8 +192,9 @@ function Gauge({
             stroke="var(--border)"
             strokeWidth="5"
           />
-          {/* Progress arc — SSR renders at final offset; animation is progressive enhancement */}
-          <motion.circle
+          {/* Progress arc — SSR/no-JS: strokeDashoffset={offset} (FILLED value).
+              CSS animation (tmpl-gauge-arc) plays C→offset on load as progressive enhancement. */}
+          <circle
             cx="40"
             cy="40"
             r={R}
@@ -211,15 +203,13 @@ function Gauge({
             strokeWidth="5"
             strokeLinecap="round"
             strokeDasharray={C}
-            initial={{ strokeDashoffset: initialOffset }}
-            animate={{ strokeDashoffset: animatedOffset }}
-            transition={
-              prefersReduced ? { duration: 0 } : { duration: 1.2, ease: 'easeOut' }
-            }
+            strokeDashoffset={offset}
             transform="rotate(-90 40 40)"
+            className="tmpl-gauge-arc"
             style={{
               filter:
                 'drop-shadow(0 0 6px color-mix(in oklab, var(--neon-cyan) 70%, transparent))',
+              ['--gauge-c' as string]: String(C),
             }}
           />
         </svg>
@@ -330,7 +320,6 @@ function TechMarquee({
 
       {/* The scrolling strip — CSS animation only, no JS state */}
       <div
-        className="tmpl-edgerunner-marquee-strip"
         style={{
           display: 'flex',
           width: 'max-content',

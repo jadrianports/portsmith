@@ -566,11 +566,17 @@
 /* ============================================================================
  * Skills GAUGES (D-09 — edgerunner's circular gauge signature, Task-12).
  * The gauge section uses a 2-col group grid on md+, matching the export's
- * `grid gap-6 md:grid-cols-2` layout. The gauge ring fill is animated via
- * `motion.circle` strokeDashoffset (JS progressive enhancement); SSR renders at
- * final fill (no-JS-safe). The TechMarquee strip uses `tmpl-edgerunner-marquee`
- * (defined above). Both are zeroed under `prefers-reduced-motion` by the blanket
- * reset at the bottom of this file.
+ * `grid gap-6 md:grid-cols-2` layout.
+ *
+ * GAUGE FILL ANIMATION (R5 CSS-only, no-JS-safe):
+ * The progress arc is a plain <circle strokeDashoffset={offset}> where `offset`
+ * is the FILLED resting value. SSR/no-JS: the gauge is always rendered filled.
+ * The `tmpl-gauge-arc` class triggers a one-shot CSS animation that plays from
+ * `var(--gauge-c)` (empty / full circumference) to the element's own
+ * `strokeDashoffset` (the filled offset value), creating the C→offset fill-in
+ * on load. Under `prefers-reduced-motion`, the blanket reset below zeroes the
+ * animation, leaving the gauge statically filled at the SSR attribute value.
+ * The TechMarquee strip uses `tmpl-edgerunner-marquee` (defined above).
  * ========================================================================== */
 
 /* 1-col base → 2-col on md+ (faithful to the export's GlowCard grid). */
@@ -582,6 +588,20 @@
 @media (min-width: 768px) {
   .tmpl-edgerunner .tmpl-skills-groups {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Gauge arc CSS fill animation — plays once on load: empty (C) → filled (offset).
+   The `to` keyframe is intentionally absent: CSS fills it from the element's own
+   strokeDashoffset attribute value, which is the filled `offset`. No-JS: the
+   animation still runs and ends at the filled value. Reduced-motion: blanket reset
+   below zeroes `animation`, leaving the arc statically at its strokeDashoffset. */
+.tmpl-edgerunner .tmpl-gauge-arc {
+  animation: tmpl-edgerunner-gauge-fill 1.2s ease-out;
+}
+@keyframes tmpl-edgerunner-gauge-fill {
+  from {
+    stroke-dashoffset: var(--gauge-c);
   }
 }
 
