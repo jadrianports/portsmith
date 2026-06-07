@@ -59,6 +59,8 @@ export interface HeroSocialLink {
 export interface HeroExtraProps {
   email?: string | null;
   socials?: HeroSocialLink[];
+  /** Terminal lines, built in index.tsx (which has the skills data for the stack list). */
+  terminalLines?: Array<{ p: string; c: string; out: string }>;
 }
 
 /**
@@ -99,7 +101,7 @@ function SocialIcon({ label }: { label: string }) {
   return <Globe size={16} aria-hidden="true" />;
 }
 
-export function Hero({ section, email, socials }: SectionProps & HeroExtraProps) {
+export function Hero({ section, email, socials, terminalLines }: SectionProps & HeroExtraProps) {
   const content = (section?.content ?? null) as HeroSectionContent | null;
   if (!content) return null;
 
@@ -127,29 +129,12 @@ export function Hero({ section, email, socials }: SectionProps & HeroExtraProps)
     email && present(email) ? safeHref(`mailto:${email}`, { allowMailto: true }) ?? null : null;
   const socialLinks = (socials ?? []).filter((s) => !!s.href);
 
-  // Terminal lines — built from real data, EXACT structure from export
-  // Export lines: whoami / cat stack.json / uptime / status
-  // We map: whoami → displayName + role, cat stack.json → tagline or role, uptime → static, status → static
-  const terminalLines: Array<{ p: string; c: string; out: string }> = [
-    {
-      p: '$',
-      c: 'whoami',
-      out: `${displayName}${roleLine ? ` — ${roleLine.toLowerCase()}` : ''}`,
-    },
-    ...(tagline
-      ? [{ p: '$', c: 'cat stack.json', out: tagline }]
-      : [{ p: '$', c: 'cat stack.json', out: 'see my work below' }]),
-    {
-      p: '$',
-      c: 'uptime',
-      out: '99.99%  ·  latency 42ms  ·  deploys 1,284',
-    },
-    {
-      p: '$',
-      c: 'status',
-      out: 'available for select engagements ▌',
-    },
-  ];
+  // Terminal lines come from index.tsx (it has the skills data for the stack list).
+  // Fallback to a minimal whoami line if not provided.
+  const termLines =
+    terminalLines && terminalLines.length > 0
+      ? terminalLines
+      : [{ p: '$', c: 'whoami', out: displayName }];
 
   return (
     <section
@@ -289,7 +274,7 @@ export function Hero({ section, email, socials }: SectionProps & HeroExtraProps)
 
         {/* Terminal HUD — VERBATIM structure from export (hidden below lg) */}
         <div className="relative hidden lg:flex lg:justify-end">
-          <TerminalCard lines={terminalLines} />
+          <TerminalCard lines={termLines} />
         </div>
       </div>
     </section>

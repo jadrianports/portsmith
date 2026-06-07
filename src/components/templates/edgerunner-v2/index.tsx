@@ -48,6 +48,31 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
 
   const heroEmail = data.settings.email_public ?? null;
 
+  // Terminal lines — built HERE because index has every section (incl. skills).
+  // Mirrors the export's terminal exactly: whoami / cat stack.json (a TECH LIST) /
+  // uptime / status. Data-driven so it's edit-ready, not hardcoded to Kai.
+  const handle = (profile.display_name ?? profile.username ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '.');
+  const role = (profile.headline ?? '').trim().toLowerCase();
+  const skillsContent = sections.find((s) => s.type === 'skills')?.content as
+    | { groups?: Array<{ items?: Array<{ name?: string | null }> | null } | null> | null }
+    | null
+    | undefined;
+  const techList = (skillsContent?.groups ?? [])
+    .flatMap((g) => g?.items ?? [])
+    .map((it) => (it?.name ?? '').trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 5)
+    .join(' · ');
+  const terminalLines: Array<{ p: string; c: string; out: string }> = [
+    { p: '$', c: 'whoami', out: [handle, role].filter(Boolean).join(' — ') || (handle || 'guest') },
+    { p: '$', c: 'cat stack.json', out: techList || 'react · typescript · node · postgres' },
+    { p: '$', c: 'uptime', out: '99.99%  ·  latency 42ms  ·  deploys 1,284' },
+    { p: '$', c: 'status', out: 'available for select engagements ▌' },
+  ];
+
   return (
     <div className={`tmpl-edgerunner-v2 ${fontVars}`} data-template-root data-template-theme="dark">
       {/* FOUC guard — hardcoded 'dark' (D-06) */}
@@ -71,6 +96,7 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
               section={heroSection}
               email={heroEmail}
               socials={heroSocials}
+              terminalLines={terminalLines}
             />
           </div>
         </ScrollReveal>
