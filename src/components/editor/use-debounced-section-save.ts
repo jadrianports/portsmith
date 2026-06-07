@@ -113,51 +113,81 @@ function filled(v: unknown): boolean {
   return typeof v === 'string' && v.trim().length > 0;
 }
 
+/**
+ * PER-TYPE required-text-key map — the SINGLE SOURCE the structural probe keys off,
+ * derived field-for-field from the `min(1)` string keys of each item schema in
+ * `src/lib/validations/sections.ts` (NOT imported — D-25 bundle rule; this is a
+ * hand-mirrored, Zod-free copy that the unit suite pins against the schemas).
+ *
+ * THE DRIFT BUG IT REPLACES (CR-01 / IN-02): a single flat `PRIMARY_TEXT_KEYS`
+ * allowlist silently went stale every time a new soft-enum type was added —
+ * `education` (requires `degree` + `school`) became un-saveable because neither key
+ * was in the list, and `metrics` passed on `label` alone though `value` is ALSO
+ * required. A per-type map cannot drift unnoticed: each item-bearing type names its
+ * own required text keys, and an item is structurally complete only when EVERY one
+ * of its type's required keys is filled (AND, not OR — IN-02).
+ *
+ * Each entry is the set of `z.string().min(1)` keys on the type's ITEM schema:
+ *   - projects:       `title`              (projectItemSchema)
+ *   - experience:     `company`, `role`    (experienceItemSchema)
+ *   - testimonials:   `name`, `quote`      (testimonialItemSchema)
+ *   - services:       `title`              (serviceItemSchema)
+ *   - metrics:        `value`, `label`     (metricItemSchema — BOTH required, IN-02)
+ *   - certifications: `title`              (certificationItemSchema)
+ *   - education:      `degree`, `school`   (educationItemSchema — CR-01)
+ *   - moodboard:      (none)               (moodboardImageSchema — only `id` + the
+ *                       alt-when-image refine; a text-/image-less gallery slot is
+ *                       SERVER-VALID, so it must pass the probe — CR-02)
+ *
+ * CONSERVATIVE DEFAULT (CLAUDE.md "skip only what the server is CERTAIN to reject"):
+ * a type WITHOUT an entry here defaults to no required text keys → its items pass on
+ * the alt-when-image rule alone, letting the server re-parse be the precise gate
+ * rather than silently dropping a snapshot the probe is unsure about.
+ */
+const REQUIRED_TEXT_KEYS: Record<string, readonly string[]> = {
+  projects: ['title'],
+  experience: ['company', 'role'],
+  testimonials: ['name', 'quote'],
+  services: ['title'],
+  metrics: ['value', 'label'],
+  certifications: ['title'],
+  education: ['degree', 'school'],
+  moodboard: [], // gallery item: only the alt-when-image rule gates it (CR-02).
+};
+
 /** Item-bearing types whose content lives in a `content.items[]` array. */
-const ITEM_BEARING = new Set<string>([
-  'projects',
-  'experience',
-  'testimonials',
-  'services',
-  'moodboard',
-  'metrics',
-  'certifications',
-  'education',
-]);
+const ITEM_BEARING = new Set<string>(Object.keys(REQUIRED_TEXT_KEYS));
 
 /**
  * Per-item REQUIRED-field probe — the minimal "this item has its required field(s)"
  * structural rule, mirroring the INTENT of the section schemas WITHOUT importing
  * them (D-25). Two universal traps the per-type forms hit transiently:
- *   - a freshly-added item with its primary required text still empty
- *     (`title` / `name` / `heading` / `quote` / `label` — whichever the item uses);
+ *   - a freshly-added item with one of its type's required text keys still empty
+ *     (each item-bearing type names its own keys in `REQUIRED_TEXT_KEYS`);
  *   - an image set but its REQUIRED alt still empty (Pitfall 8 / D-13 alt presence):
  *     if `image` is present, the paired `image_alt` MUST be non-empty.
  *
- * Any of the recognized primary-text keys being filled satisfies the text rule (a
- * permissive union — the SERVER re-parse is the precise gate; this only skips a
- * snapshot that is CERTAIN to be rejected).
+ * EVERY required text key for the type must be filled (AND, not OR — so a metric with
+ * `label` but no `value` is correctly skipped, IN-02). A type with NO required text
+ * keys (e.g. `moodboard`) is governed by the alt-when-image rule ALONE — an
+ * image-/text-less gallery slot is saveable (CR-02). The SERVER re-parse stays the
+ * precise gate; this only skips a snapshot that is CERTAIN to be rejected.
  */
-function itemIsStructurallyComplete(item: unknown): boolean {
+function itemIsStructurallyComplete(item: unknown, type: string): boolean {
   if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
   const it = item as LooseContent;
 
   // Alt presence (Pitfall 8 / D-13): when an item carries an image its required alt
   // MUST be non-empty. An image-bearing item (e.g. a moodboard swatch) is governed
-  // by this alt rule ALONE — such items legitimately carry no primary text.
-  const hasImage = filled(it.image) || filled(it.avatar);
-  if (hasImage) {
-    if (filled(it.image) && !filled(it.image_alt)) return false;
-    if (filled(it.avatar) && !filled(it.avatar_alt)) return false;
-    return true; // image present + its alt present → structurally complete.
-  }
+  // by this alt rule — such items legitimately carry no primary text.
+  if (filled(it.image) && !filled(it.image_alt)) return false;
+  if (filled(it.avatar) && !filled(it.avatar_alt)) return false;
 
-  // Otherwise it is a TEXT item — its primary required text must be filled (a
-  // freshly-added blank item is un-saveable). Any recognized primary key being
-  // filled is enough; the exact field varies by type and the server re-parse pins
-  // the precise one (this only skips a snapshot CERTAIN to be rejected).
-  const PRIMARY_TEXT_KEYS = ['title', 'name', 'heading', 'quote', 'label', 'company'];
-  return PRIMARY_TEXT_KEYS.some((k) => filled(it[k]));
+  // Then EVERY required text key for this type must be filled (AND — a half-filled
+  // item like a metric with `label` but no `value` is doomed and is skipped, IN-02).
+  // A type with no required text keys (moodboard) passes on the alt rule alone (CR-02).
+  const requiredKeys = REQUIRED_TEXT_KEYS[type] ?? [];
+  return requiredKeys.every((k) => filled(it[k]));
 }
 
 /**
@@ -181,7 +211,7 @@ export function isSaveableSnapshot(type: string, content: unknown): boolean {
   if (ITEM_BEARING.has(type)) {
     const items = c.items;
     if (!Array.isArray(items)) return true; // no items array yet → nothing doomed.
-    return items.every(itemIsStructurallyComplete);
+    return items.every((item) => itemIsStructurallyComplete(item, type));
   }
 
   // Section-level image/alt pairing applies to non-item types too (e.g. about.avatar,
