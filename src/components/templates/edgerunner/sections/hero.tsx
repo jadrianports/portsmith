@@ -26,7 +26,6 @@
 import type { SectionProps } from './types';
 import type { HeroContent } from '@/lib/validations';
 import { safeHref } from '@/lib/safe-url';
-import { HoloShape } from '../HoloShape';
 import { present } from './shared';
 
 /**
@@ -114,26 +113,7 @@ export function Hero({ section }: SectionProps) {
         />
       </div>
 
-      {/* The WebGL holo centerpiece — the additive lazy {ssr:false} island (D-04). It
-          sits behind the foreground text, centered; the CSS sun/grid above show through
-          before/without it. aria-hidden: purely decorative WebGL. */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: '38%',
-          width: 'min(80vw, 520px)',
-          height: 'min(80vw, 520px)',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 0,
-          pointerEvents: 'none',
-        }}
-      >
-        <HoloShape className="tmpl-holo" />
-      </div>
-
-      {/* Foreground content (above the backdrop + holo). SHELLED: `.tmpl-shell` gives the
+      {/* Foreground content (above the backdrop). SHELLED: `.tmpl-shell` gives the
           centered column + gutter; the decorative layers stay FULL-BLEED siblings. */}
       <div
         className="tmpl-shell"
