@@ -696,6 +696,96 @@
 }
 
 /* ============================================================================
+ * NAVBAR (Task-14) — sticky neon pill nav desktop/mobile layout + scroll-spy links.
+ *
+ * `.tmpl-nav-desktop` — the desktop link row (hidden by default in inline style; this
+ * media query makes it a flex row on lg+, always visible regardless of JS/toggle).
+ * `.tmpl-nav-link` — the per-link style (mono, uppercase, muted colour with hover/active).
+ * `.tmpl-nav-link--active` — the scroll-spy active state: neon-pink glow + underline.
+ * `.tmpl-nav-hamburger` — the hamburger button (visible < lg, hidden lg+).
+ * ========================================================================== */
+
+/* Desktop: show the link row inline on lg+ (overrides the `display:none` inline style). */
+@media (min-width: 1024px) {
+  .tmpl-edgerunner .tmpl-nav-desktop {
+    display: flex !important;
+    align-items: center;
+    gap: 4px;
+  }
+  /* Hide the hamburger on desktop */
+  .tmpl-edgerunner .tmpl-nav-hamburger {
+    display: none !important;
+  }
+}
+
+/* Nav link base */
+.tmpl-edgerunner .tmpl-nav-link {
+  display: inline-block;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  text-decoration: none;
+  color: var(--muted-fg);
+  transition: color 140ms ease;
+}
+.tmpl-edgerunner .tmpl-nav-link:hover {
+  color: var(--neon-cyan);
+}
+
+/* Scroll-spy active link — neon-pink glow + underline (progressive enhancement). */
+.tmpl-edgerunner .tmpl-nav-link--active {
+  color: var(--neon-pink);
+  text-shadow:
+    0 0 8px var(--neon-pink),
+    0 0 20px color-mix(in oklab, var(--neon-pink) 50%, transparent);
+}
+.tmpl-edgerunner .tmpl-nav-link--active::after {
+  content: '';
+  position: absolute;
+  inset-inline: 8px;
+  bottom: -1px;
+  height: 1px;
+  background: var(--neon-gradient);
+  box-shadow: 0 0 8px var(--neon-pink);
+}
+
+/* ============================================================================
+ * FOOTER QUICK-LINK + CHANNEL hover (Task-14) — neon-pink hover on quick-links /
+ * neon-pink ring + glow hover on the channel icon buttons. Hover glows are NOT
+ * motion — reduced-motion-exempt (like tmpl-project-card hover glow).
+ * ========================================================================== */
+
+.tmpl-edgerunner .tmpl-footer-ql-link:hover {
+  color: var(--neon-pink);
+  text-shadow: 0 0 10px color-mix(in oklab, var(--neon-pink) 50%, transparent);
+}
+
+.tmpl-edgerunner .tmpl-footer-channel-btn:hover {
+  border-color: var(--neon-pink);
+  color: var(--neon-pink);
+  box-shadow: 0 0 14px -4px color-mix(in oklab, var(--neon-pink) 55%, transparent);
+}
+
+/* ============================================================================
+ * FOOTER 3-COL GRID (Task-14) — stacks to 1 col on mobile, upgrades to 3 cols on md+.
+ * Mirrors the export's `md:grid-cols-3` layout.
+ * ========================================================================== */
+.tmpl-edgerunner .tmpl-footer-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+@media (min-width: 768px) {
+  .tmpl-edgerunner .tmpl-footer-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 40px;
+    align-items: start;
+  }
+}
+
+/* ============================================================================
  * Reduced-motion contract (hard requirement — UI-SPEC §Motion / D-07).
  * Under `prefers-reduced-motion: reduce`, ALL animation/transition inside the
  * template is zeroed — including the synthwave CSS layer (flicker/sun/grid/scanline),

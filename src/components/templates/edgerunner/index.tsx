@@ -50,10 +50,21 @@ import { Experience } from './sections/experience';
 import { Footer } from './sections/footer';
 import { Hero } from './sections/hero';
 import { Metrics } from './sections/metrics';
+import { Navbar } from './sections/navbar';
 import { Projects } from './sections/projects';
 import { Skills } from './sections/skills';
 import { personLdScriptHtml } from '@/lib/seo/person-jsonld';
 import type { PortfolioData, PublicSection } from '../types';
+
+/** The standard edgerunner nav items (the 7 sections minus metrics, matching the export). */
+const NAV_ITEMS = [
+  { id: 'hero', label: 'Home' },
+  { id: 'about', label: 'About' },
+  { id: 'experience', label: 'Experience' },
+  { id: 'projects', label: 'Projects' },
+  { id: 'skills', label: 'Stack' },
+  { id: 'contact', label: 'Contact' },
+];
 
 /**
  * Resolve the single visible section of a given `type` from the pre-sorted
@@ -101,6 +112,18 @@ export default function EdgerunnerTemplate({ data }: { data: PortfolioData }) {
         the RSC level). Zero animation-lib install (CSS/rAF only); cmdk dropped (D-07).
       */}
       <EdgerunnerEffects />
+
+      {/*
+        Sticky neon pill Navbar (Task-14 chrome). A 'use client' island (scroll-spy
+        IntersectionObserver + mobile toggle); nav links are SSR-rendered in the
+        initial HTML so they are accessible without JS. logoText derives from the
+        display_name (or falls back to the username handle, then a generic label).
+        The section items are the static edgerunner set — no runtime DB read.
+      */}
+      <Navbar
+        items={NAV_ITEMS}
+        logoText={profile.display_name ?? profile.username ?? 'Portfolio'}
+      />
 
       {/* The 7 supported sections IN THE EXPORT'S SOURCE ORDER (Services + Blog dropped).
           ScrollReveal is wired here as template chrome so the per-section fade-up belongs
