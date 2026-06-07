@@ -382,6 +382,39 @@
 }
 
 /* ============================================================================
+ * NEON COLOR UTILITIES — scoped so Tailwind v4's text-neon-* classes resolve
+ * to the template tokens (Tailwind v4 maps text-neon-cyan → var(--color-neon-cyan)
+ * but these vars live here as --neon-cyan, not on :root as --color-neon-cyan).
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .text-neon-cyan {
+  color: var(--neon-cyan);
+}
+.tmpl-edgerunner-v2 .text-neon-pink {
+  color: var(--neon-pink);
+}
+.tmpl-edgerunner-v2 .text-neon-purple {
+  color: var(--neon-purple);
+}
+.tmpl-edgerunner-v2 .text-neon-yellow {
+  color: var(--neon-yellow);
+}
+
+/* ============================================================================
+ * SCROLL PROGRESS BAR — fixed top bar, pointer-events: none, z-index: 60
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .tmpl-scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 60;
+  pointer-events: none;
+  transform-origin: left center;
+  background-image: var(--gradient-neon);
+}
+
+/* ============================================================================
  * NAVBAR hover states
  * ========================================================================== */
 /* Desktop nav link hover — hover:text-neon-cyan */

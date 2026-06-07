@@ -28,6 +28,7 @@ import { Experience } from './sections/experience';
 import { Footer } from './sections/footer';
 import { Hero, type HeroSocialLink } from './sections/hero';
 import { Navbar, type NavItem } from './sections/navbar';
+import { ScrollProgress } from './sections/scroll-progress';
 import { Projects } from './sections/projects';
 import { Services } from './sections/services';
 import { Skills } from './sections/skills';
@@ -140,6 +141,9 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
 
       {/* Person JSON-LD */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: personLdHtml }} />
+
+      {/* Scroll progress bar — fixed top, z-60, pointer-events:none */}
+      <ScrollProgress />
 
       {/* Sticky pill navbar — first child, above ambient bg + main */}
       <Navbar items={navItems} logoText={logoText} badge={logoBadge} />

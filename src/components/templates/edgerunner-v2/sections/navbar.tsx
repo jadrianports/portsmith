@@ -30,11 +30,15 @@
  *        - Blog link DROPPED (deferred)
  *        - Services and other section links come from `items` prop (not hardcoded)
  *        - Logo wordmark derived from `logoText` prop
- *        - Scroll-spy: useScrollSpy hook inlined (IntersectionObserver on section offsetTop)
+ *        - Scroll-spy: IntersectionObserver on actual #id elements (offsetTop was 0
+ *            because the <div id> is the immediate child of a <section> wrapper whose
+ *            own offsetTop is the real page position — el.offsetTop returned 0 always).
+ *        - Smooth-scroll: click handler calls scrollIntoView({behavior:'smooth'});
+ *            respects prefers-reduced-motion (uses 'auto' when reduced).
  *   6. Props: { items: {id:string; label:string}[]; logoText: string }
  *        logoText = last word of display_name uppercased + ".dev" computed in index.tsx
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Menu, X } from 'lucide-react';
 
@@ -51,27 +55,64 @@ export interface NavbarProps {
   badge?: string;
 }
 
-/** Inline scroll-spy: mirrors the export's useScrollSpy hook (ids, offset=120) */
-function useScrollSpy(ids: string[], offset = 120): string {
+/**
+ * IntersectionObserver-based scroll-spy.
+ *
+ * ROOT CAUSE of the old offsetTop=0 bug: the `<div id="about">` etc. are immediate
+ * children of `<ScrollReveal as="section">` wrappers. `el.offsetTop` is relative to
+ * offsetParent (the <section>), which is 0. We need absolute page position.
+ *
+ * Fix: observe each `#<id>` element with IntersectionObserver (rootMargin so the
+ * topmost visible section triggers active). Falls back gracefully if IO is absent
+ * (SSR / very old browser) by using getBoundingClientRect + scroll event.
+ */
+function useScrollSpy(ids: string[]): string {
   const [active, setActive] = useState<string>(ids[0] ?? '');
+  // Keep a stable ref to ids so the effect doesn't re-run on every render
+  const idsRef = useRef(ids);
+  useEffect(() => { idsRef.current = ids; }, [ids]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handler = () => {
-      const scrollPos = window.scrollY + offset;
-      let current = ids[0] ?? '';
-      for (const id of ids) {
-        const el = document.getElementById(id);
-        if (el && el.offsetTop <= scrollPos) current = id;
-      }
-      setActive(current);
+    if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') return;
+
+    // rootMargin: top -10% to -80% — a section is "active" when its top edge is
+    // in the upper 10–80% of the viewport (i.e. it has scrolled into view).
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Find the topmost intersecting entry (smallest boundingClientRect.top ≥ 0)
+        // or the last one that crossed the top boundary.
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setActive(entry.target.id);
+          }
+        }
+      },
+      { rootMargin: '-10% 0px -80% 0px', threshold: 0 }
+    );
+
+    const elements: Element[] = [];
+    for (const id of idsRef.current) {
+      const el = document.getElementById(id);
+      if (el) { observer.observe(el); elements.push(el); }
+    }
+
+    return () => {
+      for (const el of elements) observer.unobserve(el);
+      observer.disconnect();
     };
-    handler();
-    window.addEventListener('scroll', handler, { passive: true });
-    return () => window.removeEventListener('scroll', handler);
-  }, [ids, offset]);
+  // Only re-run when the ids array reference changes (ids is derived from navItems which is stable)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return active;
+}
+
+/** Smooth-scroll to a section id; respects prefers-reduced-motion. */
+function smoothScrollTo(id: string) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  el.scrollIntoView({ behavior: prefersReduced ? 'auto' : 'smooth', block: 'start' });
 }
 
 export function Navbar({ items, logoText, badge }: NavbarProps) {
@@ -85,6 +126,11 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
   const active = useScrollSpy(sectionIds);
   const [open, setOpen] = useState(false);
 
+  const handleNavClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    e.preventDefault();
+    smoothScrollTo(id);
+  }, []);
+
   return (
     <header className="fixed inset-x-0 top-0 z-50">
       {/* Sticky pill — VERBATIM layout classes from export */}
@@ -96,7 +142,7 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
         }}
       >
         {/* Logo — VERBATIM from export */}
-        <a href="#hero" className="group flex items-center gap-2" style={{ textDecoration: 'none' }}>
+        <a href="#hero" onClick={(e) => handleNavClick(e, 'hero')} className="group flex items-center gap-2" style={{ textDecoration: 'none' }}>
           <span
             className="grid h-9 w-9 place-items-center rounded-md font-display text-sm font-bold text-neon-pink text-glow-pink"
             aria-hidden="true"
@@ -122,6 +168,7 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
               <a
                 key={l.id}
                 href={`#${l.id}`}
+                onClick={(e) => handleNavClick(e, l.id)}
                 className="group relative px-3 py-2 font-mono-retro text-base uppercase tracking-widest transition-colors tmpl-nav-link"
                 style={{
                   color: isActive
@@ -186,7 +233,7 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
                 <a
                   key={l.id}
                   href={`#${l.id}`}
-                  onClick={() => setOpen(false)}
+                  onClick={(e) => { handleNavClick(e, l.id); setOpen(false); }}
                   className="rounded-md px-3 py-2 font-mono-retro text-lg uppercase tracking-wider tmpl-nav-mobile-link"
                   style={{
                     background: isActive

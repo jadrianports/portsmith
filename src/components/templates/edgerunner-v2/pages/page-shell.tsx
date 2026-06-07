@@ -24,6 +24,7 @@ import { orbitron, spaceGrotesk, vt323 } from '../fonts';
 import { themeInitScript } from '../../_kit';
 import { NavbarSubpage, type NavItem } from './navbar-subpage';
 import { Footer } from '../sections/footer';
+import { ScrollProgress } from '../sections/scroll-progress';
 import type { PortfolioData } from '../../types';
 
 export interface EdgerunnerV2PageShellProps {
@@ -78,6 +79,9 @@ export function EdgerunnerV2PageShell({
     >
       {/* FOUC guard — hardcoded 'dark' (D-06) */}
       <script dangerouslySetInnerHTML={{ __html: themeInitScript('dark') }} />
+
+      {/* Scroll progress bar — fixed top, z-60, pointer-events:none */}
+      <ScrollProgress />
 
       {/* Sticky pill navbar — sub-page variant (href-based, no scroll-spy) */}
       <NavbarSubpage
