@@ -67,9 +67,8 @@ export function About({ section, initials, stats }: SectionProps & AboutExtraPro
         <div className="grid items-center gap-12 lg:grid-cols-[1fr_1.4fr]">
           {/* Holographic portrait — LEFT column */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true, margin: '-100px' }}
+            initial={false}
+            animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.7 }}
             className="relative mx-auto aspect-[3/4] w-full max-w-xs"
           >
@@ -131,9 +130,8 @@ export function About({ section, initials, stats }: SectionProps & AboutExtraPro
           <div>
             {bio ? (
               <motion.p
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-100px' }}
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
                 className="text-lg leading-relaxed"
                 style={{ color: 'color-mix(in oklab, var(--fg) 85%, transparent)' }}
               >
@@ -147,9 +145,8 @@ export function About({ section, initials, stats }: SectionProps & AboutExtraPro
                 {resolvedStats.map((s, i) => (
                   <motion.div
                     key={s.label}
-                    initial={{ opacity: 0, y: 10 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true, margin: '-100px' }}
+                    initial={false}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.08 }}
                     className="rounded-xl p-4 backdrop-blur-md"
                     style={{

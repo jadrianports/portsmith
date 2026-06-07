@@ -310,9 +310,8 @@ export function Projects({ section }: SectionProps) {
               return (
                 <motion.div
                   key={present(item.id) ? item.id : `${item.title}-${i}`}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-80px' }}
+                  initial={false}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.45, delay: i * 0.06 }}
                 >
                   <TiltCard className="h-full">

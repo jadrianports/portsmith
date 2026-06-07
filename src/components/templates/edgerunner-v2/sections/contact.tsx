@@ -69,9 +69,8 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
         <div className="grid gap-8 lg:grid-cols-[1fr_1.4fr]">
           {/* LEFT: "Direct Lines" holo-panel */}
           <motion.div
-            initial={{ opacity: 0, x: -16 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
+            initial={false}
+            animate={{ opacity: 1, x: 0 }}
             className="holo-panel rounded-2xl p-6 shadow-neon-cyan"
           >
             <h3 className="font-display text-lg font-bold uppercase tracking-widest text-neon-cyan">
@@ -116,9 +115,8 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
 
           {/* RIGHT: spinning conic-gradient border wrapper + real ContactForm */}
           <motion.div
-            initial={{ opacity: 0, x: 16 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: '-80px' }}
+            initial={false}
+            animate={{ opacity: 1, x: 0 }}
             className="relative rounded-2xl p-[1.5px]"
           >
             {/* Spinning conic border ring */}

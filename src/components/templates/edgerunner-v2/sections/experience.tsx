@@ -149,9 +149,8 @@ export function Experience({ section }: SectionProps) {
               return (
                 <motion.li
                   key={present(item.id) ? item.id : `${item.company}-${item.role}-${i}`}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: '-80px' }}
+                  initial={false}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: i * 0.05 }}
                   className="relative md:grid md:grid-cols-2 md:gap-12"
                 >

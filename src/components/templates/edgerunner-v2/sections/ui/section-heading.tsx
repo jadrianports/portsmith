@@ -51,9 +51,8 @@ export function SectionHeading({
     >
       {eyebrow && (
         <motion.span
-          initial={{ opacity: 0, y: 8 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-80px' }}
+          initial={false}
+          animate={{ opacity: 1, y: 0 }}
           className="font-mono-retro text-sm uppercase tracking-[0.4em]"
           style={{ color: 'color-mix(in oklab, var(--neon-cyan) 80%, transparent)' }}
         >
@@ -61,20 +60,18 @@ export function SectionHeading({
         </motion.span>
       )}
       <motion.h2
-        initial={{ opacity: 0, y: 12 }}
-        whileInView={{ opacity: 1, y: 0 }}
+        initial={false}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        viewport={{ once: true, margin: '-80px' }}
         className={`font-display text-3xl font-bold uppercase tracking-wider sm:text-4xl md:text-5xl ${accentTextClass[accent]}`}
       >
         {title}
       </motion.h2>
       {description && (
         <motion.p
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
+          initial={false}
+          animate={{ opacity: 1 }}
           transition={{ delay: 0.15 }}
-          viewport={{ once: true, margin: '-80px' }}
           className="max-w-2xl text-base sm:text-lg"
           style={{ color: 'var(--muted-fg)' }}
         >

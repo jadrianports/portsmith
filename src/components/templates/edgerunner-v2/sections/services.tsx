@@ -127,9 +127,8 @@ export function Services({ section }: SectionProps) {
             return (
               <motion.div
                 key={present(item.id) ? item.id : `svc-${i}`}
-                initial={{ opacity: 0, y: 18 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-60px' }}
+                initial={false}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
               >
                 <GlowCard accent={accent} className="h-full">

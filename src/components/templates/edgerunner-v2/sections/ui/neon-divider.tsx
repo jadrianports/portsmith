@@ -27,9 +27,8 @@ export function NeonDivider({
       aria-hidden="true"
     >
       <motion.div
-        initial={{ scaleX: 0, opacity: 0 }}
-        whileInView={{ scaleX: 1, opacity: 1 }}
-        viewport={{ once: true, margin: '-80px' }}
+        initial={false}
+        animate={{ scaleX: 1, opacity: 1 }}
         transition={{ duration: 0.9, ease: 'easeOut' }}
         className="h-px flex-1 origin-right"
         style={{
@@ -40,9 +39,8 @@ export function NeonDivider({
       />
       <span className="font-mono-retro text-neon-cyan text-glow-cyan text-lg">{glyph}</span>
       <motion.div
-        initial={{ scaleX: 0, opacity: 0 }}
-        whileInView={{ scaleX: 1, opacity: 1 }}
-        viewport={{ once: true, margin: '-80px' }}
+        initial={false}
+        animate={{ scaleX: 1, opacity: 1 }}
         transition={{ duration: 0.9, ease: 'easeOut' }}
         className="h-px flex-1 origin-left"
         style={{
