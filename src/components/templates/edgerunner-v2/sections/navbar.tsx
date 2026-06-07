@@ -205,10 +205,16 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
               >
                 {l.label}
                 {isActive && (
-                  <m.span
-                    layoutId="nav-underline"
+                  // Active-item underline. Was a shared-layout `m.span layoutId="nav-underline"`
+                  // (a FLIP slide between items) — but `layoutId` drags motion's entire projection/
+                  // layout engine into the public First Load JS (D-25 / TMPL-04 ≤200 kB). The
+                  // underline is decorative scroll-spy feedback; the active item still gets it. We
+                  // render a plain `<span>` (pixel-identical AT REST — and the parity capture is
+                  // reduced-motion, where the slide is suppressed anyway). Scroll-spy + nav links are
+                  // unchanged; only the inter-item slide transition is dropped.
+                  <span
+                    aria-hidden="true"
                     className="absolute inset-x-2 -bottom-0.5 h-px bg-gradient-neon shadow-neon-pink"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                   />
                 )}
               </a>

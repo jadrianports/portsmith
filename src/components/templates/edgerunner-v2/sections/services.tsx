@@ -1,4 +1,3 @@
-'use client';
 /**
  * Services section — bar-for-bar transcription of
  * lovable-exports/synthwave-founder/src/components/sections/Services.tsx
@@ -14,13 +13,16 @@
  *      border-neon-pink shadow-neon-pink/40 → inline style
  *   3. Custom classes (font-mono-retro, font-display, text-neon-*, text-foreground,
  *      bg-neon-pink/10) KEPT where possible.
- *   4. framer-motion → motion/react. ALL motion values VERBATIM.
- *   5. DATA BINDING: services content items (title/description/icon/deliverables).
+ *   4. DATA BINDING: services content items (title/description/icon/deliverables).
  *      "View all services" → scrolls to #contact (no /services route on single-scroll).
- *   6. Icon map: lucide icons by slug (same as edgerunner/sections/services.tsx).
- *   7. 'use client' required for motion/react.
+ *   5. Icon map: lucide icons by slug (same as edgerunner/sections/services.tsx).
+ *   6. SERVER COMPONENT — no 'use client', no motion (bundle-budget; D-25 / TMPL-04).
+ *      The export's per-card motion was `initial={false}` + `animate` = cards render AT REST
+ *      (no visible entrance); the shared `ScrollReveal` kit wrapper already reveals the
+ *      section on scroll. Converting the redundant `m.div` to a plain `<div>` drops
+ *      `motion/react` from First Load JS with ZERO static-render change. The card hover-glow
+ *      lives in `GlowCard` (its own client island), so interactivity is preserved.
  */
-import { m } from 'motion/react';
 import Link from 'next/link';
 import { type ComponentType } from 'react';
 import {
@@ -126,11 +128,8 @@ export function Services({ section, username }: SectionProps & { username?: stri
               : [];
 
             return (
-              <m.div
+              <div
                 key={present(item.id) ? item.id : `svc-${i}`}
-                initial={false}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
               >
                 <GlowCard accent={accent} className="h-full">
                   <div className="flex h-full flex-col">
@@ -180,7 +179,7 @@ export function Services({ section, username }: SectionProps & { username?: stri
                     ) : null}
                   </div>
                 </GlowCard>
-              </m.div>
+              </div>
             );
           })}
         </div>

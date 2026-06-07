@@ -1,4 +1,3 @@
-'use client';
 /**
  * About section — bar-for-bar transcription of
  * lovable-exports/synthwave-founder/src/components/sections/About.tsx
@@ -15,15 +14,18 @@
  *      text-foreground/70 → color-mix(in oklab, var(--fg) 70%, transparent)
  *   3. Custom classes (holo-panel, text-glow-pink, font-mono-retro, font-display,
  *      text-neon-pink, text-neon-cyan, bg-gradient-neon, shadow-neon-cyan) KEPT AS-IS.
- *   4. framer-motion → motion/react. ALL motion values VERBATIM.
- *   5. DATA BINDING:
+ *   4. DATA BINDING:
  *      profile.bio → about content bio
  *      portrait placeholder: derive initials from display_name prop
  *      profile.stats → stats prop (metrics items folded in from index.tsx)
  *      Real avatar: next/image guarded by isHttpImageSrc
- *   6. 'use client' required for motion/react.
+ *   5. SERVER COMPONENT — no 'use client', no motion (bundle-budget; D-25 / TMPL-04).
+ *      The export's section motion was `initial={false}` + `animate` = elements render AT
+ *      REST (no visible entrance); the shared `ScrollReveal` kit wrapper already reveals the
+ *      section on scroll. The redundant `m.*` islands were the only reason this was a client
+ *      component — converting them to plain elements drops `motion/react` from First Load JS
+ *      with ZERO static-render change (parity capture is `reducedMotion:'reduce'`).
  */
-import { m } from 'motion/react';
 import Image from 'next/image';
 
 import type { SectionProps } from './types';
@@ -66,10 +68,7 @@ export function About({ section, initials, stats }: SectionProps & AboutExtraPro
         <SectionHeading eyebrow="About" title="Decoded" accent="cyan" />
         <div className="grid items-center gap-12 lg:grid-cols-[1fr_1.4fr]">
           {/* Holographic portrait — LEFT column */}
-          <m.div
-            initial={false}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.7 }}
+          <div
             className="relative mx-auto aspect-[3/4] w-full max-w-xs"
           >
             <div
@@ -124,30 +123,25 @@ export function About({ section, initials, stats }: SectionProps & AboutExtraPro
                 </div>
               )}
             </div>
-          </m.div>
+          </div>
 
           {/* RIGHT column — bio + stats grid */}
           <div>
             {bio ? (
-              <m.p
-                initial={false}
-                animate={{ opacity: 1, y: 0 }}
+              <p
                 className="text-lg leading-relaxed"
                 style={{ color: 'color-mix(in oklab, var(--fg) 85%, transparent)' }}
               >
                 {bio}
-              </m.p>
+              </p>
             ) : null}
 
             {/* STATS GRID — folded from metrics section (passed via prop from index.tsx) */}
             {resolvedStats.length > 0 ? (
               <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-                {resolvedStats.map((s, i) => (
-                  <m.div
+                {resolvedStats.map((s) => (
+                  <div
                     key={s.label}
-                    initial={false}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.08 }}
                     className="rounded-xl p-4 backdrop-blur-md"
                     style={{
                       border: '1px solid color-mix(in oklab, var(--neon-purple) 30%, transparent)',
@@ -163,7 +157,7 @@ export function About({ section, initials, stats }: SectionProps & AboutExtraPro
                     >
                       {s.label}
                     </div>
-                  </m.div>
+                  </div>
                 ))}
               </div>
             ) : null}

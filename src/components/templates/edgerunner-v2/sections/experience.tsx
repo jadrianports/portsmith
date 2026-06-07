@@ -1,4 +1,3 @@
-'use client';
 /**
  * Experience section — bar-for-bar transcription of
  * lovable-exports/synthwave-founder/src/components/sections/Experience.tsx
@@ -14,13 +13,14 @@
  *      bg-gradient-to-b from-neon-pink via-neon-purple to-neon-cyan → linear-gradient(...)
  *      bg-neon-cyan shadow-neon-cyan → var(--neon-cyan)
  *   3. Custom classes (font-mono-retro, font-display, text-neon-*, text-glow-pink) KEPT.
- *   4. framer-motion → motion/react. ALL motion values VERBATIM.
- *   5. DATA BINDING: experience content items. No location field (not in schema).
- *   6. GlowCard imported from local ui/ folder.
- *   7. 'use client' required for motion/react.
+ *   4. DATA BINDING: experience content items. No location field (not in schema).
+ *   5. GlowCard imported from local ui/ folder.
+ *   6. SERVER COMPONENT — no 'use client', no motion (bundle-budget; D-25 / TMPL-04).
+ *      The export's per-item motion was `initial={false}` + `animate` = rows render AT REST
+ *      (no visible entrance); the shared `ScrollReveal` kit wrapper already reveals the
+ *      section on scroll. Converting the redundant `m.li` to a plain `<li>` drops
+ *      `motion/react` from First Load JS with ZERO static-render change.
  */
-import { m } from 'motion/react';
-
 import type { SectionProps } from './types';
 import type { ExperienceContent, ExperienceItem } from '@/lib/validations';
 import { present } from './shared';
@@ -147,11 +147,8 @@ export function Experience({ section }: SectionProps) {
             {items.map((item, i) => {
               const left = i % 2 === 0;
               return (
-                <m.li
+                <li
                   key={present(item.id) ? item.id : `${item.company}-${item.role}-${i}`}
-                  initial={false}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: i * 0.05 }}
                   className="relative md:grid md:grid-cols-2 md:gap-12"
                 >
                   {/* Node marker */}
@@ -166,7 +163,7 @@ export function Experience({ section }: SectionProps) {
                   <div className={left ? 'md:pr-12 md:text-right' : 'md:col-start-2 md:pl-12'}>
                     <ExperienceCard item={item} left={left} />
                   </div>
-                </m.li>
+                </li>
               );
             })}
           </ul>

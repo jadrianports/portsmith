@@ -1,4 +1,3 @@
-'use client';
 /**
  * SectionHeading for edgerunner-v2 — bar-for-bar port of
  * lovable-exports/synthwave-founder/src/components/ui/SectionHeading.tsx
@@ -7,11 +6,14 @@
  *   1. Layout classes VERBATIM from export JSX.
  *   2. Color classes converted → inline style with scoped var(--token).
  *   3. Custom classes (font-mono-retro, text-glow-*, text-neon-*) KEPT AS-IS (scoped in theme.css).
- *   4. framer-motion → motion/react, ALL motion values VERBATIM.
- *   5. 'use client' required for motion/react.
+ *   4. SERVER COMPONENT — no 'use client', no motion (bundle-budget; D-25 / TMPL-04).
+ *      The export's entrance motion here was `initial={false}` + `animate` = the elements
+ *      render AT REST (no visible entrance). The shared `ScrollReveal` kit wrapper already
+ *      reveals each section on scroll, so the redundant per-heading `m.*` islands were
+ *      pulling `motion/react` into the public First Load JS for ZERO static-render effect.
+ *      Converted to plain elements — pixel-identical at rest (the parity capture is
+ *      `reducedMotion:'reduce'`, where `initial={false}` motion is suppressed anyway).
  */
-import { m } from 'motion/react';
-
 type Accent = 'pink' | 'cyan' | 'purple';
 
 const accentTextClass: Record<Accent, string> = {
@@ -50,33 +52,25 @@ export function SectionHeading({
         .join(' ')}
     >
       {eyebrow && (
-        <m.span
-          initial={false}
-          animate={{ opacity: 1, y: 0 }}
+        <span
           className="font-mono-retro text-sm uppercase tracking-[0.4em]"
           style={{ color: 'color-mix(in oklab, var(--neon-cyan) 80%, transparent)' }}
         >
           // {eyebrow}
-        </m.span>
+        </span>
       )}
-      <m.h2
-        initial={false}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
+      <h2
         className={`font-display text-3xl font-bold uppercase tracking-wider sm:text-4xl md:text-5xl ${accentTextClass[accent]}`}
       >
         {title}
-      </m.h2>
+      </h2>
       {description && (
-        <m.p
-          initial={false}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.15 }}
+        <p
           className="max-w-2xl text-base sm:text-lg"
           style={{ color: 'var(--muted-fg)' }}
         >
           {description}
-        </m.p>
+        </p>
       )}
     </div>
   );

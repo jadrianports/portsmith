@@ -1,4 +1,3 @@
-'use client';
 /**
  * BlogTeaser section — bar-for-bar transcription of
  * lovable-exports/synthwave-founder/src/components/sections/BlogTeaser.tsx
@@ -17,13 +16,15 @@
  *        border-border/40          → style={{ borderColor: 'color-mix(in oklab, var(--border) 40%, transparent)' }}
  *        border-neon-pink bg-neon-pink/10 shadow-neon-pink/40 → inline styles
  *   3. Custom classes (font-mono-retro, font-display, text-glow-*) KEPT AS-IS.
- *   4. framer-motion → motion/react. `initial={false}` (SSR-visible, no-JS-safety rule).
- *   5. DATA BINDING: BlogPreviewContent items (id/slug/title/excerpt/date/reading_time/tags/accent).
- *   6. Card link → Next <Link href={`/${username}/blog/${item.slug}`}> (blog post pages built next).
- *   7. "View all" CTA → /[username]/blog.
- *   8. 'use client' required for motion/react animations.
+ *   4. DATA BINDING: BlogPreviewContent items (id/slug/title/excerpt/date/reading_time/tags/accent).
+ *   5. Card link → Next <Link href={`/${username}/blog/${item.slug}`}> (blog post pages built next).
+ *   6. "View all" CTA → /[username]/blog.
+ *   7. SERVER COMPONENT — no 'use client', no motion (bundle-budget; D-25 / TMPL-04).
+ *      The export's per-card motion was `initial={false}` + `animate` = cards render AT REST
+ *      (no visible entrance); the shared `ScrollReveal` kit wrapper already reveals the
+ *      section on scroll. Converting the redundant `m.div` to a plain `<div>` drops
+ *      `motion/react` from First Load JS with ZERO static-render change.
  */
-import { m } from 'motion/react';
 import Link from 'next/link';
 import { ArrowRight, Calendar, Clock } from 'lucide-react';
 
@@ -98,11 +99,8 @@ export function BlogTeaser({
             : null;
 
           return (
-            <m.div
+            <div
               key={post.id || post.slug}
-              initial={false}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: i * 0.08 }}
             >
               <Link
                 href={postHref}
@@ -175,7 +173,7 @@ export function BlogTeaser({
                   </div>
                 ) : null}
               </Link>
-            </m.div>
+            </div>
           );
         })}
       </div>

@@ -52,14 +52,12 @@ export function TiltCard({
     my.set(0.5);
   };
 
-  if (prefersReduced) {
-    return (
-      <div ref={ref} className={['relative', className].filter(Boolean).join(' ')}>
-        {children}
-      </div>
-    );
-  }
-
+  // NOTE: do NOT branch the returned markup on `prefersReduced` — `useReducedMotion()` is
+  // null on the server and the real value on the client, so an early-return-a-different-tree
+  // here caused a hydration mismatch for reduced-motion users (server rendered the m.div,
+  // their client rendered a plain div). We ALWAYS render the m.div (identical markup server +
+  // client) and the `onMove` guard above keeps it flat for reduced motion: the motion values
+  // stay at 0.5 → rotateX/Y resolve to 0 and the sheen stays centered, so there is no motion.
   return (
     <m.div
       ref={ref}

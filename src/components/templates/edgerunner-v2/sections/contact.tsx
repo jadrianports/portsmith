@@ -1,4 +1,3 @@
-'use client';
 /**
  * Contact section — bar-for-bar transcription of the VISUAL structure from
  * lovable-exports/synthwave-founder/src/components/sections/Contact.tsx,
@@ -15,13 +14,16 @@
  *      text-foreground/90 → color-mix(in oklab, var(--fg) 90%, transparent)
  *   3. Custom classes (holo-panel, shadow-neon-cyan, shadow-neon-pink, font-mono-retro,
  *      font-display, text-neon-pink, text-neon-cyan) KEPT AS-IS.
- *   4. framer-motion → motion/react. ALL motion values VERBATIM.
- *   5. FAKE FORM REPLACED: spinning-border wrapper kept; inner replaced by
+ *   4. FAKE FORM REPLACED: spinning-border wrapper kept; inner replaced by
  *      <ContactForm portfolioId emailPublic /> (same wiring as edgerunner/contact.tsx).
- *   6. Direct Lines: email only (no phone/location — not in data schema).
- *   7. 'use client' required for motion/react.
+ *   5. Direct Lines: email only (no phone/location — not in data schema).
+ *   6. SERVER COMPONENT — no 'use client', no motion (bundle-budget; D-25 / TMPL-04).
+ *      The export's panel motion was `initial={false}` + `animate` = panels render AT REST
+ *      (no visible entrance); the shared `ScrollReveal` kit wrapper already reveals the
+ *      section on scroll. Converting the redundant `m.div` to a plain `<div>` drops
+ *      `motion/react` from First Load JS with ZERO static-render change. The real form
+ *      interactivity lives in `<ContactForm>` (its own client island), preserved as-is.
  */
-import { m } from 'motion/react';
 import { Mail } from 'lucide-react';
 
 import { ContactForm } from '@/components/public/contact-form';
@@ -68,9 +70,7 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
 
         <div className="grid gap-8 lg:grid-cols-[1fr_1.4fr]">
           {/* LEFT: "Direct Lines" holo-panel */}
-          <m.div
-            initial={false}
-            animate={{ opacity: 1, x: 0 }}
+          <div
             className="holo-panel rounded-2xl p-6 shadow-neon-cyan"
           >
             <h3 className="font-display text-lg font-bold uppercase tracking-widest text-neon-cyan">
@@ -111,15 +111,13 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
             >
               &gt; status: open to new transmissions
             </div>
-          </m.div>
+          </div>
 
           {/* RIGHT: vivid gradient panel (the panel BG IS the gradient, faithful to export).
               The ContactForm sits inside; its inputs use --surface-muted (dark/translucent)
               boxes on the bright gradient, labels/placeholders are forced readable via the
               .tmpl-contact-gradient-panel hook in theme.css. */}
-          <m.div
-            initial={false}
-            animate={{ opacity: 1, x: 0 }}
+          <div
             className="tmpl-contact-gradient-panel relative rounded-2xl p-6 shadow-neon-pink"
             style={{
               background:
@@ -144,7 +142,7 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
                 </p>
               </div>
             ) : null}
-          </m.div>
+          </div>
         </div>
       </div>
     </section>

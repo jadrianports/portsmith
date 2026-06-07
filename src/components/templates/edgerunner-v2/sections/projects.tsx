@@ -308,11 +308,8 @@ export function Projects({ section }: SectionProps) {
               const liveHref = safeHref(item.live_url) ?? null;
 
               return (
-                <m.div
+                <div
                   key={present(item.id) ? item.id : `${item.title}-${i}`}
-                  initial={false}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.45, delay: i * 0.06 }}
                 >
                   <TiltCard className="h-full">
                     <GlowCard accent={accent} className="h-full cursor-pointer">
@@ -446,7 +443,7 @@ export function Projects({ section }: SectionProps) {
                       ) : null}
                     </GlowCard>
                   </TiltCard>
-                </m.div>
+                </div>
               );
             })}
           </div>
