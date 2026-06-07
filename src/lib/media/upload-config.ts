@@ -24,8 +24,14 @@ const IMAGE_CEILING_BYTES = 5 * 1024 * 1024; // 5 MiB = 5242880
 /** Résumé byte ceiling — mirrors migration 003 `resumes` file_size_limit. */
 const RESUME_CEILING_BYTES = 10 * 1024 * 1024; // 10 MiB = 10485760
 
-/** The four upload slots. `kind` is the wire param the route branches on. */
-export type UploadKind = 'avatar' | 'project' | 'testimonial' | 'resume';
+/**
+ * The upload slots. `kind` is the wire param the route branches on. `moodboard`
+ * (13.1-03, correctness gap #3) is the gallery image kind the moodboard per-type
+ * form uploads through — a pure config addition (bucket `media`, image-gated by the
+ * existing `isImageKind`/`ALLOWED_IMAGE_MIME` path), NO migration (the BEFORE-INSERT
+ * atomic quota trigger gates ALL `media` writes regardless of render state).
+ */
+export type UploadKind = 'avatar' | 'project' | 'testimonial' | 'moodboard' | 'resume';
 
 /** A user-writable Storage bucket (migration 003). */
 export type UploadBucket = 'avatars' | 'media' | 'resumes';
@@ -75,6 +81,17 @@ export const UPLOAD_KINDS: Record<UploadKind, UploadSlotConfig> = {
     target: { width: 96, height: 96 },
     ceiling: IMAGE_CEILING_BYTES,
   },
+  // 13.1-03 (gap #3): the gallery/moodboard image slot. A square crop (1:1 — a
+  // gallery grid tile / mood swatch) at a retina target ~2-3× a typical render box;
+  // bucket `media` so the BEFORE-INSERT 25 MiB quota trigger (migration 009) gates it
+  // unchanged. `ceiling: IMAGE_CEILING_BYTES` is per-request defense-in-depth.
+  moodboard: {
+    bucket: 'media',
+    context: 'moodboard',
+    aspect: 1,
+    target: { width: 1200, height: 1200 },
+    ceiling: IMAGE_CEILING_BYTES,
+  },
   resume: {
     bucket: 'resumes',
     context: 'resume',
@@ -93,6 +110,7 @@ export const kindToBucket: Record<UploadKind, UploadBucket> = {
   avatar: UPLOAD_KINDS.avatar.bucket,
   project: UPLOAD_KINDS.project.bucket,
   testimonial: UPLOAD_KINDS.testimonial.bucket,
+  moodboard: UPLOAD_KINDS.moodboard.bucket,
   resume: UPLOAD_KINDS.resume.bucket,
 };
 

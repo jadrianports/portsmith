@@ -67,8 +67,12 @@ import {
   type UploadKind,
 } from '@/lib/media/upload-config';
 
-/** The three image kinds this uploader handles (résumé has its own uploader). */
-export type ImageUploadKind = Extract<UploadKind, 'avatar' | 'project' | 'testimonial'>;
+/** The image kinds this uploader handles (résumé has its own uploader). `moodboard`
+ *  (13.1-03, gap #3) is the gallery image slot the moodboard form uploads through. */
+export type ImageUploadKind = Extract<
+  UploadKind,
+  'avatar' | 'project' | 'testimonial' | 'moodboard'
+>;
 
 /** Image-slot byte ceiling in whole MB, for the truthful "{N} MB" copy. */
 function ceilingMb(cfg: ImageSlotConfig): number {
@@ -80,6 +84,7 @@ const RATIO_HINT: Record<ImageUploadKind, string> = {
   avatar: 'Square — 1:1',
   testimonial: 'Square — 1:1',
   project: 'Landscape — 16:9',
+  moodboard: 'Square — 1:1',
 };
 
 /** Per-slot preview shape (05-UI-SPEC B-2/B-3/B-4 — 4px-aligned layout constants). */
@@ -87,6 +92,8 @@ const PREVIEW_CLASS: Record<ImageUploadKind, string> = {
   avatar: 'size-22 rounded-full',
   testimonial: 'size-14 rounded-full',
   project: 'aspect-[16/9] w-full max-w-80 rounded-md',
+  // A square gallery tile (1:1) on a rounded card — the moodboard grid swatch shape.
+  moodboard: 'aspect-square w-full max-w-40 rounded-md',
 };
 
 /** ~2.2s success-beat hold (05-UI-SPEC Motion "image added"). */

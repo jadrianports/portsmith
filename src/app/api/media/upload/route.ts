@@ -64,15 +64,19 @@ import { getVerifiedClaims } from '@/lib/supabase/server';
 // the Node runtime, never edge.
 export const runtime = 'nodejs';
 
-/** The four wire kinds the route accepts (mirrors UPLOAD_KINDS). */
+/** The wire kinds the route accepts (mirrors UPLOAD_KINDS). `moodboard` (13.1-03,
+ *  gap #3) is the gallery image kind — image-gated by `isImageKind` below, written to
+ *  the `media` bucket whose BEFORE-INSERT quota trigger gates it unchanged. */
 const VALID_KINDS = new Set<UploadKind>([
   'avatar',
   'project',
   'testimonial',
+  'moodboard',
   'resume',
 ]);
 
-/** True for the three image kinds (resume is the only non-image kind). */
+/** True for the image kinds (resume is the only non-image kind — moodboard is an
+ *  image, so this `!== 'resume'` rule already classifies it correctly). */
 function isImageKind(kind: UploadKind): boolean {
   return kind !== 'resume';
 }
