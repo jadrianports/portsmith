@@ -548,6 +548,22 @@
 }
 
 /* ============================================================================
+ * Projects grid — responsive 1→2→3 column layout (sm: 2 cols, lg: 3 cols).
+ * The inline style on the <ul> sets the 1-col base; these rules upgrade at
+ * breakpoints. Gap and list-reset are handled inline; only columns override here.
+ * ========================================================================== */
+@media (min-width: 640px) {
+  .tmpl-edgerunner .tmpl-projects-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .tmpl-edgerunner .tmpl-projects-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ============================================================================
  * Experience timeline — vertical neon spine + alternating left/right cards on
  * md+ (experience.tsx faithful clone, Task-10). Mobile: single column left of
  * the spine; md+: spine is centered (left:50%), items alternate left/right.
