@@ -390,16 +390,64 @@
 }
 
 /* ============================================================================
- * Contact — form-field focus ring + live-submit spinner/success hooks. The Contact
- * section hosts the live `<ContactForm>` island (Phase-6 complete, template-agnostic).
- * That island reads scoped `var(--token)` + the SHARED class hooks below — so this
- * template MUST define them scoped to `.tmpl-edgerunner`. All values read scoped tokens.
+ * Contact — 2-col layout grid + spinning conic-gradient border + form-field focus
+ * ring + live-submit spinner/success hooks. The Contact section hosts the live
+ * `<ContactForm>` island (Phase-6 complete, template-agnostic). That island reads
+ * scoped `var(--token)` + the SHARED class hooks below — so this template MUST
+ * define them scoped to `.tmpl-edgerunner`. All values read scoped tokens.
  *
- * HOOK INVENTORY (contact-form.tsx):
+ * HOOK INVENTORY (contact.tsx / contact-form.tsx):
+ *   - `.tmpl-contact-grid`          — responsive 1-col (mobile) → 2-col (lg+) layout
+ *   - `.tmpl-contact-spin-border`   — spinning conic-gradient ring around the form
  *   - `.tmpl-contact-field`         — input/textarea base style + focus ring
  *   - `.tmpl-contact-spinner`       — submitting state: spin animation on the SVG ring
  *   - `.tmpl-contact-success-pulse` — success state: neon glow pulse on the panel
  * ========================================================================== */
+
+/* Responsive 2-col grid (stacks on mobile, side-by-side on lg+).
+   Matches the export's `lg:grid-cols-[1fr_1.4fr]`. */
+.tmpl-edgerunner .tmpl-contact-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+@media (min-width: 1024px) {
+  .tmpl-edgerunner .tmpl-contact-grid {
+    grid-template-columns: 1fr 1.4fr;
+    align-items: start;
+  }
+}
+
+/* Spinning conic-gradient border ring — faithful to the export's Contact right panel.
+   The wrapper is `position:relative; padding:1.5px; border-radius:inherit`. The `::before`
+   pseudo carries the spinning `conic-gradient(pink→purple→cyan→pink)` at `position:absolute
+   inset:0 border-radius:inherit`. The inner content sits on top via `position:relative
+   z-index:1`.
+   Reduced-motion: the blanket reset at the bottom of this file zeroes `animation:none
+   !important` so the ring is static under `prefers-reduced-motion:reduce`. */
+.tmpl-edgerunner .tmpl-contact-spin-border {
+  position: relative;
+  padding: 1.5px;
+  isolation: isolate;
+}
+.tmpl-edgerunner .tmpl-contact-spin-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    var(--neon-pink),
+    var(--neon-purple),
+    var(--neon-cyan),
+    var(--neon-pink)
+  );
+  filter: blur(2px);
+  opacity: 0.8;
+  z-index: 0;
+  animation: tmpl-edgerunner-spin 6s linear infinite;
+}
+
 .tmpl-edgerunner .tmpl-contact-field {
   background: var(--surface);
   color: var(--fg);
