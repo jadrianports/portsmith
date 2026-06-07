@@ -198,7 +198,7 @@ function ProjectModal({ item, onClose }: ProjectModalProps) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="tmpl-project-modal tmpl-project-modal-enter"
+        className="tmpl-project-modal-enter"
         initial={prefersReduced ? undefined : { opacity: 0, scale: 0.96, y: 8 }}
         animate={prefersReduced ? undefined : { opacity: 1, scale: 1, y: 0 }}
         exit={prefersReduced ? undefined : { opacity: 0, scale: 0.96 }}
@@ -444,20 +444,15 @@ function ProjectModal({ item, onClose }: ProjectModalProps) {
 // ---------------------------------------------------------------------------
 
 export function Projects({ section }: SectionProps) {
+  // Compute content/items first (no early return yet — hooks must run unconditionally).
   const content = (section?.content ?? null) as ProjectsContent | null;
-  if (!content) return null;
-
-  // hide-if-empty: only items with a title survive; no items → hide the section.
-  const items = Array.isArray(content.items)
+  const items = content && Array.isArray(content.items)
     ? content.items.filter((it) => present(it?.title))
     : [];
-  if (items.length === 0) return null;
 
-  const heading = present(content.heading) ? content.heading : 'Selected Work';
-
-  // Modal state: open item + per-item trigger refs for return-focus.
+  // ALL hooks must be called before any conditional return (Rules of Hooks).
   const [activeItem, setActiveItem] = useState<ProjectItem | null>(null);
-  const triggerRefs = useRef<Map<string, HTMLElement | null>>(new Map());
+  const triggerRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
   const lastOpenSlug = useRef<string | null>(null);
 
   const openModal = useCallback((item: ProjectItem) => {
@@ -475,6 +470,11 @@ export function Projects({ section }: SectionProps) {
     }
     lastOpenSlug.current = null;
   }, []);
+
+  // Guards: render nothing if there is no content or no visible items.
+  if (!content || items.length === 0) return null;
+
+  const heading = present(content.heading) ? content.heading : 'Selected Work';
 
   return (
     <>
@@ -515,10 +515,6 @@ export function Projects({ section }: SectionProps) {
                   <GlowCard accent={accent} as="div">
                     {/* The whole inner div is click-to-open; links inside stop propagation. */}
                     <div
-                      ref={(el) => {
-                        if (el) triggerRefs.current.set(item.slug, el);
-                        else triggerRefs.current.delete(item.slug);
-                      }}
                       onClick={() => openModal(item)}
                       style={{
                         display: 'flex',
@@ -580,6 +576,10 @@ export function Projects({ section }: SectionProps) {
                       <h3 style={{ margin: 0 }}>
                         <button
                           type="button"
+                          ref={(el) => {
+                            if (el) triggerRefs.current.set(item.slug, el);
+                            else triggerRefs.current.delete(item.slug);
+                          }}
                           onClick={(e) => {
                             e.stopPropagation();
                             openModal(item);
