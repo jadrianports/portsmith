@@ -31,6 +31,12 @@
  * `min-height: 100vh` so the template paints its OWN full-bleed canvas; the
  * `(portfolio)` route-group layout additionally neutralizes the chrome `body`
  * background for that group only.
+ *
+ * PALETTE SOURCE: re-authored 1:1 from `lovable-exports/synthwave-founder/src/styles.css`
+ * (the export's oklch neons + surface stack + keyframes). The scoped token vocabulary
+ * replaces the export's shadcn `--background`/`--primary`/`--ring` HSL vars, `@theme`
+ * block, and `@utility` Tailwind directives with isolated `.tmpl-edgerunner` custom
+ * properties and plain CSS utility classes.
  */
 
 /* ============================================================================
@@ -39,8 +45,32 @@
  * surfaces/foreground derive from the export's deep-indigo `--bg-deep`.
  * ========================================================================== */
 .tmpl-edgerunner {
+  /* ── Template-private neon extras (CONTRACT §3 — allowed, NOT in REQUIRED_TOKENS).
+     Re-authored 1:1 from the export `styles.css:109-114`. ── */
+  --neon-pink: oklch(0.72 0.30 350);
+  --neon-magenta: oklch(0.65 0.32 330);
+  --neon-cyan: oklch(0.85 0.18 200);
+  --neon-purple: oklch(0.62 0.28 305);
+  --neon-yellow: oklch(0.92 0.18 95);
+  --bg-deep: oklch(0.10 0.04 285);
+
+  /* The neon gradient — THE signature (hero name text-clip, sun arc, section rules).
+     Re-authored from the export's `--gradient-neon`. */
+  --neon-gradient: linear-gradient(135deg, var(--neon-pink), var(--neon-purple), var(--neon-cyan));
+  /* The retro-sky sunset (hero backdrop atmosphere — the export's `--gradient-sky`). */
+  --sky-gradient: linear-gradient(
+    180deg,
+    oklch(0.16 0.10 305) 0%,
+    oklch(0.20 0.18 340) 45%,
+    oklch(0.40 0.25 25) 75%,
+    oklch(0.65 0.22 60) 100%
+  );
+
+  /* ── 18 REQUIRED_TOKENS (colour + radius roles — the font triple is injected by
+     next/font `variable:` in fonts.ts, NOT declared literally here). ── */
+
   /* Surfaces — deep indigo-violet night (the export's `--bg-deep`). */
-  --bg: oklch(0.1 0.04 285); /* page canvas */
+  --bg: oklch(0.10 0.04 285); /* page canvas */
   --surface: oklch(0.14 0.05 285); /* elevated cards / contact panel */
   --surface-muted: oklch(0.18 0.06 285); /* inset fills, chips / skill panels */
 
@@ -49,39 +79,20 @@
   --muted-fg: oklch(0.72 0.06 300); /* muted-body / meta / dates */
 
   /* Borders — low-chroma violet hairlines (decorative, WCAG 1.4.11 exempt). */
-  --border: oklch(0.3 0.1 300 / 0.4);
-  --border-strong: oklch(0.42 0.12 300 / 0.55);
+  --border: oklch(0.30 0.10 300 / 0.4);
+  --border-strong: oklch(0.45 0.14 300 / 0.6);
 
-  /* Accents — the synthwave neon system (the export's `--neon-*`, REQUIRED + extras). */
-  --accent: oklch(0.72 0.3 350); /* PRIMARY neon-pink — CTA fill/glow, link-hover, active */
-  --ring: oklch(0.72 0.3 350); /* focus ring = neon-pink */
-  --success: oklch(0.78 0.18 160);
+  /* Accents — the synthwave neon system (the export's `--neon-*`). */
+  --accent: var(--neon-pink); /* PRIMARY neon-pink — CTA fill/glow, link-hover, active */
+  --ring: var(--neon-pink); /* focus ring = neon-pink */
+  --success: oklch(0.80 0.18 160);
   --destructive: oklch(0.65 0.28 25); /* contact form-shell error state only */
 
-  /* Template-private neon extras (CONTRACT §3 — allowed, NOT in REQUIRED_TOKENS).
-     Re-authored 1:1 from the export `styles.css:109-114`. */
-  --neon-pink: oklch(0.72 0.3 350);
-  --neon-magenta: oklch(0.65 0.32 330);
-  --neon-cyan: oklch(0.85 0.18 200);
-  --neon-purple: oklch(0.62 0.28 305);
-  --neon-yellow: oklch(0.92 0.18 95);
-
-  /* The neon gradient — THE signature (hero name text-clip, sun arc, section rules).
-     Re-authored from the export's `--gradient-neon`. */
-  --neon-gradient: linear-gradient(
-    135deg,
-    var(--neon-pink),
-    var(--neon-purple),
-    var(--neon-cyan)
-  );
-  /* The retro-sky sunset (hero backdrop atmosphere — the export's `--gradient-sky`). */
-  --sky-gradient: linear-gradient(
-    180deg,
-    oklch(0.16 0.1 305) 0%,
-    oklch(0.2 0.18 340) 45%,
-    oklch(0.4 0.25 25) 75%,
-    oklch(0.65 0.22 60) 100%
-  );
+  /* Radius — the template's OWN scale (distinct from chrome; the export `--radius`). */
+  --radius-sm: 0.5rem; /* chips, small inputs, tier pills */
+  --radius-md: 0.75rem; /* buttons, form fields */
+  --radius-lg: 1rem; /* project/testimonial cards, contact panel */
+  --radius-full: 9999px; /* status dot, avatar, toggle knob */
 
   /* Shared report-dialog COMPLETE-VALUE tokens (the SAME `<ReportDialog>` + project
      modal islands mount under edgerunner and read THESE per-template tokens; the
@@ -105,12 +116,6 @@
   --tmpl-modal-cta-shadow: 0 8px 28px -12px
     color-mix(in oklab, var(--neon-pink) 50%, transparent);
 
-  /* Radius — the template's OWN scale (distinct from chrome; the export `--radius`). */
-  --radius-sm: 8px; /* chips, small inputs, tier pills */
-  --radius-md: 10px; /* buttons, form fields */
-  --radius-lg: 14px; /* project/testimonial cards, contact panel */
-  --radius-full: 9999px; /* status dot, avatar, toggle knob */
-
   /* The template owns its full-bleed canvas (no chrome gutter behind the scroll). */
   background: var(--bg);
   color: var(--fg);
@@ -122,6 +127,56 @@
      elements; this anchors the ROOT body face so the cascade never reaches a host
      font (the leak that bit minimal pre-08-03). */
   font-family: var(--font-body);
+}
+
+/* ============================================================================
+ * BASE ELEMENT STYLING — scoped selection + font-smoothing (ported from the
+ * export's `@layer base` body/selection, re-hosted under `.tmpl-edgerunner`).
+ * ========================================================================== */
+.tmpl-edgerunner ::selection {
+  background: var(--neon-pink);
+  color: var(--bg-deep);
+}
+
+/* ============================================================================
+ * SCOPED UTILITY CLASSES — plain CSS classes (NOT Tailwind `@utility`/`@theme`).
+ * Ported from the export's `@utility` directives; all reference scoped tokens.
+ * ========================================================================== */
+
+/* Text-shadow neon glows — the export's `text-glow-*` utilities. */
+.tmpl-edgerunner .tmpl-glow-pink {
+  text-shadow:
+    0 0 8px var(--neon-pink),
+    0 0 24px color-mix(in oklab, var(--neon-pink) 50%, transparent);
+}
+.tmpl-edgerunner .tmpl-glow-cyan {
+  text-shadow:
+    0 0 8px var(--neon-cyan),
+    0 0 24px color-mix(in oklab, var(--neon-cyan) 50%, transparent);
+}
+.tmpl-edgerunner .tmpl-glow-purple {
+  text-shadow:
+    0 0 8px var(--neon-purple),
+    0 0 24px color-mix(in oklab, var(--neon-purple) 50%, transparent);
+}
+
+/* Holographic glass panel — the export's `holo-panel` utility. */
+.tmpl-edgerunner .tmpl-holo-panel {
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklab, var(--neon-purple) 10%, transparent),
+    color-mix(in oklab, var(--neon-cyan) 5%, transparent)
+  );
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in oklab, var(--neon-cyan) 30%, transparent);
+}
+
+/* Gradient background fills — the export's `bg-gradient-neon` / `bg-gradient-sky`. */
+.tmpl-edgerunner .tmpl-bg-neon {
+  background-image: var(--neon-gradient);
+}
+.tmpl-edgerunner .tmpl-bg-sky {
+  background-image: var(--sky-gradient);
 }
 
 /* ============================================================================
@@ -151,6 +206,16 @@
   transform: none;
   animation: none;
 }
+
+/* ============================================================================
+ * SCROLL-REVEAL (.tmpl-reveal) — CSS class hook for the kit's ScrollReveal island.
+ * The kit's `ScrollRevealOnScroll` component controls opacity/transform via INLINE
+ * STYLES (not a class toggle). The `.tmpl-reveal` class is therefore NOT used to drive
+ * the reveal animation — that lives in JS inline styles. This rule exists solely as
+ * the reduced-motion CSS-level visible-fallback GUARANTEE (belt-and-suspenders):
+ * the blanket reset below overrides the inline opacity:0 with `!important` under
+ * reduced-motion, decoupled from JS. No `[data-revealed]` selector needed.
+ * ========================================================================== */
 
 /* ============================================================================
  * THE CSS SYNTHWAVE LAYER (D-04) — decorative `@keyframes`, template-prefixed.
@@ -187,11 +252,13 @@
 @keyframes tmpl-edgerunner-neon-pulse {
   0%,
   100% {
-    box-shadow: 0 0 12px var(--neon-pink),
+    box-shadow:
+      0 0 12px var(--neon-pink),
       0 0 28px color-mix(in oklab, var(--neon-pink) 40%, transparent);
   }
   50% {
-    box-shadow: 0 0 22px var(--neon-cyan),
+    box-shadow:
+      0 0 22px var(--neon-cyan),
       0 0 48px color-mix(in oklab, var(--neon-cyan) 50%, transparent);
   }
 }
@@ -227,10 +294,20 @@
   }
 }
 
-/* AnimatedSun spin — the export's slow rotating retro-sun (`spin-slow 18s`). */
-@keyframes tmpl-edgerunner-spin-slow {
+/* Spin — generic 360° rotation (spinner + slow sun variant). */
+@keyframes tmpl-edgerunner-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Marquee — horizontal ticker loop (skills / tech-stack marquee rows). */
+@keyframes tmpl-edgerunner-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
   }
 }
 
@@ -268,7 +345,8 @@
 }
 .tmpl-edgerunner .tmpl-project-card:hover {
   border-color: var(--border-strong);
-  box-shadow: 0 0 0 1px var(--accent),
+  box-shadow:
+    0 0 0 1px var(--accent),
     0 10px 30px -14px color-mix(in oklab, var(--neon-pink) 45%, transparent);
   transform: translateY(-2px);
 }
@@ -286,11 +364,9 @@
 
 /* ============================================================================
  * Skills BARS (D-09 — edgerunner's signature). The bar fill width is set inline
- * (from skills.level); this only owns the in-view transition. The `.tmpl-reveal`
- * scroll-reveal wrapper toggles a visible class — when the section is in view the
- * fill grows from 0 to its level width. The transition is reduced-motion-zeroed
- * (the blanket reset) and the fill renders at its final width with no transition
- * under reduce, so the bar is never stuck empty.
+ * (from skills.level); this only owns the in-view transition. The transition is
+ * reduced-motion-zeroed (the blanket reset) and the fill renders at its final
+ * width with no transition under reduce, so the bar is never stuck empty.
  * ========================================================================== */
 .tmpl-edgerunner .tmpl-skill-bar-track {
   position: relative;
@@ -311,11 +387,21 @@
 }
 
 /* ============================================================================
- * Contact form-field focus ring + Server-Component focus treatment. Inline styles
- * cannot express `:focus-visible`; scoped to `.tmpl-edgerunner`, token-driven. The
- * neon-pink focus-ring on `:focus-visible` (UI a11y >=3:1 every surface).
+ * Contact — form-field focus ring + live-submit spinner/success hooks. The Contact
+ * section hosts the live `<ContactForm>` island (Phase-6 complete, template-agnostic).
+ * That island reads scoped `var(--token)` + the SHARED class hooks below — so this
+ * template MUST define them scoped to `.tmpl-edgerunner`. All values read scoped tokens.
+ *
+ * HOOK INVENTORY (contact-form.tsx):
+ *   - `.tmpl-contact-field`         — input/textarea base style + focus ring
+ *   - `.tmpl-contact-spinner`       — submitting state: spin animation on the SVG ring
+ *   - `.tmpl-contact-success-pulse` — success state: neon glow pulse on the panel
  * ========================================================================== */
 .tmpl-edgerunner .tmpl-contact-field {
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease;
@@ -340,7 +426,11 @@
  * -------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: no-preference) {
   .tmpl-edgerunner .tmpl-contact-spinner {
-    animation: tmpl-edgerunner-spin-slow 0.7s linear infinite;
+    animation: tmpl-edgerunner-spin 0.8s linear infinite;
+  }
+  /* Success: a one-shot neon-pink → success glow pulse on the confirmation panel. */
+  .tmpl-edgerunner .tmpl-contact-success-pulse {
+    animation: tmpl-edgerunner-neon-pulse 2.4s ease-in-out infinite;
   }
   /* Backdrop fade-in (~140ms). */
   .tmpl-edgerunner .tmpl-modal-backdrop-enter {
@@ -430,9 +520,10 @@
   }
 
   /* CSS-level visible-fallback GUARANTEE for the scroll-reveal (UI-SPEC §Motion).
-     The ScrollReveal island starts at an INLINE `opacity:0`; this forces the
-     revealed state at the CSS layer so content is visible under reduced-motion even
-     if the JS effect is slow/blocked, fully decoupled from JS. */
+     The ScrollReveal island controls opacity/transform via INLINE STYLES; this
+     `!important` override beats inline styles so content is ALWAYS visible under
+     reduced-motion even if the JS effect is slow/blocked — fully decoupled from JS.
+     The no-JS SSR path is independently safe (the island SSRs `opacity:1`). */
   .tmpl-edgerunner .tmpl-reveal {
     opacity: 1 !important;
     transform: none !important;
