@@ -117,17 +117,21 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
           <motion.div
             initial={false}
             animate={{ opacity: 1, x: 0 }}
-            className="relative rounded-2xl p-[1.5px]"
+            className="relative rounded-2xl p-[2px]"
+            style={{
+              boxShadow:
+                '0 0 48px -12px color-mix(in oklab, var(--neon-pink) 45%, transparent), 0 0 64px -20px color-mix(in oklab, var(--neon-cyan) 45%, transparent)',
+            }}
           >
-            {/* Spinning conic border ring */}
+            {/* Static gradient border frame (NOT a spinning/blurred fill — that produced a
+                rotating square poking out behind the form). The 2px outer padding + this
+                inset-0 gradient + the dark inner panel = a clean glowing gradient frame. */}
             <div
               aria-hidden="true"
-              className="absolute inset-0 rounded-2xl opacity-80"
+              className="absolute inset-0 rounded-2xl"
               style={{
                 background:
-                  'conic-gradient(from 0deg, var(--neon-pink), var(--neon-purple), var(--neon-cyan), var(--neon-pink))',
-                animation: 'tmpl-edgerunner-v2-spin 6s linear infinite',
-                filter: 'blur(2px)',
+                  'linear-gradient(135deg, var(--neon-pink), var(--neon-purple), var(--neon-cyan))',
               }}
             />
 
