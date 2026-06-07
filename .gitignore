@@ -48,3 +48,10 @@ yarn-error.log*
 .DS_Store
 .idea
 *.swp
+
+# local-only: private planning corpus, GSD tooling, scratch ideas, Playwright MCP cache
+# (NOT for the public code-only export)
+.planning/
+.claude/
+idea/
+.playwright-mcp/
