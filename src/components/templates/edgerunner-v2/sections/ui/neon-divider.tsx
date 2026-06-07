@@ -10,7 +10,7 @@
  *   4. framer-motion → motion/react, ALL motion values VERBATIM.
  *   5. 'use client' required for motion/react.
  */
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 
 export function NeonDivider({
   glyph = '◆',
@@ -26,7 +26,7 @@ export function NeonDivider({
         .join(' ')}
       aria-hidden="true"
     >
-      <motion.div
+      <m.div
         initial={false}
         animate={{ scaleX: 1, opacity: 1 }}
         transition={{ duration: 0.9, ease: 'easeOut' }}
@@ -38,7 +38,7 @@ export function NeonDivider({
         }}
       />
       <span className="font-mono-retro text-neon-cyan text-glow-cyan text-lg">{glyph}</span>
-      <motion.div
+      <m.div
         initial={false}
         animate={{ scaleX: 1, opacity: 1 }}
         transition={{ duration: 0.9, ease: 'easeOut' }}

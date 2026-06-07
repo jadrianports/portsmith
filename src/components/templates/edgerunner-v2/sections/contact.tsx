@@ -21,7 +21,7 @@
  *   6. Direct Lines: email only (no phone/location — not in data schema).
  *   7. 'use client' required for motion/react.
  */
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { Mail } from 'lucide-react';
 
 import { ContactForm } from '@/components/public/contact-form';
@@ -68,7 +68,7 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
 
         <div className="grid gap-8 lg:grid-cols-[1fr_1.4fr]">
           {/* LEFT: "Direct Lines" holo-panel */}
-          <motion.div
+          <m.div
             initial={false}
             animate={{ opacity: 1, x: 0 }}
             className="holo-panel rounded-2xl p-6 shadow-neon-cyan"
@@ -111,13 +111,13 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
             >
               &gt; status: open to new transmissions
             </div>
-          </motion.div>
+          </m.div>
 
           {/* RIGHT: vivid gradient panel (the panel BG IS the gradient, faithful to export).
               The ContactForm sits inside; its inputs use --surface-muted (dark/translucent)
               boxes on the bright gradient, labels/placeholders are forced readable via the
               .tmpl-contact-gradient-panel hook in theme.css. */}
-          <motion.div
+          <m.div
             initial={false}
             animate={{ opacity: 1, x: 0 }}
             className="tmpl-contact-gradient-panel relative rounded-2xl p-6 shadow-neon-pink"
@@ -144,7 +144,7 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
                 </p>
               </div>
             ) : null}
-          </motion.div>
+          </m.div>
         </div>
       </div>
     </section>

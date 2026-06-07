@@ -35,7 +35,7 @@
  *   8. TerminalCard: EXACT titlebar text `~/portfolio — zsh`, built from real data.
  *   9. 'use client' required for motion/react animations.
  */
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { Mail, Download, ArrowDown } from 'lucide-react';
 import { CityScene } from './city-scene';
 import { TerminalCard } from './terminal-card';
@@ -109,7 +109,7 @@ export function Hero({ section, email, socials, terminalLines }: SectionProps & 
       <div className="relative z-10 mx-auto grid max-w-6xl gap-10 px-6 lg:grid-cols-[1.4fr_1fr] lg:items-center">
         <div>
           {/* "System online" label — VERBATIM from export */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
@@ -121,10 +121,10 @@ export function Hero({ section, email, socials, terminalLines }: SectionProps & 
               style={{ background: 'var(--neon-cyan)' }}
             />
             <span className="uppercase tracking-[0.4em] text-base">System online</span>
-          </motion.div>
+          </m.div>
 
           {/* Hero headline — VERBATIM classes from export */}
-          <motion.h1
+          <m.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.1 }}
@@ -142,11 +142,11 @@ export function Hero({ section, email, socials, terminalLines }: SectionProps & 
                 {roleLine}
               </span>
             ) : null}
-          </motion.h1>
+          </m.h1>
 
           {/* Tagline — VERBATIM classes from export */}
           {tagline ? (
-            <motion.p
+            <m.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 }}
@@ -154,13 +154,13 @@ export function Hero({ section, email, socials, terminalLines }: SectionProps & 
               style={{ color: 'color-mix(in oklab, var(--fg) 80%, transparent)' }}
             >
               {tagline}
-            </motion.p>
+            </m.p>
           ) : null}
 
           {/* Contact pills row — VERBATIM structure from export
               Phone/location pills OMITTED (no data); email pill kept when present. */}
           {emailHref ? (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.55 }}
@@ -179,11 +179,11 @@ export function Hero({ section, email, socials, terminalLines }: SectionProps & 
               >
                 <Mail className="h-4 w-4" style={{ color: 'var(--neon-pink)' }} /> {email}
               </a>
-            </motion.div>
+            </m.div>
           ) : null}
 
           {/* CTAs + socials row — VERBATIM structure from export */}
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7 }}
@@ -231,7 +231,7 @@ export function Hero({ section, email, socials, terminalLines }: SectionProps & 
                 ))}
               </div>
             ) : null}
-          </motion.div>
+          </m.div>
         </div>
 
         {/* Terminal HUD — VERBATIM structure from export (hidden below lg) */}

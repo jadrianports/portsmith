@@ -10,13 +10,7 @@
  *   4. 'use client' required.
  */
 import { useRef, type ReactNode, type MouseEvent } from 'react';
-import {
-  motion,
-  useMotionValue,
-  useSpring,
-  useTransform,
-  useReducedMotion,
-} from 'motion/react';
+import { m, useMotionValue, useSpring, useTransform, useReducedMotion } from 'motion/react';
 
 export function TiltCard({
   children,
@@ -67,7 +61,7 @@ export function TiltCard({
   }
 
   return (
-    <motion.div
+    <m.div
       ref={ref}
       onMouseMove={onMove}
       onMouseLeave={onLeave}
@@ -75,7 +69,7 @@ export function TiltCard({
       className={['relative', className].filter(Boolean).join(' ')}
     >
       {children}
-      <motion.div
+      <m.div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 rounded-2xl"
         style={{
@@ -83,6 +77,6 @@ export function TiltCard({
           mixBlendMode: 'screen',
         }}
       />
-    </motion.div>
+    </m.div>
   );
 }

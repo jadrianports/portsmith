@@ -23,7 +23,7 @@
  *   7. "View all" CTA → /[username]/blog.
  *   8. 'use client' required for motion/react animations.
  */
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import Link from 'next/link';
 import { ArrowRight, Calendar, Clock } from 'lucide-react';
 
@@ -98,7 +98,7 @@ export function BlogTeaser({
             : null;
 
           return (
-            <motion.div
+            <m.div
               key={post.id || post.slug}
               initial={false}
               animate={{ opacity: 1, y: 0 }}
@@ -175,7 +175,7 @@ export function BlogTeaser({
                   </div>
                 ) : null}
               </Link>
-            </motion.div>
+            </m.div>
           );
         })}
       </div>

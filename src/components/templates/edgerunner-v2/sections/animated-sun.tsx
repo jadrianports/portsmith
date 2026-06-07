@@ -14,7 +14,7 @@
  * NOTE: AnimatedSun is NOT directly used in the Hero section (the Hero backdrop is
  * CityScene). This component exists for potential future use in other sections.
  */
-import { motion, useReducedMotion } from 'motion/react';
+import { m, useReducedMotion } from 'motion/react';
 
 export function AnimatedSun() {
   const reduce = useReducedMotion();
@@ -28,7 +28,7 @@ export function AnimatedSun() {
       aria-hidden="true"
     >
       {/* outer glow halo — breathes */}
-      <motion.div
+      <m.div
         className="absolute inset-0 -z-10 rounded-full blur-3xl"
         style={{ background: 'var(--neon-pink)' }}
         initial={{ scale: 1, opacity: 0.55 }}
@@ -37,7 +37,7 @@ export function AnimatedSun() {
       />
 
       {/* secondary cyan halo (chromatic aberration) */}
-      <motion.div
+      <m.div
         className="absolute inset-0 -z-10 rounded-full blur-3xl mix-blend-screen"
         style={{ background: 'var(--neon-cyan)', opacity: 0.18 }}
         animate={reduce ? {} : { x: [-3, 3, -3] }}
@@ -45,7 +45,7 @@ export function AnimatedSun() {
       />
 
       {/* sun disc — slow rotation */}
-      <motion.div
+      <m.div
         className="absolute inset-0 rounded-full"
         style={{
           background:
@@ -57,7 +57,7 @@ export function AnimatedSun() {
       />
 
       {/* chromatic offset ghost (pink) */}
-      <motion.div
+      <m.div
         className="absolute inset-0 rounded-full mix-blend-screen opacity-40"
         style={{
           background:
@@ -68,7 +68,7 @@ export function AnimatedSun() {
       />
 
       {/* base slice layer — scrolls downward */}
-      <motion.div
+      <m.div
         className="absolute inset-0 rounded-full"
         style={{
           backgroundImage:
@@ -84,7 +84,7 @@ export function AnimatedSun() {
       />
 
       {/* parallax slice layer — slower, fainter, wider gaps */}
-      <motion.div
+      <m.div
         className="absolute inset-0 rounded-full opacity-40"
         style={{
           backgroundImage:
@@ -101,7 +101,7 @@ export function AnimatedSun() {
 
       {/* orbiting sparks */}
       {!reduce && (
-        <motion.div
+        <m.div
           className="absolute inset-0"
           animate={{ rotate: 360 }}
           transition={{ duration: 22, repeat: Infinity, ease: 'linear' }}
@@ -120,7 +120,7 @@ export function AnimatedSun() {
               }}
             />
           ))}
-        </motion.div>
+        </m.div>
       )}
     </div>
   );

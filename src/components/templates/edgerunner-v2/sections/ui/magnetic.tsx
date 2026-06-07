@@ -8,7 +8,7 @@
  * All motion values (stiffness 200, damping 18, mass 0.4, strength 0.35) are VERBATIM.
  */
 import { useRef, type ReactNode, type MouseEvent } from 'react';
-import { motion, useMotionValue, useSpring } from 'motion/react';
+import { m, useMotionValue, useSpring } from 'motion/react';
 
 type Props = {
   children: ReactNode;
@@ -36,7 +36,7 @@ export function Magnetic({ children, className, strength = 0.35 }: Props) {
   };
 
   return (
-    <motion.div
+    <m.div
       ref={ref}
       onMouseMove={onMove}
       onMouseLeave={onLeave}
@@ -44,6 +44,6 @@ export function Magnetic({ children, className, strength = 0.35 }: Props) {
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }

@@ -23,7 +23,9 @@ import { orbitron, spaceGrotesk, vt323 } from './fonts';
 import { ScrollReveal } from '../_kit';
 import { About, type StatItem } from './sections/about';
 import { BlogTeaser } from './sections/blog-teaser';
-import { CommandPalette, type CommandItem } from './sections/command-palette';
+import { CommandPaletteLazy } from './sections/command-palette-lazy';
+import { MotionProvider } from './sections/motion-provider';
+import type { CommandItem } from './sections/command-palette';
 import { Contact } from './sections/contact';
 import { Experience } from './sections/experience';
 import { Footer } from './sections/footer';
@@ -169,6 +171,11 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
       {/* Person JSON-LD — SSR-rendered for SEO; safe (server-only path, XSS-safe helper) */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: personLdHtml }} />
 
+      {/* LazyMotion provider — async-loads the motion feature bundle AFTER hydration so
+          its ~24 kB gz stays OUT of the /[username] First Load JS (D-25). All `m.*`
+          islands below read its context. (A client boundary wrapping server-rendered
+          children — context still propagates to the nested client islands.) */}
+      <MotionProvider>
       {/* Scroll progress bar — fixed top, z-60, pointer-events:none */}
       <ScrollProgress />
 
@@ -267,14 +274,16 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
 
       <Footer data={data} />
 
-      {/* ⌘K / Ctrl+K command palette — client island, portals above everything (z-200) */}
-      <CommandPalette
+      {/* ⌘K / Ctrl+K command palette — LAZY client island (deferred chunk; out of the
+          route's First Load JS until ⌘K is first pressed). Portals above everything (z-200). */}
+      <CommandPaletteLazy
         username={profile.username}
         items={cmdItems}
         resumeUrl={cmdResumeUrl}
         email={emailPublic}
         socials={cmdSocials}
       />
+      </MotionProvider>
     </div>
   );
 }

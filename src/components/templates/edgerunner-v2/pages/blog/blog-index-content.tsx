@@ -15,7 +15,7 @@
  *   6. 'use client' required for motion/react.
  */
 import Link from 'next/link';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { ArrowRight, Calendar, Clock } from 'lucide-react';
 import { SectionHeading } from '../../sections/ui/section-heading';
 import { blogPosts } from './posts';
@@ -67,7 +67,7 @@ export function BlogIndexContent({ username }: BlogIndexContentProps) {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {blogPosts.map((post, i) => (
-          <motion.div
+          <m.div
             key={post.slug}
             initial={false}
             whileInView={{ opacity: 1, y: 0 }}
@@ -148,7 +148,7 @@ export function BlogIndexContent({ username }: BlogIndexContentProps) {
                 </div>
               </div>
             </Link>
-          </motion.div>
+          </m.div>
         ))}
       </div>
     </section>

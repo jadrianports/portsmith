@@ -20,7 +20,7 @@
  *   6. Icon map: lucide icons by slug (same as edgerunner/sections/services.tsx).
  *   7. 'use client' required for motion/react.
  */
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import Link from 'next/link';
 import { type ComponentType } from 'react';
 import {
@@ -126,7 +126,7 @@ export function Services({ section, username }: SectionProps & { username?: stri
               : [];
 
             return (
-              <motion.div
+              <m.div
                 key={present(item.id) ? item.id : `svc-${i}`}
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
@@ -180,7 +180,7 @@ export function Services({ section, username }: SectionProps & { username?: stri
                     ) : null}
                   </div>
                 </GlowCard>
-              </motion.div>
+              </m.div>
             );
           })}
         </div>

@@ -10,7 +10,7 @@
  *   4. framer-motion → motion/react, ALL motion values VERBATIM.
  *   5. 'use client' required for motion/react.
  */
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 
 type Accent = 'pink' | 'cyan' | 'purple';
 
@@ -50,25 +50,25 @@ export function SectionHeading({
         .join(' ')}
     >
       {eyebrow && (
-        <motion.span
+        <m.span
           initial={false}
           animate={{ opacity: 1, y: 0 }}
           className="font-mono-retro text-sm uppercase tracking-[0.4em]"
           style={{ color: 'color-mix(in oklab, var(--neon-cyan) 80%, transparent)' }}
         >
           // {eyebrow}
-        </motion.span>
+        </m.span>
       )}
-      <motion.h2
+      <m.h2
         initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
         className={`font-display text-3xl font-bold uppercase tracking-wider sm:text-4xl md:text-5xl ${accentTextClass[accent]}`}
       >
         {title}
-      </motion.h2>
+      </m.h2>
       {description && (
-        <motion.p
+        <m.p
           initial={false}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.15 }}
@@ -76,7 +76,7 @@ export function SectionHeading({
           style={{ color: 'var(--muted-fg)' }}
         >
           {description}
-        </motion.p>
+        </m.p>
       )}
     </div>
   );

@@ -22,7 +22,7 @@
  *   component threads them down to the <Body> render.
  */
 import Link from 'next/link';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { ArrowLeft, Calendar, Clock } from 'lucide-react';
 import { blogPosts, type Accent, type PostCodeTokens } from './posts';
 
@@ -59,7 +59,7 @@ export function BlogPostContent({ slug, username, codeTokens }: BlogPostContentP
       </Link>
 
       {/* Header */}
-      <motion.header
+      <m.header
         initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
@@ -108,20 +108,20 @@ export function BlogPostContent({ slug, username, codeTokens }: BlogPostContentP
             {post.readingTime}
           </span>
         </div>
-      </motion.header>
+      </m.header>
 
       {/* Neon gradient divider */}
       <div className="my-10 h-px bg-gradient-neon" />
 
       {/* Post body */}
-      <motion.div
+      <m.div
         initial={false}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.15 }}
         className="prose-blog"
       >
         <Body codeTokens={codeTokens} />
-      </motion.div>
+      </m.div>
 
       {/* Keep reading */}
       {others.length > 0 && (

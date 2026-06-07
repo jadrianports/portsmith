@@ -23,7 +23,7 @@
  *      Real avatar: next/image guarded by isHttpImageSrc
  *   6. 'use client' required for motion/react.
  */
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import Image from 'next/image';
 
 import type { SectionProps } from './types';
@@ -66,7 +66,7 @@ export function About({ section, initials, stats }: SectionProps & AboutExtraPro
         <SectionHeading eyebrow="About" title="Decoded" accent="cyan" />
         <div className="grid items-center gap-12 lg:grid-cols-[1fr_1.4fr]">
           {/* Holographic portrait — LEFT column */}
-          <motion.div
+          <m.div
             initial={false}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.7 }}
@@ -124,26 +124,26 @@ export function About({ section, initials, stats }: SectionProps & AboutExtraPro
                 </div>
               )}
             </div>
-          </motion.div>
+          </m.div>
 
           {/* RIGHT column — bio + stats grid */}
           <div>
             {bio ? (
-              <motion.p
+              <m.p
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 className="text-lg leading-relaxed"
                 style={{ color: 'color-mix(in oklab, var(--fg) 85%, transparent)' }}
               >
                 {bio}
-              </motion.p>
+              </m.p>
             ) : null}
 
             {/* STATS GRID — folded from metrics section (passed via prop from index.tsx) */}
             {resolvedStats.length > 0 ? (
               <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
                 {resolvedStats.map((s, i) => (
-                  <motion.div
+                  <m.div
                     key={s.label}
                     initial={false}
                     animate={{ opacity: 1, y: 0 }}
@@ -163,7 +163,7 @@ export function About({ section, initials, stats }: SectionProps & AboutExtraPro
                     >
                       {s.label}
                     </div>
-                  </motion.div>
+                  </m.div>
                 ))}
               </div>
             ) : null}

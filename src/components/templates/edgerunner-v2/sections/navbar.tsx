@@ -39,7 +39,7 @@
  *        logoText = last word of display_name uppercased + ".dev" computed in index.tsx
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { Menu, X, Command } from 'lucide-react';
 
 export interface NavItem {
@@ -111,7 +111,7 @@ function useScrollSpy(ids: string[]): string {
   return active;
 }
 
-/** Smooth-scroll to a section id; respects prefers-reduced-motion. */
+/** Smooth-scroll to a section id; respects prefers-reduced-m. */
 function smoothScrollTo(id: string) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -205,7 +205,7 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
               >
                 {l.label}
                 {isActive && (
-                  <motion.span
+                  <m.span
                     layoutId="nav-underline"
                     className="absolute inset-x-2 -bottom-0.5 h-px bg-gradient-neon shadow-neon-pink"
                     transition={{ type: 'spring', stiffness: 380, damping: 30 }}
@@ -257,7 +257,7 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
       {/* Mobile dropdown — VERBATIM from export */}
       <AnimatePresence>
         {open && (
-          <motion.nav
+          <m.nav
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
@@ -308,7 +308,7 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
                 </a>
               );
             })}
-          </motion.nav>
+          </m.nav>
         )}
       </AnimatePresence>
     </header>

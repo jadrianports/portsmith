@@ -16,7 +16,7 @@
  *   - SSR-safe: initializes revealedCount to lines.length (all shown); mount effect
  *     resets to 0 for the progressive typing reveal.
  */
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
 
@@ -47,7 +47,7 @@ export function TerminalCard({ lines, className }: TerminalCardProps) {
   }, [shown, lines.length, prefersReduced]);
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 24, rotateY: -8 }}
       animate={{ opacity: 1, y: 0, rotateY: 0 }}
       transition={{ duration: 0.8, delay: 0.3 }}
@@ -167,7 +167,7 @@ export function TerminalCard({ lines, className }: TerminalCardProps) {
         }}
       >
         {lines.slice(0, shown).map((l, i) => (
-          <motion.div
+          <m.div
             key={i}
             initial={{ opacity: 0, x: -6 }}
             animate={{ opacity: 1, x: 0 }}
@@ -180,7 +180,7 @@ export function TerminalCard({ lines, className }: TerminalCardProps) {
             <div style={{ paddingLeft: '12px', color: 'color-mix(in oklab, var(--neon-cyan) 90%, transparent)' }}>
               → {l.out}
             </div>
-          </motion.div>
+          </m.div>
         ))}
         {shown < lines.length && (
           <span
@@ -228,7 +228,7 @@ export function TerminalCard({ lines, className }: TerminalCardProps) {
             border: '1px solid var(--border)',
           }}
         >
-          <motion.div
+          <m.div
             initial={{ width: '10%' }}
             animate={{ width: '92%' }}
             transition={{ duration: 2.4, repeat: Infinity, repeatType: 'reverse' }}
@@ -237,6 +237,6 @@ export function TerminalCard({ lines, className }: TerminalCardProps) {
           />
         </div>
       </div>
-    </motion.div>
+    </m.div>
   );
 }

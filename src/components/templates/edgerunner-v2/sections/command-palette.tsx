@@ -57,6 +57,13 @@ export interface CommandPaletteProps {
   resumeUrl?: string | null;
   email?: string | null;
   socials?: { label: string; href: string }[];
+  /**
+   * Start in the OPEN state on mount. Used by the lazy wrapper
+   * (`command-palette-lazy.tsx`): when the visitor's first ⌘K loads this chunk, the
+   * arming event has already been consumed, so the wrapper mounts us pre-opened
+   * rather than relying on a racy re-dispatched event. Defaults to false (closed).
+   */
+  initialOpen?: boolean;
 }
 
 // ─── Icon map for Navigate items ─────────────────────────────────────────────
@@ -161,8 +168,9 @@ export function CommandPalette({
   resumeUrl,
   email,
   socials,
+  initialOpen = false,
 }: CommandPaletteProps) {
-  const [open, setOpen]     = useState(false);
+  const [open, setOpen]     = useState(initialOpen);
   const [query, setQuery]   = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef  = useRef<HTMLInputElement>(null);

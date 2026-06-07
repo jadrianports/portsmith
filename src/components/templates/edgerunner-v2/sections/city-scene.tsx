@@ -13,7 +13,7 @@
  *
  * All motion values are VERBATIM from the export.
  */
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import Image from 'next/image';
 
 const beams = [
@@ -40,7 +40,7 @@ export function CityScene() {
       />
 
       {/* soft horizon glow pulse — VERBATIM motion values from export */}
-      <motion.div
+      <m.div
         className="absolute left-1/2 top-[55%] h-[55%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
         style={{
           background:
@@ -53,7 +53,7 @@ export function CityScene() {
 
       {/* animated neon beams — VERBATIM motion values from export */}
       {beams.map((b, i) => (
-        <motion.div
+        <m.div
           key={i}
           className="absolute bottom-[28%]"
           style={{
@@ -86,7 +86,7 @@ export function CityScene() {
       />
 
       {/* chromatic aberration sweep — VERBATIM motion values from export */}
-      <motion.div
+      <m.div
         className="absolute inset-0"
         style={{
           background:

@@ -8,7 +8,7 @@
  * zIndex 60 (above navbar at z-50), pointer-events: none.
  * Reduced-motion safe: motionValue still drives scaleX but CSS zeroes transitions.
  */
-import { useScroll, useSpring, motion } from 'motion/react';
+import { useScroll, useSpring, m } from 'motion/react';
 
 export function ScrollProgress() {
   const { scrollYProgress } = useScroll();
@@ -19,7 +19,7 @@ export function ScrollProgress() {
   });
 
   return (
-    <motion.div
+    <m.div
       className="tmpl-scroll-progress"
       style={{ scaleX }}
       aria-hidden="true"

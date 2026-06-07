@@ -28,7 +28,7 @@
  *   7. 'use client' required.
  */
 import { useState, useEffect, useCallback, useRef, useId } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { GitBranch, ExternalLink, X } from 'lucide-react';
 import Image from 'next/image';
 
@@ -121,7 +121,7 @@ function ProjectModal({
   }, [onClose]);
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -129,7 +129,7 @@ function ProjectModal({
       style={{ background: 'color-mix(in srgb, var(--bg) 80%, transparent)' }}
       onClick={() => onClose()}
     >
-      <motion.div
+      <m.div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
@@ -249,8 +249,8 @@ function ProjectModal({
             </a>
           ) : null}
         </div>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }
 
@@ -308,7 +308,7 @@ export function Projects({ section }: SectionProps) {
               const liveHref = safeHref(item.live_url) ?? null;
 
               return (
-                <motion.div
+                <m.div
                   key={present(item.id) ? item.id : `${item.title}-${i}`}
                   initial={false}
                   animate={{ opacity: 1, y: 0 }}
@@ -446,7 +446,7 @@ export function Projects({ section }: SectionProps) {
                       ) : null}
                     </GlowCard>
                   </TiltCard>
-                </motion.div>
+                </m.div>
               );
             })}
           </div>

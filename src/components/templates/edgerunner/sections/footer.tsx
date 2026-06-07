@@ -374,7 +374,6 @@ export function Footer({ data }: FooterProps) {
             fontSize: '12px',
             letterSpacing: '0.04em',
             color: 'var(--muted-fg)',
-            opacity: 0.5,
           }}
         >
           // crafted with neon &amp; coffee

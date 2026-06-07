@@ -22,7 +22,7 @@
  *   5. 'use client' required for motion/react.
  *   6. Anchor links: /{username}#contact / /{username}#projects / /{username}/blog
  */
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import {
   Code2,
   Cable,
@@ -245,16 +245,16 @@ function Hero({ username }: { username: string }) {
   return (
     <section className="relative px-6 pt-36 pb-20">
       <div className="mx-auto max-w-4xl text-center">
-        <motion.span
+        <m.span
           initial={false}
           animate={{ opacity: 1, y: 0 }}
           className="font-mono-retro text-sm uppercase tracking-[0.5em]"
           style={{ color: 'color-mix(in oklab, var(--neon-cyan) 80%, transparent)' }}
         >
           // services
-        </motion.span>
+        </m.span>
 
-        <motion.h1
+        <m.h1
           initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05, duration: 0.6 }}
@@ -263,9 +263,9 @@ function Hero({ username }: { username: string }) {
           Build it. Ship it.
           <br />
           <span className="text-neon-cyan text-glow-cyan">Make it gnarly.</span>
-        </motion.h1>
+        </m.h1>
 
-        <motion.p
+        <m.p
           initial={false}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
@@ -274,9 +274,9 @@ function Hero({ username }: { username: string }) {
         >
           Full-stack engineering, design, and weird internet automation — done end-to-end.
           No agencies. No handoffs. Just one person who has shipped this before.
-        </motion.p>
+        </m.p>
 
-        <motion.div
+        <m.div
           initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
@@ -285,9 +285,9 @@ function Hero({ username }: { username: string }) {
           <StatusPill tone="cyan"   label="Remote worldwide"      />
           <StatusPill tone="purple" label="Edge-native"            />
           <StatusPill tone="pink"   label="2 slots open · Q3 2026" pulse />
-        </motion.div>
+        </m.div>
 
-        <motion.div
+        <m.div
           initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
@@ -311,7 +311,7 @@ function Hero({ username }: { username: string }) {
           >
             See projects
           </a>
-        </motion.div>
+        </m.div>
       </div>
     </section>
   );
@@ -324,7 +324,7 @@ function ServiceCards({ username }: { username: string }) {
         {SERVICES.map((s, i) => {
           const Icon = s.icon;
           return (
-            <motion.article
+            <m.article
               key={s.slug}
               initial={false}
               whileInView={{ opacity: 1, y: 0 }}
@@ -463,7 +463,7 @@ function ServiceCards({ username }: { username: string }) {
                   <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover/cta:translate-x-1" />
                 </a>
               </div>
-            </motion.article>
+            </m.article>
           );
         })}
       </div>
@@ -495,7 +495,7 @@ function Testimonials() {
 
       <div className="grid gap-6 md:grid-cols-3">
         {TESTIMONIALS.map((t, i) => (
-          <motion.figure
+          <m.figure
             key={t.name}
             initial={false}
             whileInView={{ opacity: 1, y: 0 }}
@@ -530,7 +530,7 @@ function Testimonials() {
                 --role &ldquo;{t.role}&rdquo;
               </div>
             </figcaption>
-          </motion.figure>
+          </m.figure>
         ))}
       </div>
     </section>
@@ -540,7 +540,7 @@ function Testimonials() {
 function BottomCTA({ username }: { username: string }) {
   return (
     <section className="relative mx-auto max-w-5xl px-6 py-24">
-      <motion.div
+      <m.div
         initial={false}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: '-60px' }}
@@ -596,7 +596,7 @@ function BottomCTA({ username }: { username: string }) {
             </a>
           </div>
         </div>
-      </motion.div>
+      </m.div>
     </section>
   );
 }

@@ -54,6 +54,8 @@ import type { TemplateSpec } from '@/components/templates/minimal/spec';
 import { minimalSpec } from '@/components/templates/minimal/spec';
 import { editorialSpec } from '@/components/templates/editorial/spec';
 import { auroraSpec } from '@/components/templates/aurora/spec';
+import { edgerunnerSpec } from '@/components/templates/edgerunner/spec';
+import { edgerunnerV2Spec } from '@/components/templates/edgerunner-v2/spec';
 import { goldenFixture } from '@/lib/fixtures/lovable-scaffold-golden';
 
 import { renderFixture } from './helpers/render-fixture';
@@ -72,6 +74,8 @@ const SPEC_BY_SLUG: Record<string, TemplateSpec> = {
   minimal: minimalSpec,
   editorial: editorialSpec,
   aurora: auroraSpec,
+  edgerunner: edgerunnerSpec,
+  'edgerunner-v2': edgerunnerV2Spec,
 };
 
 /** Every registered template slug — the corpus the conformance gate generalizes over. */

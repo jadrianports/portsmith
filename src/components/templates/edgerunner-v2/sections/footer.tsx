@@ -195,7 +195,7 @@ export function Footer({ data }: FooterProps) {
         </p>
         <p
           className="font-mono-retro text-base"
-          style={{ color: 'color-mix(in oklab, var(--fg) 40%, transparent)' }}
+          style={{ color: 'color-mix(in oklab, var(--fg) 60%, transparent)' }}
         >
           {'// crafted with neon & coffee'}
         </p>

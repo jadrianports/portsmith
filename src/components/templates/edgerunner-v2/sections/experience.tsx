@@ -19,7 +19,7 @@
  *   6. GlowCard imported from local ui/ folder.
  *   7. 'use client' required for motion/react.
  */
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 
 import type { SectionProps } from './types';
 import type { ExperienceContent, ExperienceItem } from '@/lib/validations';
@@ -147,7 +147,7 @@ export function Experience({ section }: SectionProps) {
             {items.map((item, i) => {
               const left = i % 2 === 0;
               return (
-                <motion.li
+                <m.li
                   key={present(item.id) ? item.id : `${item.company}-${item.role}-${i}`}
                   initial={false}
                   animate={{ opacity: 1, y: 0 }}
@@ -166,7 +166,7 @@ export function Experience({ section }: SectionProps) {
                   <div className={left ? 'md:pr-12 md:text-right' : 'md:col-start-2 md:pl-12'}>
                     <ExperienceCard item={item} left={left} />
                   </div>
-                </motion.li>
+                </m.li>
               );
             })}
           </ul>

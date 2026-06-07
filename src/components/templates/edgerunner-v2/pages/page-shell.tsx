@@ -21,7 +21,9 @@ import '../theme.css';
 
 import type { ReactNode } from 'react';
 import { orbitron, spaceGrotesk, vt323 } from '../fonts';
-import { CommandPalette, type CommandItem } from '../sections/command-palette';
+import { CommandPaletteLazy } from '../sections/command-palette-lazy';
+import { MotionProvider } from '../sections/motion-provider';
+import type { CommandItem } from '../sections/command-palette';
 import { NavbarSubpage, type NavItem } from './navbar-subpage';
 import { Footer } from '../sections/footer';
 import { ScrollProgress } from '../sections/scroll-progress';
@@ -113,6 +115,8 @@ export function EdgerunnerV2PageShell({
           raw <script> in a client-navigated component causes the React error:
           "Encountered a script tag while rendering React component." (Bug B fix) */}
 
+      {/* LazyMotion provider — async motion features (out of First Load JS; D-25) */}
+      <MotionProvider>
       {/* Scroll progress bar — fixed top, z-60, pointer-events:none */}
       <ScrollProgress />
 
@@ -132,14 +136,15 @@ export function EdgerunnerV2PageShell({
 
       <Footer data={data} />
 
-      {/* ⌘K / Ctrl+K command palette — client island */}
-      <CommandPalette
+      {/* ⌘K / Ctrl+K command palette — LAZY client island (deferred chunk) */}
+      <CommandPaletteLazy
         username={username}
         items={cmdItems}
         resumeUrl={cmdResumeUrl}
         email={cmdEmail}
         socials={cmdSocials}
       />
+      </MotionProvider>
     </div>
   );
 }
