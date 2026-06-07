@@ -3,7 +3,7 @@
  *
  * Mirrors the outer wrapper of `edgerunner-v2/index.tsx` exactly:
  *   - Same tmpl-edgerunner-v2 root with fontVars + data-template-root + data-template-theme="dark"
- *   - themeInitScript('dark') FOUC guard
+ *   - no themeInitScript (dark-only; removed to fix client-nav React script error)
  *   - ambient bg div
  *   - Navbar wired with sub-page-aware nav items (anchor links → /${username}#id,
  *     Services → /${username}/services, Blog → /${username}/blog)
@@ -21,7 +21,6 @@ import '../theme.css';
 
 import type { ReactNode } from 'react';
 import { orbitron, spaceGrotesk, vt323 } from '../fonts';
-import { themeInitScript } from '../../_kit';
 import { CommandPalette, type CommandItem } from '../sections/command-palette';
 import { NavbarSubpage, type NavItem } from './navbar-subpage';
 import { Footer } from '../sections/footer';
@@ -109,8 +108,10 @@ export function EdgerunnerV2PageShell({
       data-template-root
       data-template-theme="dark"
     >
-      {/* FOUC guard — hardcoded 'dark' (D-06) */}
-      <script dangerouslySetInnerHTML={{ __html: themeInitScript('dark') }} />
+      {/* No themeInitScript here — edgerunner-v2 is dark-only; the hardcoded
+          data-template-theme="dark" on the root div is sufficient. Rendering a
+          raw <script> in a client-navigated component causes the React error:
+          "Encountered a script tag while rendering React component." (Bug B fix) */}
 
       {/* Scroll progress bar — fixed top, z-60, pointer-events:none */}
       <ScrollProgress />

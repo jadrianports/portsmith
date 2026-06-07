@@ -21,6 +21,7 @@
  *   7. 'use client' required for motion/react.
  */
 import { motion } from 'motion/react';
+import Link from 'next/link';
 import { type ComponentType } from 'react';
 import {
   Code,
@@ -87,7 +88,7 @@ const accentChipColor: Record<Accent, string> = {
   purple: 'color-mix(in oklab, var(--neon-purple) 90%, transparent)',
 };
 
-export function Services({ section }: SectionProps) {
+export function Services({ section, username }: SectionProps & { username?: string | null }) {
   const content = (section?.content ?? null) as ServicesContent | null;
   if (!content) return null;
 
@@ -184,10 +185,10 @@ export function Services({ section }: SectionProps) {
           })}
         </div>
 
-        {/* "View all services" CTA — links to #contact on single-scroll (no /services route) */}
+        {/* "View all services" CTA — navigates to /${username}/services dedicated page */}
         <div className="mt-12 flex justify-center">
-          <a
-            href="#contact"
+          <Link
+            href={username ? `/${username}/services` : '/services'}
             className="group inline-flex items-center gap-3 rounded-md font-mono-retro text-sm uppercase tracking-widest text-neon-pink px-6 py-3 transition-all"
             style={{
               border: '1px solid var(--neon-pink)',
@@ -198,7 +199,7 @@ export function Services({ section }: SectionProps) {
           >
             View all services
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </a>
+          </Link>
         </div>
       </div>
     </section>

@@ -13,14 +13,14 @@
  *
  * SERVER COMPONENT (NO `'use client'`).
  * DARK-ONLY: `data-template-theme="dark"` hardcoded (D-06).
- * SECURITY: only `themeInitScript` + `personLdScriptHtml` use dangerouslySetInnerHTML.
+ * SECURITY: only `personLdScriptHtml` uses dangerouslySetInnerHTML (themeInitScript removed — dark-only, Bug B fix).
  *
  * PUBLIC ISR INVARIANT (D-22): no cookies()/headers()/host-read on this path.
  */
 import './theme.css';
 
 import { orbitron, spaceGrotesk, vt323 } from './fonts';
-import { ScrollReveal, themeInitScript } from '../_kit';
+import { ScrollReveal } from '../_kit';
 import { About, type StatItem } from './sections/about';
 import { BlogTeaser } from './sections/blog-teaser';
 import { CommandPalette, type CommandItem } from './sections/command-palette';
@@ -118,8 +118,10 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
     ...(sectionOfType(sections, 'experience') ? [{ id: 'experience', label: 'Experience' }] : []),
     ...(sectionOfType(sections, 'projects')   ? [{ id: 'projects',   label: 'Projects'   }] : []),
     ...(sectionOfType(sections, 'skills')     ? [{ id: 'stack',      label: 'Stack'      }] : []),
-    ...(sectionOfType(sections, 'services')     ? [{ id: 'services',   label: 'Services'   }] : []),
-    ...(sectionOfType(sections, 'blog_preview') ? [{ id: 'blog',       label: 'Blog'       }] : []),
+    // Services and Blog are dedicated sub-pages — use href so the Navbar renders them as
+    // plain <a> links without scroll interception (not anchor items).
+    ...(sectionOfType(sections, 'services')     ? [{ id: 'services', label: 'Services', href: `/${profile.username ?? ''}/services` }] : []),
+    ...(sectionOfType(sections, 'blog_preview') ? [{ id: 'blog',     label: 'Blog',     href: `/${profile.username ?? ''}/blog`     }] : []),
     ...(sectionOfType(sections, 'contact')      ? [{ id: 'contact',    label: 'Contact'    }] : []),
   ];
 
@@ -159,10 +161,12 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
 
   return (
     <div className={`tmpl-edgerunner-v2 ${fontVars}`} data-template-root data-template-theme="dark">
-      {/* FOUC guard — hardcoded 'dark' (D-06) */}
-      <script dangerouslySetInnerHTML={{ __html: themeInitScript('dark') }} />
+      {/* No themeInitScript — edgerunner-v2 is dark-only; data-template-theme="dark"
+          is hardcoded so there is no flash to guard. Rendering a raw <script> inside a
+          React component causes "Encountered a script tag while rendering React component"
+          on client-side navigation (Bug B fix — D-06). */}
 
-      {/* Person JSON-LD */}
+      {/* Person JSON-LD — SSR-rendered for SEO; safe (server-only path, XSS-safe helper) */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: personLdHtml }} />
 
       {/* Scroll progress bar — fixed top, z-60, pointer-events:none */}
@@ -232,7 +236,7 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
         {/* ── Services ─────────────────────────────────────────────────────── */}
         <ScrollReveal as="section" data-section-type="services">
           <div id="services">
-            <Services section={sectionOfType(sections, 'services')} />
+            <Services section={sectionOfType(sections, 'services')} username={profile.username} />
           </div>
         </ScrollReveal>
 

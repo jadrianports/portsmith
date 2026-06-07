@@ -45,6 +45,8 @@ import { Menu, X, Command } from 'lucide-react';
 export interface NavItem {
   id: string;
   label: string;
+  /** If set, clicking navigates to this href instead of smooth-scrolling to #id */
+  href?: string;
 }
 
 export interface NavbarProps {
@@ -53,6 +55,8 @@ export interface NavbarProps {
   logoText: string;
   /** Badge text shown in the logo square, e.g. "K_N" (first-letter of each name word joined by _) */
   badge?: string;
+  /** Username for the portfolio owner — used to build route hrefs */
+  username?: string;
 }
 
 /**
@@ -122,7 +126,9 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
   const stem = logoText; // already the stem, no ".dev" suffix
   const badgeText = badge ?? (stem.length >= 2 ? stem[0] + '_' + stem[stem.length - 1] : stem);
 
-  const sectionIds = items.map((l) => l.id);
+  // Only spy on anchor items (items without an href) — route items (Services, Blog) are not sections.
+  const anchorItems = items.filter((l) => !l.href);
+  const sectionIds = anchorItems.map((l) => l.id);
   const active = useScrollSpy(sectionIds);
   const [open, setOpen] = useState(false);
 
@@ -164,6 +170,23 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
         <nav className="hidden items-center gap-1 lg:flex">
           {items.map((l) => {
             const isActive = active === l.id;
+            // Route items (Services, Blog) navigate with a plain href — no scroll interception.
+            // Anchor items smooth-scroll to their #id on the homepage.
+            if (l.href) {
+              return (
+                <a
+                  key={l.id}
+                  href={l.href}
+                  className="group relative px-3 py-2 font-mono-retro text-base uppercase tracking-widest transition-colors tmpl-nav-link"
+                  style={{
+                    color: 'color-mix(in oklab, var(--fg) 70%, transparent)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  {l.label}
+                </a>
+              );
+            }
             return (
               <a
                 key={l.id}
@@ -246,6 +269,24 @@ export function Navbar({ items, logoText, badge }: NavbarProps) {
           >
             {items.map((l) => {
               const isActive = active === l.id;
+              // Route items (Services, Blog) navigate directly — no scroll interception.
+              if (l.href) {
+                return (
+                  <a
+                    key={l.id}
+                    href={l.href}
+                    onClick={() => setOpen(false)}
+                    className="rounded-md px-3 py-2 font-mono-retro text-lg uppercase tracking-wider tmpl-nav-mobile-link"
+                    style={{
+                      color: 'color-mix(in oklab, var(--fg) 80%, transparent)',
+                      textDecoration: 'none',
+                      display: 'block',
+                    }}
+                  >
+                    {l.label}
+                  </a>
+                );
+              }
               return (
                 <a
                   key={l.id}
