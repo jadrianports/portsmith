@@ -76,6 +76,11 @@ function resolveTech(item: ProjectItem): string[] {
   return Array.isArray(item.tech_stack) ? item.tech_stack.filter((t) => present(t)) : [];
 }
 
+/** Filtered, non-empty category tag entries. */
+function resolveTags(item: ProjectItem): string[] {
+  return Array.isArray(item.tags) ? item.tags.filter((t) => present(t)) : [];
+}
+
 // Per-accent neon glow colors for tech pill borders on the card.
 const ACCENT_CYCLE: Array<'pink' | 'cyan' | 'purple'> = ['cyan', 'purple', 'pink'];
 
@@ -506,6 +511,7 @@ export function Projects({ section }: SectionProps) {
             const image = resolveImage(item);
             const { live, repo } = resolveLinks(item);
             const techStack = resolveTech(item);
+            const categoryTags = resolveTags(item);
             // Show max 5 tech pills on the card; rest visible in modal.
             const visibleTech = techStack.slice(0, 5);
 
@@ -544,6 +550,32 @@ export function Projects({ section }: SectionProps) {
                             unoptimized
                             style={{ objectFit: 'cover' }}
                           />
+                        </div>
+                      ) : null}
+
+                      {/* Category tag pills — ABOVE tech pills; cyan-bordered, mono, uppercase.
+                          Render-if-present (when item.tags is non-empty). */}
+                      {categoryTags.length > 0 ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {categoryTags.map((tag) => (
+                            <span
+                              key={tag}
+                              style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.16em',
+                                padding: '2px 8px',
+                                borderRadius: 'var(--radius-sm)',
+                                background: 'transparent',
+                                color: 'var(--neon-cyan)',
+                                border: '1px solid color-mix(in oklab, var(--neon-cyan) 55%, transparent)',
+                              }}
+                            >
+                              {tag}
+                            </span>
+                          ))}
                         </div>
                       ) : null}
 

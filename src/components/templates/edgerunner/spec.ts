@@ -43,9 +43,9 @@ export const edgerunnerSpec = {
     // group-level fields the same way minimal/aurora do.
     skills: { supported: true, fields: ['heading', 'groups'] },
     contact: { supported: true, fields: ['heading', 'subheading'] },
-    // Dropped this phase (D-01 → 13.2): the export's `/services` route is multi-page.
-    // Declared UNSUPPORTED so the mismatch predicate is testable.
-    services: { supported: false, fields: [] },
+    // Faithful-clone task: services is now a SUPPORTED single-scroll section.
+    // The export's multi-page `/services` route is adapted as an inline "OFFERINGS" block.
+    services: { supported: true, fields: ['heading', 'subheading', 'items'] },
     // Dropped (D-01 → 13.2): the blog engine is unbuilt + the CMS never produces
     // `blog_preview`. Declared UNSUPPORTED so the mismatch predicate is testable.
     blog_preview: { supported: false, fields: [] },

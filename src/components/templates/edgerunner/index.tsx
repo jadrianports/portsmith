@@ -13,9 +13,10 @@
  * `<Navbar>` (scroll-spy IntersectionObserver + mobile toggle), and `<NeonDivider>` (motion
  * scale-in). Reached lazily via the registry (`dynamic(() => import('./edgerunner'))`).
  *
- * SECTION ORDER (the export's `Index.tsx` single scroll, minus the dropped Services +
- * Blog): hero → NeonDivider(◇) → about → metrics → NeonDivider(◆) → experience →
- * NeonDivider(✦) → projects → NeonDivider(◇) → skills → NeonDivider(◆) → contact.
+ * SECTION ORDER (the export's `Index.tsx` single scroll, minus the dropped Blog):
+ * hero → NeonDivider(◇) → about → metrics → NeonDivider(◆) → experience →
+ * NeonDivider(✦) → projects → NeonDivider(◇) → skills → NeonDivider(◆) →
+ * services → NeonDivider(✦) → contact.
  * Metrics follows About with NO divider between them (they read as one block in the export).
  * Each section is a `<ScrollReveal as="section" data-section-type="<type>">` with a
  * nested `<div id="<type>">` so nav anchor links resolve (ScrollReveal does not forward
@@ -48,6 +49,7 @@ import { Hero, type HeroSocialLink } from './sections/hero';
 import { Metrics } from './sections/metrics';
 import { Navbar } from './sections/navbar';
 import { Projects } from './sections/projects';
+import { Services } from './sections/services';
 import { Skills } from './sections/skills';
 import { NeonDivider } from './sections/ui/neon-divider';
 import { safeHref } from '@/lib/safe-url';
@@ -73,6 +75,7 @@ const NAV_LABEL_MAP: Record<string, string> = {
   experience: 'Experience',
   projects: 'Projects',
   skills: 'Stack',
+  services: 'Services',
   contact: 'Contact',
 };
 
@@ -144,7 +147,7 @@ export default function EdgerunnerTemplate({ data }: { data: PortfolioData }) {
       <Navbar items={navItems} logoText={logoText} />
 
       {/*
-        The 7 supported sections IN THE EXPORT'S SOURCE ORDER (Services + Blog dropped).
+        The 8 supported sections IN THE EXPORT'S SOURCE ORDER (Blog dropped).
         ScrollReveal is wired here as template chrome — each section emits `data-section-type`
         for the conformance gate. ANCHOR IDS: ScrollReveal does not forward an `id` prop, so
         each `<ScrollReveal>` wraps its section content in a `<div id="<type>">` — the inner
@@ -153,7 +156,7 @@ export default function EdgerunnerTemplate({ data }: { data: PortfolioData }) {
 
         Section order with NeonDividers:
           hero → ◇ → about → metrics (no divider — reads as one block) →
-          ◆ → experience → ✦ → projects → ◇ → skills → ◆ → contact
+          ◆ → experience → ✦ → projects → ◇ → skills → ◆ → services → ✦ → contact
       */}
       <main>
         {/* ── Hero (LCP — priority: static wrapper, zero entrance motion) ─────── */}
@@ -211,6 +214,15 @@ export default function EdgerunnerTemplate({ data }: { data: PortfolioData }) {
         </ScrollReveal>
 
         <NeonDivider glyph="◆" />
+
+        {/* ── Services / Offerings ─────────────────────────────────────────────── */}
+        <ScrollReveal as="section" data-section-type="services">
+          <div id="services">
+            <Services section={sectionOfType(sections, 'services')} />
+          </div>
+        </ScrollReveal>
+
+        <NeonDivider glyph="✦" />
 
         {/* ── Contact ──────────────────────────────────────────────────────────── */}
         <ScrollReveal as="section" data-section-type="contact">

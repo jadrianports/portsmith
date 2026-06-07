@@ -80,6 +80,10 @@ export const projectItemSchema = z
     image: urlOrEmptyOptional,
     image_alt: z.string().optional(),
     tech_stack: z.array(z.string()).max(10),
+    // Category tag pills (edgerunner faithful-clone — rendered ABOVE tech pills on each
+    // card). Additive/optional — no Postgres migration (content is schemaless JSONB, CMS-08).
+    // Max 6 tags per item, each trimmed non-empty string ≤40 chars.
+    tags: z.array(z.string().trim().min(1).max(40)).max(6).optional(),
     live_url: urlOrEmptyOptional,
     repo_url: urlOrEmptyOptional,
   })

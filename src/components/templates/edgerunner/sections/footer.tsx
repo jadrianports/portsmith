@@ -48,6 +48,7 @@ const QUICK_LINKS: { id: string; label: string }[] = [
   { id: 'experience', label: 'Experience' },
   { id: 'projects', label: 'Projects' },
   { id: 'skills', label: 'Stack' },
+  { id: 'services', label: 'Services' },
   { id: 'contact', label: 'Contact' },
 ];
 

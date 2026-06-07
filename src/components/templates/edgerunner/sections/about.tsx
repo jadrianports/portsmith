@@ -60,7 +60,7 @@ export function About({ section }: SectionProps) {
   return (
     <div className="tmpl-shell" style={sectionShellStyle}>
       {/* Section header — centered eyebrow + big neon-glow title. */}
-      <SectionHeading eyebrow="// ABOUT" title="About" accent="cyan" />
+      <SectionHeading eyebrow="// ABOUT" title="Decoded" accent="cyan" />
 
       {/* 2-col layout on desktop (roughly 1fr / 1.4fr via flex-grow weights — the
           export's `lg:grid-cols-[1fr_1.4fr]`). Stacks on mobile (flex-wrap). */}
