@@ -113,50 +113,37 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
             </div>
           </motion.div>
 
-          {/* RIGHT: spinning conic-gradient border wrapper + real ContactForm */}
+          {/* RIGHT: vivid gradient panel (the panel BG IS the gradient, faithful to export).
+              The ContactForm sits inside; its inputs use --surface-muted (dark/translucent)
+              boxes on the bright gradient, labels/placeholders are forced readable via the
+              .tmpl-contact-gradient-panel hook in theme.css. */}
           <motion.div
             initial={false}
             animate={{ opacity: 1, x: 0 }}
-            className="relative rounded-2xl p-[2px]"
+            className="tmpl-contact-gradient-panel relative rounded-2xl p-6 shadow-neon-pink"
             style={{
+              background:
+                'linear-gradient(135deg, var(--neon-pink), var(--neon-purple), var(--neon-cyan))',
               boxShadow:
-                '0 0 48px -12px color-mix(in oklab, var(--neon-pink) 45%, transparent), 0 0 64px -20px color-mix(in oklab, var(--neon-cyan) 45%, transparent)',
+                '0 0 48px -12px color-mix(in oklab, var(--neon-pink) 55%, transparent), 0 0 64px -20px color-mix(in oklab, var(--neon-cyan) 50%, transparent)',
             }}
           >
-            {/* Static gradient border frame (NOT a spinning/blurred fill — that produced a
-                rotating square poking out behind the form). The 2px outer padding + this
-                inset-0 gradient + the dark inner panel = a clean glowing gradient frame. */}
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 rounded-2xl"
-              style={{
-                background:
-                  'linear-gradient(135deg, var(--neon-pink), var(--neon-purple), var(--neon-cyan))',
-              }}
-            />
-
-            {/* Inner form wrapper — positioned above the ring */}
-            <div
-              className="holo-panel relative rounded-2xl p-6 shadow-neon-pink"
-              style={{ position: 'relative', zIndex: 1 }}
-            >
-              {present(section?.portfolio_id) ? (
-                <ContactForm portfolioId={section.portfolio_id} emailPublic={emailPublic} />
-              ) : emailPublic && mailtoHref ? (
-                <div className="flex flex-col gap-6 p-6">
-                  <p
-                    className="font-mono-retro text-base"
-                    style={{ color: 'color-mix(in oklab, var(--fg) 75%, transparent)' }}
-                  >
-                    Prefer email? Reach me directly at{' '}
-                    <a href={mailtoHref} style={{ color: 'var(--neon-cyan)', textDecoration: 'underline' }}>
-                      {emailPublic}
-                    </a>
-                    .
-                  </p>
-                </div>
-              ) : null}
-            </div>
+            {present(section?.portfolio_id) ? (
+              <ContactForm portfolioId={section.portfolio_id} emailPublic={emailPublic} />
+            ) : emailPublic && mailtoHref ? (
+              <div className="flex flex-col gap-6">
+                <p
+                  className="font-mono-retro text-base"
+                  style={{ color: 'var(--bg-deep)' }}
+                >
+                  Prefer email? Reach me directly at{' '}
+                  <a href={mailtoHref} style={{ color: 'var(--bg-deep)', textDecoration: 'underline' }}>
+                    {emailPublic}
+                  </a>
+                  .
+                </p>
+              </div>
+            ) : null}
           </motion.div>
         </div>
       </div>

@@ -351,16 +351,16 @@
 }
 
 .tmpl-edgerunner-v2 .tmpl-contact-field {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
   color: var(--fg);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in oklab, var(--fg) 18%, transparent);
   border-radius: var(--radius-md);
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 .tmpl-edgerunner-v2 .tmpl-contact-field:focus-visible {
   outline: none;
-  border-color: var(--ring);
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--neon-cyan) 30%, transparent);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -370,6 +370,48 @@
   .tmpl-edgerunner-v2 .tmpl-contact-success-pulse {
     animation: tmpl-edgerunner-v2-neon-pulse 2.4s ease-in-out infinite;
   }
+}
+
+/* ============================================================================
+ * CONTACT GRADIENT PANEL — right column is the vivid gradient itself.
+ * The ContactForm renders its outer <form> with background:var(--surface) and
+ * border:1px solid var(--border) via inline style — we neutralise those here so
+ * the gradient shows through. Individual field inputs/textarea keep their own
+ * var(--surface-muted) fill (dark boxes on the gradient). Labels are pinned to
+ * near-white so they read against the bright pink→cyan fill. The ContactForm
+ * submit button (background:var(--accent)) already reads fine on the gradient.
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .tmpl-contact-gradient-panel > form {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  /* Strip the ContactForm's own padding — the gradient panel's p-6 already provides it */
+  padding: 0 !important;
+  max-width: none !important;
+}
+/* Labels inside the gradient panel: force near-white (--fg is oklch(0.97…) ≈ white) */
+.tmpl-edgerunner-v2 .tmpl-contact-gradient-panel label {
+  color: var(--fg) !important;
+}
+/* Placeholder text: readable on gradient — use semi-transparent white */
+.tmpl-edgerunner-v2 .tmpl-contact-gradient-panel input::placeholder,
+.tmpl-edgerunner-v2 .tmpl-contact-gradient-panel textarea::placeholder {
+  color: color-mix(in oklab, var(--fg) 55%, transparent) !important;
+}
+/* Success/error state: the success panel background override */
+.tmpl-edgerunner-v2 .tmpl-contact-gradient-panel .tmpl-contact-success-pulse {
+  background: color-mix(in srgb, var(--bg) 70%, transparent) !important;
+  border-color: color-mix(in oklab, var(--fg) 20%, transparent) !important;
+}
+/* Error text on gradient: keep destructive but ensure readable */
+.tmpl-edgerunner-v2 .tmpl-contact-gradient-panel [role="alert"] {
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+}
+/* Muted-fg copy (the "Prefer email?" fallback) — force light on gradient */
+.tmpl-edgerunner-v2 .tmpl-contact-gradient-panel p {
+  color: color-mix(in oklab, var(--fg) 80%, transparent) !important;
 }
 
 /* ============================================================================
