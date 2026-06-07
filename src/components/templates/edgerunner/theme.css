@@ -53,6 +53,9 @@
   --neon-purple: oklch(0.62 0.28 305);
   --neon-yellow: oklch(0.92 0.18 95);
   --bg-deep: oklch(0.10 0.04 285);
+  /* Alias the shared <ContactForm> island's email-fallback link color
+     (contact-form.tsx reads var(--accent-cyan)) onto the synthwave cyan. */
+  --accent-cyan: var(--neon-cyan);
 
   /* The neon gradient — THE signature (hero name text-clip, sun arc, section rules).
      Re-authored from the export's `--gradient-neon`. */

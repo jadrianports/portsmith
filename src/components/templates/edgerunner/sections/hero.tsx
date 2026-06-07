@@ -91,7 +91,7 @@ export function Hero({ section }: SectionProps) {
             opacity: 0.22,
             maskImage: 'repeating-linear-gradient(to bottom, #000 0 14px, transparent 14px 22px)',
             WebkitMaskImage: 'repeating-linear-gradient(to bottom, #000 0 14px, transparent 14px 22px)',
-            animation: 'tmpl-edgerunner-spin-slow 60s linear infinite',
+            animation: 'tmpl-edgerunner-spin 60s linear infinite',
           }}
         />
         {/* Perspective grid-horizon — converging neon hairlines, low opacity. */}
