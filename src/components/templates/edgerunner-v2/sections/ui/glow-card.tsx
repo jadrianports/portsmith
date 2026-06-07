@@ -65,7 +65,14 @@ export const GlowCard = forwardRef<HTMLDivElement, Props>(function GlowCard(
     >
       <div
         className="relative h-full rounded-2xl backdrop-blur-xl p-6"
-        style={{ backgroundImage: 'var(--gradient-card)' }}
+        style={{
+          // bg-card/80 — the DARK glassy base (without this the outer neon gradient
+          // bleeds through and the card looks like a solid neon fill).
+          backgroundColor: 'color-mix(in srgb, var(--surface) 82%, transparent)',
+          // the export's --gradient-card: a very faint neon overlay on top of the base.
+          backgroundImage:
+            'linear-gradient(145deg, color-mix(in oklab, var(--neon-purple) 8%, transparent), color-mix(in oklab, var(--neon-cyan) 4%, transparent))',
+        }}
       >
         {children}
       </div>
