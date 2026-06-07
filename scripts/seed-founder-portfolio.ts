@@ -124,9 +124,12 @@ function buildSections(): { type: string; content: unknown; visible: boolean }[]
       content: { heading: 'Testimonials', items: [] },
       visible: false,
     },
-    // Services — after skills/projects, before contact; sort_order follows testimonials.
+    // Services — after skills/projects, before blog_preview; sort_order follows testimonials.
     // `validateSectionContent('services', ...)` runs below (the SAME Zod gate as the CMS).
     { type: 'services', content: s.services, visible: true },
+    // blog_preview — TRANSMISSIONS blog teaser section (edgerunner-v2, data-driven cards).
+    // Additive — no migration; `blog_preview` is a registered soft-enum type (CMS-08).
+    { type: 'blog_preview', content: s.blog_preview, visible: true },
     { type: 'contact', content: contactContent, visible: true },
   ];
 }

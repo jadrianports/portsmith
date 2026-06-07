@@ -22,6 +22,7 @@ import './theme.css';
 import { orbitron, spaceGrotesk, vt323 } from './fonts';
 import { ScrollReveal, themeInitScript } from '../_kit';
 import { About, type StatItem } from './sections/about';
+import { BlogTeaser } from './sections/blog-teaser';
 import { Contact } from './sections/contact';
 import { Experience } from './sections/experience';
 import { Footer } from './sections/footer';
@@ -115,8 +116,9 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
     ...(sectionOfType(sections, 'experience') ? [{ id: 'experience', label: 'Experience' }] : []),
     ...(sectionOfType(sections, 'projects')   ? [{ id: 'projects',   label: 'Projects'   }] : []),
     ...(sectionOfType(sections, 'skills')     ? [{ id: 'stack',      label: 'Stack'      }] : []),
-    ...(sectionOfType(sections, 'services')   ? [{ id: 'services',   label: 'Services'   }] : []),
-    ...(sectionOfType(sections, 'contact')    ? [{ id: 'contact',    label: 'Contact'    }] : []),
+    ...(sectionOfType(sections, 'services')     ? [{ id: 'services',   label: 'Services'   }] : []),
+    ...(sectionOfType(sections, 'blog_preview') ? [{ id: 'blog',       label: 'Blog'       }] : []),
+    ...(sectionOfType(sections, 'contact')      ? [{ id: 'contact',    label: 'Contact'    }] : []),
   ];
 
   // logoText: last word of display_name uppercased (stem only — Navbar appends ".dev")
@@ -204,6 +206,18 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
         <ScrollReveal as="section" data-section-type="services">
           <div id="services">
             <Services section={sectionOfType(sections, 'services')} />
+          </div>
+        </ScrollReveal>
+
+        <NeonDivider glyph="◇" />
+
+        {/* ── Blog teaser / Transmissions ──────────────────────────────────── */}
+        <ScrollReveal as="section" data-section-type="blog_preview">
+          <div id="blog">
+            <BlogTeaser
+              section={sectionOfType(sections, 'blog_preview')}
+              username={profile.username}
+            />
           </div>
         </ScrollReveal>
 

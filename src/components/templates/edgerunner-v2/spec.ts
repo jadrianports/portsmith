@@ -41,7 +41,7 @@ export const edgerunnerV2Spec = {
       supported: true,
       fields: ['heading', 'subheading'],
     },
-    blog_preview: { supported: false, fields: [] },
+    blog_preview: { supported: true, fields: ['heading', 'items'] },
   },
   color_presets: ['default'],
   font_presets: ['default'],
