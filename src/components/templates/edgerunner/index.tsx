@@ -114,6 +114,16 @@ export default function EdgerunnerTemplate({ data }: { data: PortfolioData }) {
   // Public email from settings — separate from contact section (which is write-protected).
   const heroEmail = data.settings.email_public ?? null;
 
+  // Compute initials from display_name: first letter of up to 2 words, uppercased.
+  // Used by the About placeholder portrait (the "KN" monogram from the reference).
+  const initials: string = (() => {
+    const name = (profile.display_name ?? '').trim();
+    if (!name) return '';
+    const words = name.split(/\s+/).filter(Boolean);
+    const letters = words.slice(0, 2).map((w) => w[0].toUpperCase());
+    return letters.join('');
+  })();
+
   return (
     <div className={`tmpl-edgerunner ${fontVars}`} data-template-root data-template-theme="dark">
       {/*
@@ -130,6 +140,20 @@ export default function EdgerunnerTemplate({ data }: { data: PortfolioData }) {
         out of the element. The FOUC + JSON-LD scripts are the ONLY two HTML producers here.
       */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: personLdHtml }} />
+
+      {/*
+        PAGE-WIDE AMBIENT BACKGROUND — three large blurred neon radial blobs (pink, purple,
+        cyan) positioned across the full page height, creating the living neon-tinted dark
+        field that the reference shows behind all sections (not just the hero). CSS-only,
+        pointer-events:none, reduced-motion-safe (no animation — purely static radial glows).
+        `position:fixed` keeps them in place during scroll so the whole page feels neon-lit.
+        Tokens only — no hardcoded hex.
+      */}
+      <div
+        aria-hidden="true"
+        className="tmpl-ambient-bg"
+        style={{ pointerEvents: 'none' }}
+      />
 
       {/*
         The reduced-motion + pointer-coarse gated synthwave a11y effects (D-07): a one-shot
@@ -175,7 +199,7 @@ export default function EdgerunnerTemplate({ data }: { data: PortfolioData }) {
         {/* ── About ─────────────────────────────────────────────────────────────── */}
         <ScrollReveal as="section" data-section-type="about">
           <div id="about">
-            <About section={sectionOfType(sections, 'about')} />
+            <About section={sectionOfType(sections, 'about')} initials={initials} />
           </div>
         </ScrollReveal>
 

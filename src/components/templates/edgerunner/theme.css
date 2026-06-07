@@ -133,6 +133,48 @@
 }
 
 /* ============================================================================
+ * PAGE-WIDE AMBIENT BACKGROUND — three large neon radial blobs (pink, purple,
+ * cyan) that paint the living neon-tinted dark field behind all sections. The
+ * reference has floating blobs across the WHOLE page — not just the hero area.
+ * `position:fixed` + `z-index:-1` so they stay visible during scroll and sit
+ * behind every content layer. CSS-only, pointer-events:none (set inline), no
+ * animation (reduced-motion-safe). Tokens only — no hardcoded hex.
+ * ========================================================================== */
+.tmpl-edgerunner .tmpl-ambient-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  /* Three large blurred radial blobs: top-left pink, center purple, bottom-right cyan.
+     Sizes are large (50-70vw) so they fill the page without tiling. Low opacity (~0.12-0.18)
+     so they tint without overpowering the content. */
+  background:
+    radial-gradient(
+      ellipse 60vw 50vh at 15% 20%,
+      color-mix(in oklab, var(--neon-pink) 15%, transparent) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 55vw 55vh at 75% 50%,
+      color-mix(in oklab, var(--neon-purple) 14%, transparent) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 50vw 45vh at 40% 85%,
+      color-mix(in oklab, var(--neon-cyan) 12%, transparent) 0%,
+      transparent 70%
+    );
+}
+
+/* Ensure main content renders above the ambient layer. */
+.tmpl-edgerunner > main,
+.tmpl-edgerunner > nav,
+.tmpl-edgerunner > footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================================
  * BASE ELEMENT STYLING — scoped selection + font-smoothing (ported from the
  * export's `@layer base` body/selection, re-hosted under `.tmpl-edgerunner`).
  * ========================================================================== */
@@ -418,18 +460,24 @@
   }
 }
 
-/* Spinning conic-gradient border ring — faithful to the export's Contact right panel.
-   The wrapper is `position:relative; padding:1.5px; border-radius:inherit`. The `::before`
-   pseudo carries the spinning `conic-gradient(pink→purple→cyan→pink)` at `position:absolute
-   inset:0 border-radius:inherit`. The inner content sits on top via `position:relative
-   z-index:1`.
-   Reduced-motion: the blanket reset at the bottom of this file zeroes `animation:none
-   !important` so the ring is static under `prefers-reduced-motion:reduce`. */
+/* Spinning conic-gradient VIVID border frame — faithful to the export's Contact right panel.
+   The wrapper is `position:relative; padding:2px; border-radius:inherit`. The `::before`
+   pseudo carries the vivid spinning `conic-gradient(pink→purple→cyan→pink)` border fill;
+   the `::after` pseudo adds a soft outer glow (larger blur spread, lower opacity) so the
+   form visually "emits" light. The inner content sits on top via `position:relative; z-index:1`.
+   Reduced-motion: the blanket reset zeroes `animation:none !important` — the ring renders
+   static under `prefers-reduced-motion:reduce` (still vivid, just not spinning). */
 .tmpl-edgerunner .tmpl-contact-spin-border {
   position: relative;
-  padding: 1.5px;
+  /* 2px padding = the visible border width */
+  padding: 2px;
   isolation: isolate;
+  /* Outer glow: a static neon-pink→cyan box shadow mimicking the reference's glowing frame */
+  box-shadow:
+    0 0 24px -4px color-mix(in oklab, var(--neon-pink) 55%, transparent),
+    0 0 48px -16px color-mix(in oklab, var(--neon-cyan) 45%, transparent);
 }
+/* The rotating conic-gradient ring */
 .tmpl-edgerunner .tmpl-contact-spin-border::before {
   content: '';
   position: absolute;
@@ -442,10 +490,28 @@
     var(--neon-cyan),
     var(--neon-pink)
   );
-  filter: blur(2px);
-  opacity: 0.8;
+  /* No blur on the primary ring — keeps it crisp and vivid like the reference */
+  opacity: 1;
   z-index: 0;
-  animation: tmpl-edgerunner-spin 6s linear infinite;
+  animation: tmpl-edgerunner-spin 4s linear infinite;
+}
+/* Soft bloom layer behind the ring — makes the whole frame glow */
+.tmpl-edgerunner .tmpl-contact-spin-border::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    var(--neon-pink),
+    var(--neon-purple),
+    var(--neon-cyan),
+    var(--neon-pink)
+  );
+  filter: blur(12px);
+  opacity: 0.5;
+  z-index: -1;
+  animation: tmpl-edgerunner-spin 4s linear infinite;
 }
 
 .tmpl-edgerunner .tmpl-contact-field {

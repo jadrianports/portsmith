@@ -27,7 +27,12 @@ import { isHttpImageSrc } from '@/lib/safe-image';
 import { mutedBodyStyle, present, sectionShellStyle } from './shared';
 import { SectionHeading } from './ui/section-heading';
 
-export function About({ section }: SectionProps) {
+/** Additive prop — initials to show in the portrait placeholder (e.g. "KN"). */
+interface AboutProps extends SectionProps {
+  initials?: string;
+}
+
+export function About({ section, initials }: AboutProps) {
   const content = (section?.content ?? null) as AboutContent | null;
   if (!content) return null;
 
@@ -139,19 +144,23 @@ export function About({ section }: SectionProps) {
                   ')',
               }}
             />
-            {/* Neon glyph — the "◈" diamond mark used as a visual anchor */}
+            {/* Initials monogram ("KN") or fallback glyph — the reference's big holo
+                monogram centered on the portrait placeholder card. Orbitron display face,
+                large and bold, deep-bg color for contrast against the neon-gradient fill. */}
             <span
               style={{
                 position: 'relative',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '52px',
+                fontFamily: initials ? 'var(--font-display)' : 'var(--font-mono)',
+                fontSize: initials ? '64px' : '52px',
+                fontWeight: initials ? 900 : undefined,
                 lineHeight: 1,
+                letterSpacing: initials ? '0.06em' : undefined,
                 color: 'var(--bg-deep)',
-                opacity: 0.85,
+                opacity: 0.9,
                 userSelect: 'none',
               }}
             >
-              ◈
+              {initials || '◈'}
             </span>
             {/* "// avatar.holo" retro label */}
             <span
