@@ -564,6 +564,28 @@
 }
 
 /* ============================================================================
+ * Skills GAUGES (D-09 — edgerunner's circular gauge signature, Task-12).
+ * The gauge section uses a 2-col group grid on md+, matching the export's
+ * `grid gap-6 md:grid-cols-2` layout. The gauge ring fill is animated via
+ * `motion.circle` strokeDashoffset (JS progressive enhancement); SSR renders at
+ * final fill (no-JS-safe). The TechMarquee strip uses `tmpl-edgerunner-marquee`
+ * (defined above). Both are zeroed under `prefers-reduced-motion` by the blanket
+ * reset at the bottom of this file.
+ * ========================================================================== */
+
+/* 1-col base → 2-col on md+ (faithful to the export's GlowCard grid). */
+.tmpl-edgerunner .tmpl-skills-groups {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+@media (min-width: 768px) {
+  .tmpl-edgerunner .tmpl-skills-groups {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ============================================================================
  * Experience timeline — vertical neon spine + alternating left/right cards on
  * md+ (experience.tsx faithful clone, Task-10). Mobile: single column left of
  * the spine; md+: spine is centered (left:50%), items alternate left/right.
