@@ -1,0 +1,206 @@
+/**
+ * Footer for edgerunner-v2 — bar-for-bar transcription of
+ * lovable-exports/synthwave-founder/src/components/layout/Footer.tsx
+ *
+ * TRANSCRIPTION RULES APPLIED:
+ *   1. Layout classes VERBATIM from export JSX.
+ *   2. Color classes → inline style with scoped var(--token):
+ *      border-neon-purple/20 → color-mix(in oklab, var(--neon-purple) 20%, transparent)
+ *      text-neon-pink / text-neon-cyan → var(--neon-pink) / var(--neon-cyan)
+ *      border-neon-pink/60 → color-mix(in oklab, var(--neon-pink) 60%, transparent)
+ *      text-foreground/90 → color-mix(in oklab, var(--fg) 90%, transparent)
+ *      text-foreground/65 → color-mix(in oklab, var(--fg) 65%, transparent)
+ *      text-foreground/75 → color-mix(in oklab, var(--fg) 75%, transparent)
+ *      text-foreground/80 → color-mix(in oklab, var(--fg) 80%, transparent)
+ *      text-foreground/55 → color-mix(in oklab, var(--fg) 55%, transparent)
+ *      text-foreground/40 → color-mix(in oklab, var(--fg) 40%, transparent)
+ *      border-neon-cyan/30 → color-mix(in oklab, var(--neon-cyan) 30%, transparent)
+ *      hover:border-neon-pink hover:text-neon-pink hover:shadow-neon-pink → CSS class
+ *   3. Custom classes (animate-neon-pulse, text-glow-pink, font-display, font-mono-retro,
+ *      text-neon-pink, text-neon-cyan) KEPT AS-IS.
+ *   4. NO framer-motion (footer is Server Component).
+ *   5. DATA BINDING: real socials/email from PortfolioData settings.
+ *      Derived initials from display_name. No invented data.
+ *   6. YEAR: deterministic new Date().getFullYear().
+ *   7. SERVER COMPONENT — no 'use client'.
+ *   8. ReportDialog island for safety affordance.
+ *   9. NO platform branding (D-23 / TMPL-07).
+ */
+import { ReportDialog } from '@/components/public/report-dialog';
+
+import type { FooterProps } from './types';
+import type { PublicSettings } from '../../types';
+import { siteUrl } from '@/lib/url';
+import { safeHref } from '@/lib/safe-url';
+import { present } from './shared';
+
+const quickLinks = [
+  { id: 'about', label: 'About' },
+  { id: 'projects', label: 'Projects' },
+  { id: 'services', label: 'Services' },
+  { id: 'contact', label: 'Contact' },
+];
+
+const SOCIAL_KEYS: { label: string; key: keyof PublicSettings }[] = [
+  { label: 'GitHub', key: 'github_url' },
+  { label: 'LinkedIn', key: 'linkedin_url' },
+  { label: 'X', key: 'twitter_url' },
+  { label: 'Dribbble', key: 'dribbble_url' },
+  { label: 'Website', key: 'website_url' },
+];
+
+export function Footer({ data }: FooterProps) {
+  const { profile, settings } = data;
+
+  const name = present(profile.display_name) ? profile.display_name : null;
+  const handle = present(profile.username) ? profile.username : null;
+  const emailPublic = settings.email_public ?? null;
+
+  const portfolioId = present(settings.portfolio_id) ? settings.portfolio_id : null;
+
+  // Derive initials from display_name
+  const initials = name
+    ? name
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((p) => p[0])
+        .join('')
+        .toUpperCase()
+    : handle
+      ? handle.slice(0, 2).toUpperCase()
+      : '//';
+
+  // Build social links
+  const socials: { label: string; href: string }[] = [];
+  for (const { label, key } of SOCIAL_KEYS) {
+    const raw = settings[key] as string | null | undefined;
+    const href = safeHref(raw);
+    if (href) socials.push({ label, href });
+  }
+
+  const year = new Date().getFullYear();
+
+  return (
+    <footer
+      className="relative border-t px-6 py-10"
+      style={{ borderColor: 'color-mix(in oklab, var(--neon-purple) 20%, transparent)' }}
+    >
+      <div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-3">
+        {/* Col 1: Logo + tagline */}
+        <div>
+          <div className="flex items-center gap-2">
+            <span
+              className="grid h-9 w-9 place-items-center rounded-md font-display text-sm font-bold text-neon-pink text-glow-pink animate-neon-pulse"
+              style={{
+                border: '1px solid color-mix(in oklab, var(--neon-pink) 60%, transparent)',
+              }}
+            >
+              {initials}
+            </span>
+            <span
+              className="font-display text-sm font-semibold uppercase tracking-[0.25em]"
+              style={{ color: 'color-mix(in oklab, var(--fg) 90%, transparent)' }}
+            >
+              {name ?? handle ?? 'Portfolio'}
+              <span className="text-neon-cyan">.dev</span>
+            </span>
+          </div>
+          <p
+            className="mt-3 max-w-xs"
+            style={{ color: 'color-mix(in oklab, var(--fg) 65%, transparent)' }}
+          >
+            Architecting neon-lit web experiences at the edge of the grid.
+          </p>
+        </div>
+
+        {/* Col 2: Quick Links */}
+        <div>
+          <div
+            className="font-display text-sm font-bold uppercase tracking-widest text-neon-cyan"
+          >
+            Quick Links
+          </div>
+          <ul className="mt-3 grid grid-cols-2 gap-1.5">
+            {quickLinks.map((l) => (
+              <li key={l.id}>
+                <a
+                  href={`#${l.id}`}
+                  className="font-mono-retro text-base transition-colors hover:text-neon-pink"
+                  style={{
+                    color: 'color-mix(in oklab, var(--fg) 75%, transparent)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  &gt; {l.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Col 3: Channels */}
+        <div>
+          <div
+            className="font-display text-sm font-bold uppercase tracking-widest text-neon-cyan"
+          >
+            Channels
+          </div>
+          <div className="mt-3 flex gap-2.5">
+            {socials.map(({ label, href }) => (
+              <a
+                key={label}
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={label}
+                className="grid h-10 w-10 place-items-center rounded-full transition-all hover:border-neon-pink hover:text-neon-pink hover:shadow-neon-pink"
+                style={{
+                  border: '1px solid color-mix(in oklab, var(--neon-cyan) 30%, transparent)',
+                  color: 'color-mix(in oklab, var(--fg) 80%, transparent)',
+                  textDecoration: 'none',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                {label.slice(0, 2)}
+              </a>
+            ))}
+          </div>
+          {emailPublic ? (
+            <p
+              className="mt-4 font-mono-retro text-base"
+              style={{ color: 'color-mix(in oklab, var(--fg) 55%, transparent)' }}
+            >
+              {emailPublic}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Copyright bar */}
+      <div
+        className="mx-auto mt-10 max-w-6xl border-t pt-5 flex flex-col gap-2 sm:flex-row items-center justify-between"
+        style={{ borderColor: 'color-mix(in oklab, var(--neon-purple) 20%, transparent)' }}
+      >
+        <p
+          className="font-mono-retro text-base"
+          style={{ color: 'color-mix(in oklab, var(--fg) 55%, transparent)' }}
+        >
+          © {year}{name ? ` ${name}` : ''}. All signals reserved.
+        </p>
+        <p
+          className="font-mono-retro text-base"
+          style={{ color: 'color-mix(in oklab, var(--fg) 40%, transparent)' }}
+        >
+          {'// crafted with neon & coffee'}
+        </p>
+
+        {portfolioId ? <ReportDialog portfolioId={portfolioId} /> : null}
+      </div>
+    </footer>
+  );
+}

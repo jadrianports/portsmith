@@ -382,6 +382,74 @@
 }
 
 /* ============================================================================
+ * PROJECTS GRID — responsive 1 → 2 → 3 column layout (sm: 2 cols, lg: 3 cols).
+ * Used by projects.tsx and services.tsx (faithful to the export's grid layout).
+ * ========================================================================== */
+@media (min-width: 640px) {
+  .tmpl-edgerunner-v2 .tmpl-projects-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .tmpl-edgerunner-v2 .tmpl-projects-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ============================================================================
+ * FOOTER 3-COL GRID — stacks to 1 col on mobile, upgrades to 3 cols on md+.
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .tmpl-footer-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+@media (min-width: 768px) {
+  .tmpl-edgerunner-v2 .tmpl-footer-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 40px;
+    align-items: start;
+  }
+}
+
+/* ============================================================================
+ * FOOTER link hover states
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .hover\:text-neon-pink:hover,
+.tmpl-edgerunner-v2 a:hover.hover\:text-neon-pink {
+  color: var(--neon-pink);
+}
+
+/* ============================================================================
+ * PROJECT LINK hover — neon-cyan glow on hover
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .tmpl-project-link:hover {
+  color: var(--neon-cyan);
+  text-shadow: 0 0 10px color-mix(in oklab, var(--neon-cyan) 50%, transparent);
+}
+
+/* ============================================================================
+ * GLOW CARD hover shadows — the transition is set inline; these provide the hover value.
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .group:hover .group-hover\:text-neon-pink {
+  color: var(--neon-pink);
+}
+
+/* ============================================================================
+ * MODAL close button hover
+ * ========================================================================== */
+.tmpl-edgerunner-v2 button.absolute.right-4.top-4:hover {
+  color: var(--neon-pink);
+}
+
+/* ============================================================================
+ * Services CTA button hover
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .group:hover .group-hover\:translate-x-1 {
+  transform: translateX(4px);
+}
+
+/* ============================================================================
  * REDUCED-MOTION CONTRACT — zeroes all animation/transition
  * ========================================================================== */
 @media (prefers-reduced-motion: reduce) {

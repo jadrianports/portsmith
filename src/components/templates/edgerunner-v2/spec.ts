@@ -1,10 +1,10 @@
 /**
- * Local template spec for the `edgerunner-v2` template.
+ * Template spec for the `edgerunner-v2` template.
  *
- * For NOW: only `hero` is supported (verified first before expanding).
- * Other sections supported:false — we add them after the hero is verified.
- *
- * Do NOT re-declare `TemplateSpec` here — it stays defined once in `minimal/spec.ts`.
+ * hero, about, experience, projects, skills, services, contact — all supported.
+ * metrics — folded into About (stats grid), so supported:false here.
+ * blog_preview, testimonials — not rendered by this template.
+ * footer is chrome — not a section type.
  */
 export const edgerunnerV2Spec = {
   sections: {
@@ -12,13 +12,35 @@ export const edgerunnerV2Spec = {
       supported: true,
       fields: ['heading', 'subheading', 'cta_text', 'cta_url', 'background_image'],
     },
-    about: { supported: false, fields: [] },
-    metrics: { supported: false, fields: [] },
-    experience: { supported: false, fields: [] },
-    projects: { supported: false, fields: [] },
-    skills: { supported: false, fields: [] },
-    contact: { supported: false, fields: [] },
-    services: { supported: false, fields: [] },
+    about: {
+      supported: true,
+      fields: ['bio', 'avatar', 'avatar_alt'],
+    },
+    metrics: {
+      // Folded into About's stats grid by index.tsx; not rendered as its own section.
+      supported: false,
+      fields: [],
+    },
+    experience: {
+      supported: true,
+      fields: ['heading', 'subheading', 'items'],
+    },
+    projects: {
+      supported: true,
+      fields: ['heading', 'subheading', 'items'],
+    },
+    skills: {
+      supported: true,
+      fields: ['heading', 'subheading', 'groups'],
+    },
+    services: {
+      supported: true,
+      fields: ['heading', 'subheading', 'items'],
+    },
+    contact: {
+      supported: true,
+      fields: ['heading', 'subheading'],
+    },
     blog_preview: { supported: false, fields: [] },
   },
   color_presets: ['default'],
