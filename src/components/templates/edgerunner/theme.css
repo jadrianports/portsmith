@@ -504,6 +504,50 @@
 }
 
 /* ============================================================================
+ * GlowCard hover glows (glow-card.tsx). The outer wrapper carries `.tmpl-glow-card`
+ * + `data-accent`; the box-shadow transition is set inline; this provides the hover
+ * value. Hover glows are NOT motion — reduced-motion-exempt (like tmpl-project-card).
+ * ========================================================================== */
+.tmpl-edgerunner .tmpl-glow-card[data-accent='pink']:hover {
+  box-shadow: 0 0 22px -6px color-mix(in oklab, var(--neon-pink) 55%, transparent);
+}
+.tmpl-edgerunner .tmpl-glow-card[data-accent='cyan']:hover {
+  box-shadow: 0 0 22px -6px color-mix(in oklab, var(--neon-cyan) 55%, transparent);
+}
+.tmpl-edgerunner .tmpl-glow-card[data-accent='purple']:hover {
+  box-shadow: 0 0 22px -6px color-mix(in oklab, var(--neon-purple) 55%, transparent);
+}
+
+/* ============================================================================
+ * NeonDivider — the two gradient rules flanking the center glyph (neon-divider.tsx).
+ * The motion scale-in animates scaleX; these set up the origin and base style so the
+ * CSS degraded state (no JS) shows a full-width rule at rest. The glyph uses the mono
+ * face + neon-cyan glow. DECORATIVE — aria-hidden="true" in the component.
+ * ========================================================================== */
+.tmpl-edgerunner .tmpl-divider-rule-left {
+  height: 1px;
+  flex: 1;
+  transform-origin: right center;
+  background-image: linear-gradient(to right, transparent, var(--neon-pink), var(--neon-purple), transparent);
+  box-shadow: 0 0 8px var(--neon-pink);
+}
+.tmpl-edgerunner .tmpl-divider-rule-right {
+  height: 1px;
+  flex: 1;
+  transform-origin: left center;
+  background-image: linear-gradient(to right, transparent, var(--neon-cyan), var(--neon-purple), transparent);
+  box-shadow: 0 0 8px var(--neon-cyan);
+}
+.tmpl-edgerunner .tmpl-divider-glyph {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--neon-cyan);
+  text-shadow:
+    0 0 8px var(--neon-cyan),
+    0 0 24px color-mix(in oklab, var(--neon-cyan) 50%, transparent);
+}
+
+/* ============================================================================
  * Reduced-motion contract (hard requirement — UI-SPEC §Motion / D-07).
  * Under `prefers-reduced-motion: reduce`, ALL animation/transition inside the
  * template is zeroed — including the synthwave CSS layer (flicker/sun/grid/scanline),
