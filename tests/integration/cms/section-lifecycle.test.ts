@@ -134,7 +134,7 @@ describe('13.1-01 — section add/remove lifecycle under RLS (owner vs cross-ten
     expect(data).toBeNull();
   });
 
-  it('CROSS-TENANT (T-13.1-01-XT): B’s DELETE of A’s section changes 0 rows (RLS USING)', async () => {
+  it('CROSS-TENANT (T-13.1-01-XT): B’s DELETE of A’s section changes 0 rows (RLS USING) — WR-03 the action maps that to { ok:false }', async () => {
     // Seed an `about` row state for A (the bootstrap already provisions it). Capture
     // its id, then have B attempt to DELETE it. The USING clause filters the row out
     // for B → a 0-row no-op (NOT a thrown rejection — the RLS asymmetry).
@@ -146,7 +146,18 @@ describe('13.1-01 — section add/remove lifecycle under RLS (owner vs cross-ten
       .single();
     const aboutId = aboutRow!.id as string;
 
-    await ctx.clientB.from('sections').delete().eq('id', aboutId);
+    // WR-03: the cross-tenant DELETE uses the SAME `.delete().eq(id).select('id')`
+    // the corrected `removeSectionAction` now uses. RLS filters the row out for B, so
+    // the affected-row set is EMPTY (NOT an error) — which the action maps to a generic
+    // { ok:false } instead of the old phantom { ok:true } that let the optimistic shell
+    // drop a row the server never deleted. This pins the mechanism the action relies on.
+    const { data: deletedRows, error: delErr } = await ctx.clientB
+      .from('sections')
+      .delete()
+      .eq('id', aboutId)
+      .select('id');
+    expect(delErr).toBeNull(); // RLS no-op, not a thrown rejection (the asymmetry)
+    expect(deletedRows ?? []).toHaveLength(0); // 0 affected rows ⇒ action returns { ok:false }
 
     // A's `about` row STILL exists — B could not delete cross-tenant.
     const { data: after } = await admin
