@@ -1,0 +1,400 @@
+/*
+ * Scoped theme tokens for the `edgerunner-v2` template — "Edgerunner V2"
+ * (faithful synthwave transcription — bar-for-bar from lovable-exports/synthwave-founder/).
+ *
+ * KEY DIFFERENCE FROM `edgerunner`: this template keeps the EXACT class names from the
+ * Lovable export (text-glow-pink, holo-panel, animate-flicker, font-display, font-mono-retro,
+ * bg-gradient-neon, shadow-neon-pink, etc.) as SCOPED plain classes under `.tmpl-edgerunner-v2`,
+ * rather than renaming them to `tmpl-*` prefixed utilities.
+ *
+ * TWO-LAYER UI ISOLATION (D-17, SHARED-D, CONTRACT §3):
+ *   - NO Tailwind at-rule theme block.
+ *   - NO reference to chrome color custom properties.
+ *   - NO chrome UI font.
+ *   - All tokens scoped to `.tmpl-edgerunner-v2`.
+ *
+ * DARK-ONLY: data-template-theme="dark" hardcoded. No light block.
+ * REQUIRED_TOKENS: all 18 defined. All neon oklch values VERBATIM from styles.css:103-155.
+ */
+
+/* ============================================================================
+ * SCOPED ROOT TOKENS — scoped to .tmpl-edgerunner-v2
+ * All oklch values VERBATIM from lovable-exports/synthwave-founder/src/styles.css:103-155
+ * ========================================================================== */
+.tmpl-edgerunner-v2 {
+  /* ── Template-private neon extras (EXACT values from styles.css:107-113) ── */
+  --neon-pink: oklch(0.72 0.30 350);
+  --neon-magenta: oklch(0.65 0.32 330);
+  --neon-cyan: oklch(0.85 0.18 200);
+  --neon-purple: oklch(0.62 0.28 305);
+  --neon-yellow: oklch(0.92 0.18 95);
+  --bg-deep: oklch(0.10 0.04 285);
+
+  /* Alias for shared ContactForm island */
+  --accent-cyan: var(--neon-cyan);
+
+  /* Gradient tokens VERBATIM from styles.css:149-154 */
+  --gradient-neon: linear-gradient(135deg, var(--neon-pink), var(--neon-purple), var(--neon-cyan));
+  --gradient-sky: linear-gradient(180deg, oklch(0.16 0.10 305) 0%, oklch(0.20 0.18 340) 45%, oklch(0.40 0.25 25) 75%, oklch(0.65 0.22 60) 100%);
+  --gradient-card: linear-gradient(145deg, color-mix(in oklab, var(--neon-purple) 8%, transparent), color-mix(in oklab, var(--neon-cyan) 4%, transparent));
+
+  /* Shadow tokens VERBATIM from styles.css:152-154 */
+  --shadow-neon-pink: 0 0 12px var(--neon-pink), 0 0 32px color-mix(in oklab, var(--neon-pink) 40%, transparent);
+  --shadow-neon-cyan: 0 0 12px var(--neon-cyan), 0 0 32px color-mix(in oklab, var(--neon-cyan) 40%, transparent);
+  --shadow-neon-purple: 0 0 12px var(--neon-purple), 0 0 32px color-mix(in oklab, var(--neon-purple) 40%, transparent);
+
+  /* Also expose as neon-gradient / sky-gradient aliases (for edgerunner compat) */
+  --neon-gradient: var(--gradient-neon);
+  --sky-gradient: var(--gradient-sky);
+
+  /* ── 18 REQUIRED_TOKENS ── */
+
+  /* Surfaces (from styles.css background=oklch(0.10 0.04 285), card=oklch(0.14 0.05 285)) */
+  --bg: oklch(0.10 0.04 285);
+  --surface: oklch(0.14 0.05 285);
+  --surface-muted: oklch(0.18 0.06 285);
+
+  /* Foreground (from styles.css foreground=oklch(0.97 0.02 320)) */
+  --fg: oklch(0.97 0.02 320);
+  --muted-fg: oklch(0.72 0.06 300);
+
+  /* Borders (from styles.css border=oklch(0.30 0.10 300 / 0.4)) */
+  --border: oklch(0.30 0.10 300 / 0.4);
+  --border-strong: oklch(0.45 0.14 300 / 0.6);
+
+  /* Accents */
+  --accent: var(--neon-pink);
+  --ring: var(--neon-pink);
+  --success: oklch(0.80 0.18 160);
+  --destructive: oklch(0.65 0.28 25);
+
+  /* Radius (from styles.css radius=0.75rem) */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-full: 9999px;
+
+  /* Modal tokens (for shared ReportDialog / project modal islands) */
+  --tmpl-modal-hairline: var(--gradient-neon);
+  --tmpl-modal-backdrop: radial-gradient(
+      120% 80% at 50% 120%,
+      color-mix(in oklab, var(--neon-pink) 10%, transparent) 0%,
+      color-mix(in oklab, var(--neon-cyan) 6%, transparent) 35%,
+      transparent 70%
+    ),
+    color-mix(in srgb, var(--bg) 82%, transparent);
+  --tmpl-modal-shadow: 0 0 0 1px var(--accent),
+    0 18px 44px -22px color-mix(in oklab, var(--neon-pink) 45%, transparent),
+    0 0 60px -34px color-mix(in oklab, var(--neon-cyan) 55%, transparent);
+  --tmpl-modal-cta-shadow: 0 8px 28px -12px
+    color-mix(in oklab, var(--neon-pink) 50%, transparent);
+
+  /* Full-bleed canvas */
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+
+  /* Body font — Space Grotesk via next/font variable --font-body */
+  font-family: var(--font-body);
+}
+
+/* ============================================================================
+ * PAGE-WIDE AMBIENT BACKGROUND
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .tmpl-ambient-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      ellipse 60vw 50vh at 15% 20%,
+      color-mix(in oklab, var(--neon-pink) 15%, transparent) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 55vw 55vh at 75% 50%,
+      color-mix(in oklab, var(--neon-purple) 14%, transparent) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 50vw 45vh at 40% 85%,
+      color-mix(in oklab, var(--neon-cyan) 12%, transparent) 0%,
+      transparent 70%
+    );
+}
+
+/* Ensure main content renders above the ambient layer */
+.tmpl-edgerunner-v2 > main,
+.tmpl-edgerunner-v2 > nav,
+.tmpl-edgerunner-v2 > footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================================
+ * BASE ELEMENT STYLING
+ * ========================================================================== */
+.tmpl-edgerunner-v2 ::selection {
+  background: var(--neon-pink);
+  color: var(--bg-deep);
+}
+
+/* ============================================================================
+ * SCOPED UTILITY CLASSES — VERBATIM from styles.css @utility directives
+ * Ported as plain scoped CSS classes under .tmpl-edgerunner-v2 (not @utility).
+ * JSX keeps the EXACT original class names.
+ * ========================================================================== */
+
+/* text-glow-pink / text-glow-cyan / text-glow-purple VERBATIM from styles.css:174-176 */
+.tmpl-edgerunner-v2 .text-glow-pink {
+  text-shadow: 0 0 8px var(--neon-pink), 0 0 24px color-mix(in oklab, var(--neon-pink) 50%, transparent);
+}
+.tmpl-edgerunner-v2 .text-glow-cyan {
+  text-shadow: 0 0 8px var(--neon-cyan), 0 0 24px color-mix(in oklab, var(--neon-cyan) 50%, transparent);
+}
+.tmpl-edgerunner-v2 .text-glow-purple {
+  text-shadow: 0 0 8px var(--neon-purple), 0 0 24px color-mix(in oklab, var(--neon-purple) 50%, transparent);
+}
+
+/* shadow-neon-pink / shadow-neon-cyan / shadow-neon-purple VERBATIM from styles.css:177-179 */
+.tmpl-edgerunner-v2 .shadow-neon-pink {
+  box-shadow: var(--shadow-neon-pink);
+}
+.tmpl-edgerunner-v2 .shadow-neon-cyan {
+  box-shadow: var(--shadow-neon-cyan);
+}
+.tmpl-edgerunner-v2 .shadow-neon-purple {
+  box-shadow: var(--shadow-neon-purple);
+}
+
+/* bg-gradient-neon / bg-gradient-sky VERBATIM from styles.css:180-181 */
+.tmpl-edgerunner-v2 .bg-gradient-neon {
+  background-image: var(--gradient-neon);
+}
+.tmpl-edgerunner-v2 .bg-gradient-sky {
+  background-image: var(--gradient-sky);
+}
+
+/* font-display / font-mono-retro VERBATIM from styles.css:182-183 */
+.tmpl-edgerunner-v2 .font-display {
+  font-family: var(--font-display);
+}
+.tmpl-edgerunner-v2 .font-mono-retro {
+  font-family: var(--font-mono);
+}
+
+/* holo-panel VERBATIM from styles.css:185-191 */
+.tmpl-edgerunner-v2 .holo-panel {
+  background: linear-gradient(145deg,
+    color-mix(in oklab, var(--neon-purple) 10%, transparent),
+    color-mix(in oklab, var(--neon-cyan) 5%, transparent));
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in oklab, var(--neon-cyan) 30%, transparent);
+}
+
+/* animate-flicker — uses the scoped keyframe below */
+.tmpl-edgerunner-v2 .animate-flicker {
+  animation: tmpl-edgerunner-v2-flicker 4s linear infinite;
+}
+
+/* animate-neon-pulse */
+.tmpl-edgerunner-v2 .animate-neon-pulse {
+  animation: tmpl-edgerunner-v2-neon-pulse 2.4s ease-in-out infinite;
+}
+
+/* animate-float */
+.tmpl-edgerunner-v2 .animate-float {
+  animation: tmpl-edgerunner-v2-float 6s ease-in-out infinite;
+}
+
+/* animate-spin-slow */
+.tmpl-edgerunner-v2 .animate-spin-slow {
+  animation: tmpl-edgerunner-v2-spin 18s linear infinite;
+}
+
+/* ============================================================================
+ * KEYFRAMES — ALL prefixed tmpl-edgerunner-v2-*
+ * Source values VERBATIM from lovable-exports/synthwave-founder/src/styles.css:75-101
+ * ========================================================================== */
+
+/* flicker VERBATIM from styles.css:75-85 */
+@keyframes tmpl-edgerunner-v2-flicker {
+  0%, 18%, 22%, 25%, 53%, 57%, 100% {
+    opacity: 1;
+    text-shadow:
+      0 0 4px var(--neon-pink),
+      0 0 11px var(--neon-pink),
+      0 0 19px var(--neon-pink),
+      0 0 40px var(--neon-magenta);
+  }
+  20%, 24%, 55% { opacity: 0.6; text-shadow: none; }
+}
+
+/* neon-pulse VERBATIM from styles.css:86-89 */
+@keyframes tmpl-edgerunner-v2-neon-pulse {
+  0%, 100% { box-shadow: 0 0 12px var(--neon-pink), 0 0 28px color-mix(in oklab, var(--neon-pink) 40%, transparent); }
+  50% { box-shadow: 0 0 22px var(--neon-cyan), 0 0 48px color-mix(in oklab, var(--neon-cyan) 50%, transparent); }
+}
+
+/* float VERBATIM from styles.css:90-93 */
+@keyframes tmpl-edgerunner-v2-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-14px) rotate(1.5deg); }
+}
+
+/* grid-scroll VERBATIM from styles.css:94-97 */
+@keyframes tmpl-edgerunner-v2-grid-scroll {
+  from { transform: translateY(0); }
+  to { transform: translateY(60px); }
+}
+
+/* scanline VERBATIM from styles.css:98-101 */
+@keyframes tmpl-edgerunner-v2-scanline {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(100%); }
+}
+
+/* spin — generic rotation */
+@keyframes tmpl-edgerunner-v2-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* marquee */
+@keyframes tmpl-edgerunner-v2-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* PowerOnFlash */
+@keyframes tmpl-edgerunner-v2-poweron {
+  0% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+/* ============================================================================
+ * SHELL — centered content column
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .tmpl-shell {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.5rem, 5vw, 4rem);
+}
+
+/* ============================================================================
+ * LOAD-REVEAL + SCROLL-REVEAL hooks (kit compatibility)
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .tmpl-load-reveal {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+/* ============================================================================
+ * CONTACT SECTION HOOKS (shared ContactForm island compatibility)
+ * Copied from edgerunner/theme.css
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .tmpl-contact-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+}
+@media (min-width: 1024px) {
+  .tmpl-edgerunner-v2 .tmpl-contact-grid {
+    grid-template-columns: 1fr 1.4fr;
+    align-items: start;
+  }
+}
+
+.tmpl-edgerunner-v2 .tmpl-contact-spin-border {
+  position: relative;
+  padding: 2px;
+  isolation: isolate;
+  box-shadow:
+    0 0 24px -4px color-mix(in oklab, var(--neon-pink) 55%, transparent),
+    0 0 48px -16px color-mix(in oklab, var(--neon-cyan) 45%, transparent);
+}
+.tmpl-edgerunner-v2 .tmpl-contact-spin-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    var(--neon-pink),
+    var(--neon-purple),
+    var(--neon-cyan),
+    var(--neon-pink)
+  );
+  opacity: 1;
+  z-index: 0;
+  animation: tmpl-edgerunner-v2-spin 4s linear infinite;
+}
+.tmpl-edgerunner-v2 .tmpl-contact-spin-border::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    var(--neon-pink),
+    var(--neon-purple),
+    var(--neon-cyan),
+    var(--neon-pink)
+  );
+  filter: blur(12px);
+  opacity: 0.5;
+  z-index: -1;
+  animation: tmpl-edgerunner-v2-spin 4s linear infinite;
+}
+
+.tmpl-edgerunner-v2 .tmpl-contact-field {
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.tmpl-edgerunner-v2 .tmpl-contact-field:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tmpl-edgerunner-v2 .tmpl-contact-spinner {
+    animation: tmpl-edgerunner-v2-spin 0.8s linear infinite;
+  }
+  .tmpl-edgerunner-v2 .tmpl-contact-success-pulse {
+    animation: tmpl-edgerunner-v2-neon-pulse 2.4s ease-in-out infinite;
+  }
+}
+
+/* ============================================================================
+ * HERO social icon hover (matches export's hover:border-neon-pink hover:text-neon-pink hover:shadow-neon-pink)
+ * ========================================================================== */
+.tmpl-edgerunner-v2 .tmpl-social-icon-btn:hover {
+  border-color: var(--neon-pink);
+  color: var(--neon-pink);
+  box-shadow: 0 0 14px -4px color-mix(in oklab, var(--neon-pink) 55%, transparent);
+}
+
+/* ============================================================================
+ * REDUCED-MOTION CONTRACT — zeroes all animation/transition
+ * ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .tmpl-edgerunner-v2 *,
+  .tmpl-edgerunner-v2 *::before,
+  .tmpl-edgerunner-v2 *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  .tmpl-edgerunner-v2 .tmpl-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

@@ -25,6 +25,7 @@ import { minimalSpec, type TemplateSpec } from './minimal/spec';
 import { editorialSpec } from './editorial/spec';
 import { auroraSpec } from './aurora/spec';
 import { edgerunnerSpec } from './edgerunner/spec';
+import { edgerunnerV2Spec } from './edgerunner-v2/spec';
 
 /**
  * The slug → template map. The lazy import yields the template's default export
@@ -54,6 +55,10 @@ export const templateRegistry: Record<string, ComponentType<{ data: PortfolioDat
   // would be a build error. The WebGL `{ ssr: false }` lives DEEPER — inside
   // `edgerunner/HoloShape.tsx` (a Client Component), the only sanctioned place for it.
   edgerunner: dynamic(() => import('./edgerunner')),
+  // edgerunner-v2: bar-for-bar transcription of the synthwave Lovable export using
+  // the export's EXACT class names (text-glow-pink, holo-panel, font-mono-retro, etc.)
+  // scoped under .tmpl-edgerunner-v2 — verified hero-first before full section build.
+  'edgerunner-v2': dynamic(() => import('./edgerunner-v2')),
   // Three.js / CLIENT-only templates (later) live inside a Client Component and may
   // use `{ ssr: false }` THERE — never on a Server-Component template entry above.
 };
@@ -91,6 +96,8 @@ const TEMPLATE_UUIDS = {
   // to minimal (T-13-05-UUID). The migration row id and this literal are the single
   // load-bearing pin.
   edgerunner: '00000000-0000-4000-8000-000000000004',
+  // edgerunner-v2: bar-for-bar faithful clone (UUID …0005)
+  'edgerunner-v2': '00000000-0000-4000-8000-000000000005',
 } as const;
 
 /** The inverse map (UUID → slug), derived from {@link TEMPLATE_UUIDS}. */
@@ -129,6 +136,7 @@ export const specRegistry: Record<string, TemplateSpec> = {
   editorial: editorialSpec,
   aurora: auroraSpec,
   edgerunner: edgerunnerSpec,
+  'edgerunner-v2': edgerunnerV2Spec,
 };
 
 /**
