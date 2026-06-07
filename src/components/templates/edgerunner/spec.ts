@@ -31,7 +31,7 @@ export const edgerunnerSpec = {
     metrics: { supported: true, fields: ['heading', 'subheading', 'items'] },
     experience: {
       supported: true,
-      fields: ['company', 'role', 'start_date', 'end_date', 'description'],
+      fields: ['company', 'role', 'start_date', 'end_date', 'description', 'highlights'],
     },
     projects: {
       supported: true,

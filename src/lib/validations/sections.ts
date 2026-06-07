@@ -125,6 +125,10 @@ export const experienceItemSchema = z.object({
     })
     .optional(),
   description: z.string().max(1000),
+  // Optional bullet-point highlights for rich templates (edgerunner faithful-clone).
+  // max(8) caps the list to a readable length; each entry is trimmed, non-empty, ≤200 chars.
+  // Additive/optional — no Postgres migration (content is schemaless JSONB, CMS-08).
+  highlights: z.array(z.string().trim().min(1).max(200)).max(8).optional(),
 });
 
 // ---------------------------------------------------------------------------
