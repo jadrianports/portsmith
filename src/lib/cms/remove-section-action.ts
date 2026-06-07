@@ -95,15 +95,25 @@ export async function removeSectionAction(
   const priorContent = (priorRow as { content?: unknown } | null)?.content ?? null;
 
   // 3) DELETE the row under RLS. The `sections own all` USING clause + .eq('id', …)
-  //    scope it to the owner; a cross-tenant target changes 0 rows (T-13.1-02-XT-DEL).
-  //    NEVER the service-role client for the row op.
-  const { error } = await supabase
+  //    scope it to the owner; a cross-tenant / missing target changes 0 rows
+  //    (T-13.1-02-XT-DEL). NEVER the service-role client for the row op. WR-03:
+  //    request the affected rows (`.select('id')`) so a 0-row delete is NOT reported
+  //    as a successful remove — an empty result is a generic failure (enumeration-
+  //    safe: the message never reveals whether the row was missing vs. owned by
+  //    another tenant; the RLS boundary held either way). The media-free leg + the
+  //    revalidate below are UNREACHABLE on a 0-row delete, so no spurious Storage
+  //    deletes fire and the optimistic shell is never told a phantom remove succeeded.
+  const { data: deletedRows, error } = await supabase
     .from('sections')
     .delete()
-    .eq('id', sectionId);
+    .eq('id', sectionId)
+    .select('id');
   if (error) return { ok: false, error: REMOVE_FAILED };
+  if (!deletedRows || deletedRows.length === 0) {
+    return { ok: false, error: REMOVE_FAILED };
+  }
 
-  // 4) D-05 media free — runs ONLY AFTER the DELETE succeeds. Diff the prior content
+  // 4) D-05 media free — runs ONLY AFTER the DELETE succeeds (1+ rows). Diff the prior content
   //    against EMPTY next-content so EVERY referenced image drops (section-level +
   //    gallery, via the 13.1-02 IMAGE_FIELDS extension). `deleteStorageObject` is the
   //    ONLY service-role use here; `sub` is the server-verified subject (never client-

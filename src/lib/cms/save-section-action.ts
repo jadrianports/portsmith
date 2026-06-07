@@ -160,13 +160,21 @@ export async function saveSectionAction(input: SaveSectionInput): Promise<SaveSe
   const priorContent = (priorRow as { content?: unknown } | null)?.content ?? null;
 
   // 3b) UPDATE under RLS. The sections.own_all policy + .eq('id', sectionId) scope the
-  //     UPDATE to the owner; a cross-tenant target silently changes 0 rows (T-04-03b).
-  //     Touch ONLY content — the history + updated_at triggers fire automatically.
-  const { error } = await supabase
+  //     UPDATE to the owner; a cross-tenant / missing target silently changes 0 rows
+  //     (T-04-03b). Touch ONLY content — the history + updated_at triggers fire
+  //     automatically. WR-03: request the affected rows (`.select('id')`) so a 0-row
+  //     write is NOT reported as a successful save — an empty result is a generic
+  //     failure (enumeration-safe: the message never reveals whether the row was
+  //     missing vs. owned by another tenant; the RLS boundary still held either way).
+  const { data: updatedRows, error } = await supabase
     .from('sections')
     .update({ content: parsed })
-    .eq('id', input.sectionId);
+    .eq('id', input.sectionId)
+    .select('id');
   if (error) return { ok: false, error: SAVE_FAILED };
+  if (!updatedRows || updatedRows.length === 0) {
+    return { ok: false, error: SAVE_FAILED };
+  }
 
   // 3c) WR-03 SERVER-RECOMPUTED orphan-delete leg (D-09 / D-10 / MEDIA-04) — runs ONLY
   //     AFTER the section UPDATE is confirmed (WR-02), so a failed save never deletes an
