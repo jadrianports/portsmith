@@ -55,6 +55,15 @@ export const ALLOWED_IMPORT_SPECIFIERS = [
   // Next primitives a template legitimately uses.
   'next/image',
   'next/dynamic',
+  // Next ROUTING primitives — the dedicated-page template class (D-P11 dedicated-pages
+  // capability) uses these: a navbar/footer that links to `/[username]/<page>`, and a
+  // command palette / sub-page that navigates via the router (e.g. edgerunner-v2's
+  // /blog + /services pages). Single-scroll templates never needed them. Both are inert
+  // Next primitives (no secret or external-origin surface), so allowlisting them SUPPORTS
+  // the new capability without weakening the security posture (D-P10-03: the added line
+  // IS the reviewable change).
+  'next/link',
+  'next/navigation',
   // The React runtime.
   'react',
   'react-dom',

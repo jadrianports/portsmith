@@ -80,6 +80,10 @@ export const projectItemSchema = z
     image: urlOrEmptyOptional,
     image_alt: z.string().optional(),
     tech_stack: z.array(z.string()).max(10),
+    // Category tag pills (edgerunner faithful-clone — rendered ABOVE tech pills on each
+    // card). Additive/optional — no Postgres migration (content is schemaless JSONB, CMS-08).
+    // Max 6 tags per item, each trimmed non-empty string ≤40 chars.
+    tags: z.array(z.string().trim().min(1).max(40)).max(6).optional(),
     live_url: urlOrEmptyOptional,
     repo_url: urlOrEmptyOptional,
   })
@@ -125,6 +129,10 @@ export const experienceItemSchema = z.object({
     })
     .optional(),
   description: z.string().max(1000),
+  // Optional bullet-point highlights for rich templates (edgerunner faithful-clone).
+  // max(8) caps the list to a readable length; each entry is trimmed, non-empty, ≤200 chars.
+  // Additive/optional — no Postgres migration (content is schemaless JSONB, CMS-08).
+  highlights: z.array(z.string().trim().min(1).max(200)).max(8).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -188,9 +196,28 @@ export const contactContentSchema = z.object({
   email_public: z.email().or(z.literal('')).optional(),
 });
 
+/**
+ * BlogPreviewPostItem — one teaser card. `accent` drives the card's border+title color.
+ * All fields except `id` and `slug` are optional so incomplete drafts pass the gate.
+ * Additive/optional on schemaless JSONB — NO Postgres migration (CMS-08).
+ */
+export const blogPreviewPostItemSchema = z.object({
+  id: z.string(),
+  slug: z.string().trim().min(1).max(80),
+  title: z.string().trim().min(1).max(150),
+  excerpt: z.string().trim().max(500).optional(),
+  date: z.string().trim().max(40).optional(),
+  reading_time: z.string().trim().max(40).optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(6).optional(),
+  accent: z.enum(['pink', 'cyan', 'purple']).optional(),
+});
+
 export const blogPreviewContentSchema = z.object({
   heading: z.string().max(100),
   post_count: z.number().int(),
+  // Optional data-driven items array (edgerunner-v2 TRANSMISSIONS section).
+  // Additive — no migration; older records without `items` pass the gate unchanged.
+  items: z.array(blogPreviewPostItemSchema).max(12).optional(),
 });
 
 /**
@@ -426,6 +453,7 @@ export type ProjectsContent = z.infer<typeof projectsContentSchema>;
 export type TestimonialsContent = z.infer<typeof testimonialsContentSchema>;
 export type ExperienceContent = z.infer<typeof experienceContentSchema>;
 export type ContactContent = z.infer<typeof contactContentSchema>;
+export type BlogPreviewPostItem = z.infer<typeof blogPreviewPostItemSchema>;
 export type BlogPreviewContent = z.infer<typeof blogPreviewContentSchema>;
 export type SkillsContent = z.infer<typeof skillsContentSchema>;
 

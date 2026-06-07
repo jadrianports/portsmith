@@ -71,6 +71,13 @@ export const templateMeta: Record<string, TemplateMeta> = {
     thumbnailAlt:
       'Edgerunner template preview — dark synthwave canvas with neon magenta and cyan accents, a glowing WebGL shape, and animated skill bars',
   },
+  'edgerunner-v2': {
+    name: 'Edgerunner V2',
+    description:
+      'A faithful bar-for-bar transcription of the synthwave Lovable export with exact motion values, neon glow utilities, and animated hero.',
+    thumbnailAlt:
+      'Edgerunner V2 template preview — dark synthwave canvas with neon pink and cyan accents, animated city backdrop, and terminal HUD',
+  },
 };
 
 /**
