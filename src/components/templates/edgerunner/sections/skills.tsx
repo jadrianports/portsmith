@@ -156,15 +156,20 @@ function SkillPill({
  * No JS, no hooks, no IntersectionObserver required.
  *
  * Center content: brand icon (if slug known) + name + level% label (monochrome, readable).
+ *
+ * `accentColor`: the group's CSS token string (e.g. `var(--neon-pink)`) — applied to
+ * both the progress-ring stroke and the level% label so each group has its own color.
  */
 function Gauge({
   name,
   iconSlug,
   level,
+  accentColor,
 }: {
   name: string;
   iconSlug: string | null;
   level: number;
+  accentColor: string;
 }) {
   const offset = C * (1 - level / 100);
 
@@ -194,13 +199,14 @@ function Gauge({
             strokeWidth="5"
           />
           {/* Progress arc — SSR/no-JS: strokeDashoffset={offset} (FILLED value).
-              CSS animation (tmpl-gauge-arc) plays C→offset on load as progressive enhancement. */}
+              CSS animation (tmpl-gauge-arc) plays C→offset on load as progressive enhancement.
+              stroke uses the group accent token (pink / cyan / purple) not a fixed color. */}
           <circle
             cx="40"
             cy="40"
             r={R}
             fill="none"
-            stroke="var(--neon-cyan)"
+            stroke={accentColor}
             strokeWidth="5"
             strokeLinecap="round"
             strokeDasharray={C}
@@ -208,8 +214,7 @@ function Gauge({
             transform="rotate(-90 40 40)"
             className="tmpl-gauge-arc"
             style={{
-              filter:
-                'drop-shadow(0 0 6px color-mix(in oklab, var(--neon-cyan) 70%, transparent))',
+              filter: `drop-shadow(0 0 6px color-mix(in oklab, ${accentColor} 70%, transparent))`,
               ['--gauge-c' as string]: String(C),
             }}
           />
@@ -252,9 +257,8 @@ function Gauge({
             fontFamily: 'var(--font-display)',
             fontSize: '12px',
             fontWeight: 700,
-            color: 'var(--neon-cyan)',
+            color: accentColor,
           }}
-          className="tmpl-glow-cyan"
         >
           {level}%
         </div>
@@ -407,10 +411,11 @@ export function Skills({ section }: SectionProps) {
           if (items.length === 0) return null;
           const groupLabel = present(group.label) ? group.label : null;
 
-          // Rotate accent across groups: cyan → pink → purple → cyan…
+          // Per-group accent cycling matches the reference: Frontend=pink, Backend=cyan,
+          // Database=purple, DevOps=pink, Design=cyan (cycle: pink → cyan → purple → …).
           const accents: Array<string> = [
-            'var(--neon-cyan)',
             'var(--neon-pink)',
+            'var(--neon-cyan)',
             'var(--neon-purple)',
           ];
           const accentColor = accents[gi % accents.length];
@@ -487,6 +492,7 @@ export function Skills({ section }: SectionProps) {
                       name={item.name}
                       iconSlug={slug}
                       level={level}
+                      accentColor={accentColor}
                     />
                   ) : (
                     // ── Pill fallback (items without a level) ───────────────
