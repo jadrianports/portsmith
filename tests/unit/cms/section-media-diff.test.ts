@@ -95,3 +95,53 @@ describe('serverDroppedItemImageUrls (WR-03 server delete-set diff)', () => {
     expect(serverDroppedItemImageUrls('hero', { items: [{ image: A }] }, null)).toEqual([]);
   });
 });
+
+/**
+ * 13.1-01 (Wave 0, Nyquist) — D-05 EXTENSION cases (RED until Plan 13.1-02 extends
+ * `IMAGE_FIELDS` / `imageUrlsOf`).
+ *
+ * RESEARCH Pitfall 1: removing an `about` / `hero` / `moodboard` section must FREE its
+ * media. Today `IMAGE_FIELDS` covers only `projects.image` / `testimonials.avatar` and
+ * `imageUrlsOf` walks ONLY `content.items[]` — so:
+ *   - the SECTION-LEVEL `about.avatar` and `hero.background_image` are INVISIBLE to the
+ *     diff (they are top-level content fields, NOT in `items[]`);
+ *   - `moodboard.items[].image` is in `items[]` but `moodboard` is not in the map.
+ * The section-delete media-free leg diffs against EMPTY next-content (`{}`) so EVERY
+ * referenced image drops. These cases pin the extension the remove action depends on.
+ *
+ * They are RED on today's tree (the helper returns [] for these types) and GREEN once
+ * Plan 13.1-02 adds the fields. The PRE-EXISTING item-image cases above stay green —
+ * the extension is ADDITIVE (the projects/testimonials behavior is unchanged).
+ */
+const ABOUT_AVATAR =
+  'https://stack.local/storage/v1/object/public/media/uid/avatar/about.webp';
+const HERO_BG =
+  'https://stack.local/storage/v1/object/public/media/uid/hero/bg.webp';
+const MB_IMG =
+  'https://stack.local/storage/v1/object/public/media/uid/moodboard/mb.webp';
+
+describe('serverDroppedItemImageUrls — D-05 section-level + moodboard extension (Plan 13.1-02)', () => {
+  it('about: deleting (diff vs {}) drops the SECTION-LEVEL avatar URL (not in items[])', () => {
+    // `about.avatar` lives at content.avatar — a top-level field, NOT content.items[].
+    const prior = { bio: 'About me', skills: [], avatar: ABOUT_AVATAR, avatar_alt: 'me' };
+    expect(serverDroppedItemImageUrls('about', prior, {})).toEqual([ABOUT_AVATAR]);
+  });
+
+  it('hero: deleting (diff vs {}) drops the SECTION-LEVEL background_image URL', () => {
+    const prior = { heading: 'Hi', background_image: HERO_BG };
+    expect(serverDroppedItemImageUrls('hero', prior, {})).toEqual([HERO_BG]);
+  });
+
+  it('moodboard: deleting (diff vs {}) drops the gallery item image URL (items[].image)', () => {
+    const prior = {
+      heading: 'Moodboard',
+      items: [{ id: 'm1', image: MB_IMG, image_alt: 'A swatch' }],
+    };
+    expect(serverDroppedItemImageUrls('moodboard', prior, {})).toEqual([MB_IMG]);
+  });
+
+  it('about: keeping the same avatar (prior === next) drops nothing (extension is diff-correct)', () => {
+    const content = { bio: 'x', skills: [], avatar: ABOUT_AVATAR, avatar_alt: 'me' };
+    expect(serverDroppedItemImageUrls('about', content, content)).toEqual([]);
+  });
+});

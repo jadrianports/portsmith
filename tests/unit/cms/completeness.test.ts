@@ -85,3 +85,56 @@ describe('ONB-01 — deriveCompleteness done/todo derivation (advisory)', () => 
     }
   });
 });
+
+/**
+ * 13.1-01 (Wave 0, Nyquist) — D-17 TEMPLATE-AWARE delta (RED until Plan 13.1-03
+ * extends `deriveCompleteness` to accept the active template's supported types).
+ *
+ * D-17: the checklist becomes template-aware — it only evaluates sections the active
+ * template RENDERS, so a user on `minimal` is never told they're "incomplete" for an
+ * empty section the template can't show. The new arg is the set of supported section
+ * types; section-typed checklist items for an UNSUPPORTED type are dropped.
+ *
+ * Backward-compatible contract: the supported-types arg is OPTIONAL — every PRE-
+ * EXISTING single-arg call above stays valid + green (when omitted, the full advisory
+ * list is returned, exactly today's behavior). These NEW cases pass the second arg and
+ * assert the template-aware filtering; they are RED on today's tree (the arg is ignored
+ * / does not exist) and GREEN once Plan 13.1-03 wires it.
+ *
+ * NOTE: this NEVER touches `isPublishReady` — that is the SEPARATE SAFE-04 gate (its
+ * contract is unchanged; D-17 is the advisory list only).
+ */
+describe('D-17 — deriveCompleteness is template-aware (only evaluates rendered types)', () => {
+  it('omits a section-typed item whose type the active template does NOT support', () => {
+    // The active template supports about + projects but NOT contact (e.g. a template
+    // that renders no contact section). The `contact` advisory item must be DROPPED —
+    // the user is never nagged to fill a section their template can't show.
+    const supported = ['about', 'projects'];
+    const items = deriveCompleteness(mixed, supported);
+    const ids = items.map((i) => i.id);
+
+    // RED until Plan 13.1-03: today `contact` is ALWAYS emitted (the arg is ignored).
+    expect(ids).not.toContain('contact');
+    // Supported section-typed items + the profile-level items (name/avatar) remain.
+    expect(ids).toContain('about');
+    expect(ids).toContain('project');
+    expect(ids).toContain('name');
+    expect(ids).toContain('avatar');
+  });
+
+  it('keeps every section-typed item when its type IS in the supported set', () => {
+    const supported = ['about', 'projects', 'contact'];
+    const ids = deriveCompleteness(mixed, supported).map((i) => i.id);
+    expect(ids).toContain('about');
+    expect(ids).toContain('project');
+    expect(ids).toContain('contact');
+  });
+
+  it('profile-level items (name, avatar) are template-INDEPENDENT — never dropped', () => {
+    // name/avatar carry no sectionType (they are profile fields), so the support
+    // filter never removes them regardless of the supported set.
+    const ids = deriveCompleteness(mixed, []).map((i) => i.id);
+    expect(ids).toContain('name');
+    expect(ids).toContain('avatar');
+  });
+});
