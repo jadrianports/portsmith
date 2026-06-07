@@ -548,6 +548,48 @@
 }
 
 /* ============================================================================
+ * Experience timeline — vertical neon spine + alternating left/right cards on
+ * md+ (experience.tsx faithful clone, Task-10). Mobile: single column left of
+ * the spine; md+: spine is centered (left:50%), items alternate left/right.
+ * The node marker is repositioned to hug the centered spine on md+.
+ * ========================================================================== */
+
+/* md+: move spine to center */
+@media (min-width: 768px) {
+  .tmpl-edgerunner .tmpl-experience-spine {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  /* Both variants reset mobile padding — grid controls the layout. */
+  .tmpl-edgerunner .tmpl-exp-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    padding-left: 0;
+    align-items: start;
+  }
+
+  /* Left item: card in first column, second column empty (pushes node center). */
+  .tmpl-edgerunner .tmpl-exp-left > .tmpl-glow-card {
+    grid-column: 1;
+    grid-row: 1;
+    text-align: right;
+  }
+
+  /* Right item: card in second column (first column empty). */
+  .tmpl-edgerunner .tmpl-exp-right > .tmpl-glow-card {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  /* Reposition the node to the center spine on md+. */
+  .tmpl-edgerunner .tmpl-exp-node {
+    left: calc(50% - 7px) !important;
+  }
+}
+
+/* ============================================================================
  * Reduced-motion contract (hard requirement — UI-SPEC §Motion / D-07).
  * Under `prefers-reduced-motion: reduce`, ALL animation/transition inside the
  * template is zeroed — including the synthwave CSS layer (flicker/sun/grid/scanline),
