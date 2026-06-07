@@ -131,4 +131,65 @@ describe('D-20 — isSaveableSnapshot (skip-invalid structural pre-check, no Zod
     };
     expect(isSaveableSnapshot('moodboard', imgOk)).toBe(true);
   });
+
+  // ── Regression: per-type required-key map (CR-01 / CR-02 / IN-02) ──
+  // These four cases pin the Nyquist gap that let two whole section types become
+  // silently un-saveable. Before the per-type REQUIRED_TEXT_KEYS map, the flat
+  // allowlist had neither `degree`/`school` (education) nor an exemption for the
+  // text-less moodboard gallery item, and `metrics` passed on `label` alone.
+
+  it('CR-01: a valid education item (degree + school) IS saveable', () => {
+    // educationItemSchema requires degree + school (both min 1) — neither was in the
+    // old flat PRIMARY_TEXT_KEYS allowlist, so ANY non-empty education list probed
+    // false and the save was skipped with no network call and no error.
+    const edu = {
+      heading: 'Education',
+      items: [{ id: 'e1', degree: 'BSc', school: 'MIT' }],
+    };
+    expect(isSaveableSnapshot('education', edu)).toBe(true);
+
+    // A half-filled education item (degree but no school) is correctly NOT saveable —
+    // EVERY required key must be filled (AND, not OR).
+    const eduPartial = {
+      heading: 'Education',
+      items: [{ id: 'e1', degree: 'BSc', school: '' }],
+    };
+    expect(isSaveableSnapshot('education', eduPartial)).toBe(false);
+  });
+
+  it('CR-02: a blank or caption-only moodboard gallery slot IS saveable', () => {
+    // moodboardImageSchema makes image/image_alt/caption all optional — a freshly-
+    // added { id } slot (before upload) and a caption-only item are SERVER-VALID, so
+    // the probe must pass them (its only hard gate is the alt-when-image rule).
+    const blankSlot = { heading: 'M', items: [{ id: 'm1' }] };
+    expect(isSaveableSnapshot('moodboard', blankSlot)).toBe(true);
+
+    const captionOnly = { heading: 'M', items: [{ id: 'm1', caption: 'Hero shot' }] };
+    expect(isSaveableSnapshot('moodboard', captionOnly)).toBe(true);
+
+    // The alt-when-image rule is PRESERVED: an image present with a blank alt is still
+    // un-saveable (regression-guard for the existing image-bearing-moodboard case).
+    const imageNoAlt = {
+      heading: 'M',
+      items: [{ id: 'm1', image: 'https://x/y.webp', image_alt: '' }],
+    };
+    expect(isSaveableSnapshot('moodboard', imageNoAlt)).toBe(false);
+  });
+
+  it('IN-02: a metric is saveable only when BOTH value and label are filled', () => {
+    // metricItemSchema requires value + label (both min 1). The old allowlist passed a
+    // metric as soon as `label` was filled, POSTing a doomed save the probe was meant
+    // to prevent. The per-type map requires both.
+    const labelOnly = { heading: 'Metrics', items: [{ id: 'x', label: 'Revenue' }] };
+    expect(isSaveableSnapshot('metrics', labelOnly)).toBe(false);
+
+    const valueOnly = { heading: 'Metrics', items: [{ id: 'x', value: '10M+' }] };
+    expect(isSaveableSnapshot('metrics', valueOnly)).toBe(false);
+
+    const both = {
+      heading: 'Metrics',
+      items: [{ id: 'x', value: '10M+', label: 'Revenue' }],
+    };
+    expect(isSaveableSnapshot('metrics', both)).toBe(true);
+  });
 });
