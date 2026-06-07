@@ -25,9 +25,17 @@
  *   3. Custom classes (font-display, font-mono-retro, text-glow-*, text-neon-*)
  *      KEPT AS-IS (scoped in theme.css).
  *   4. 'use client' required for CodeBlock copy button state.
+ *
+ * SYNTAX HIGHLIGHTING:
+ *   CodeBlock accepts an optional `tokens` prop (pre-computed server-side via
+ *   shiki → highlightCode() in src/lib/shiki-highlight.ts).  When present the
+ *   tokens are rendered as <span style={{ color }}> elements — no
+ *   dangerouslySetInnerHTML.  When absent the raw children are rendered as-is
+ *   (plain text fallback).
  */
 import { useRef, useState, type ReactNode } from 'react';
 import { Check, Copy } from 'lucide-react';
+import type { HighlightToken } from '@/lib/shiki-highlight';
 
 // ── Callout ───────────────────────────────────────────────────────────────────
 
@@ -86,11 +94,24 @@ export function Callout({
 
 // ── CodeBlock ────────────────────────────────────────────────────────────────
 
+/**
+ * Pre-highlighted token lines from the server (shiki → highlightCode).
+ * When provided, the code is rendered as colored <span> elements.
+ * When absent, `children` is rendered as plain text (fallback).
+ */
+export interface CodeBlockTokens {
+  lines: HighlightToken[][];
+}
+
 export function CodeBlock({
   children,
+  tokens,
   className,
   ...rest
-}: React.HTMLAttributes<HTMLPreElement> & { children?: ReactNode }) {
+}: React.HTMLAttributes<HTMLPreElement> & {
+  children?: ReactNode;
+  tokens?: CodeBlockTokens;
+}) {
   const preRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -167,14 +188,33 @@ export function CodeBlock({
         ref={preRef}
         className={[
           'overflow-x-auto p-4 text-[0.95rem] leading-relaxed',
-          '[&_code]:!bg-transparent [&_code]:!border-0 [&_code]:!p-0 [&_code]:!text-inherit [&_code]:!rounded-none [&_code]:font-mono',
           className,
         ]
           .filter(Boolean)
           .join(' ')}
         {...rest}
       >
-        {children}
+        {tokens ? (
+          // Syntax-highlighted path: render shiki token lines as colored spans.
+          // No dangerouslySetInnerHTML — pure JSX.
+          <code className="font-mono">
+            {tokens.lines.map((lineTokens, lineIdx) => (
+              <span key={lineIdx} className="block">
+                {lineTokens.map((token, tokenIdx) => (
+                  <span
+                    key={tokenIdx}
+                    style={token.color !== 'inherit' ? { color: token.color } : undefined}
+                  >
+                    {token.text}
+                  </span>
+                ))}
+              </span>
+            ))}
+          </code>
+        ) : (
+          // Plain-text fallback (no tokens prop supplied).
+          children
+        )}
       </pre>
     </div>
   );

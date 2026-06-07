@@ -15,11 +15,16 @@
  *   4. framer-motion → motion/react with initial={false} for SSR visibility.
  *   5. TanStack <Link> → Next <Link href={...}>.
  *   6. 'use client' required for motion/react + Body components.
+ *
+ * SYNTAX HIGHLIGHTING:
+ *   The server page pre-highlights all code blocks for the post via shiki and
+ *   passes them as `codeTokens` (a record keyed by block index string). This
+ *   component threads them down to the <Body> render.
  */
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import { ArrowLeft, Calendar, Clock } from 'lucide-react';
-import { blogPosts, type Accent } from './posts';
+import { blogPosts, type Accent, type PostCodeTokens } from './posts';
 
 const accentTextClass: Record<Accent, string> = {
   pink:   'text-neon-pink text-glow-pink',
@@ -32,9 +37,11 @@ const accentTextClass: Record<Accent, string> = {
 export interface BlogPostContentProps {
   slug: string;
   username: string;
+  /** Pre-highlighted shiki token lines keyed by block index. */
+  codeTokens?: PostCodeTokens;
 }
 
-export function BlogPostContent({ slug, username }: BlogPostContentProps) {
+export function BlogPostContent({ slug, username, codeTokens }: BlogPostContentProps) {
   const post = blogPosts.find((p) => p.slug === slug);
   if (!post) return null; // Should never happen — server already gated.
 
@@ -113,7 +120,7 @@ export function BlogPostContent({ slug, username }: BlogPostContentProps) {
         transition={{ delay: 0.15 }}
         className="prose-blog"
       >
-        <Body />
+        <Body codeTokens={codeTokens} />
       </motion.div>
 
       {/* Keep reading */}

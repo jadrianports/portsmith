@@ -14,6 +14,14 @@
  *   - `post-data.ts` (no 'use client') → safe to import here for metadata/gate.
  *   - `blog-post-content.tsx` ('use client') → receives `slug` and looks up the
  *     full post (including the Body component) at render time on the client.
+ *
+ * SYNTAX HIGHLIGHTING:
+ *   All code blocks for the post are pre-highlighted here (server, build time)
+ *   via shiki → highlightCode().  The resulting serializable token arrays are
+ *   passed as `codeTokens` props to the client component, which threads them
+ *   down to each <CodeBlock tokens={...}>.  No dangerouslySetInnerHTML.
+ *   Shiki runs only in this server route chunk — the main /[username] page is
+ *   never affected.
  */
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
@@ -22,7 +30,10 @@ import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
 import { EdgerunnerV2PageShell } from '@/components/templates/edgerunner-v2/pages/page-shell';
 import { BlogPostContent } from '@/components/templates/edgerunner-v2/pages/blog/blog-post-content';
 import { getPostMetaBySlug, POST_SLUGS } from '@/components/templates/edgerunner-v2/pages/blog/post-data';
+import { POST_CODE_BLOCKS } from '@/components/templates/edgerunner-v2/pages/blog/code-data';
+import { highlightCode } from '@/lib/shiki-highlight';
 import { siteUrl } from '@/lib/url';
+import type { PostCodeTokens } from '@/components/templates/edgerunner-v2/pages/blog/posts';
 
 /** D-21 ISR backstop */
 export const revalidate = 3600;
@@ -94,11 +105,30 @@ export default async function BlogPostPage({
   const meta = getPostMetaBySlug(slug);
   if (!meta) notFound();
 
-  // Pass slug to the client component; it looks up the full post (including
-  // the Body component) from posts.tsx at render time.
+  // Pre-highlight all code blocks for this post using shiki (server, build
+  // time for SSG).  Collect keys matching `${slug}/${index}` and build a
+  // PostCodeTokens record keyed by block index string ("0", "1", ...).
+  const codeTokens: PostCodeTokens = {};
+  await Promise.all(
+    Object.entries(POST_CODE_BLOCKS)
+      .filter(([key]) => key.startsWith(`${slug}/`))
+      .map(async ([key, { code, lang }]) => {
+        const blockIndex = key.slice(slug.length + 1); // e.g. "0", "1"
+        try {
+          const result = await highlightCode(code, lang);
+          codeTokens[blockIndex] = { lines: result.lines };
+        } catch {
+          // Highlighting failure is non-fatal — the CodeBlock falls back to
+          // plain text children when tokens is undefined.
+        }
+      }),
+  );
+
+  // Pass slug + pre-highlighted tokens to the client component; it looks up
+  // the full post (including the Body component) from posts.tsx at render time.
   return (
     <EdgerunnerV2PageShell data={data} activeNav="blog">
-      <BlogPostContent slug={slug} username={username} />
+      <BlogPostContent slug={slug} username={username} codeTokens={codeTokens} />
     </EdgerunnerV2PageShell>
   );
 }

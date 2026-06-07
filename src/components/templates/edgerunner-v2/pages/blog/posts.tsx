@@ -9,8 +9,16 @@
  * which has CodeBlock (with useState for the copy button).
  *
  * Server-safe metadata (slugs, titles, dates, etc.) lives in post-data.ts.
+ * Raw code strings live in code-data.ts (server-safe, imported by server page
+ * for shiki pre-highlighting).
  *
  * Re-exports Accent and BlogPostMeta from post-data.ts for convenience.
+ *
+ * SYNTAX HIGHLIGHTING:
+ *   Each Body component receives a `codeTokens` record keyed by block index
+ *   (e.g. "0", "1") which maps to pre-highlighted token lines from shiki.
+ *   These are passed through to individual <CodeBlock tokens={...}> calls.
+ *   When codeTokens is absent/empty the blocks fall back to plain text.
  */
 import type { ReactNode } from 'react';
 import {
@@ -24,6 +32,7 @@ import {
   ProseTd,
   Callout,
   CodeBlock,
+  type CodeBlockTokens,
 } from './prose';
 import {
   blogPostMetas,
@@ -34,9 +43,12 @@ import {
 // Re-export for convenience
 export type { Accent, BlogPostMeta };
 
+/** Map of block-index string → pre-highlighted tokens from shiki. */
+export type PostCodeTokens = Record<string, CodeBlockTokens | undefined>;
+
 // ── Post body components ──────────────────────────────────────────────────────
 
-function ShippingOnTheEdgeBody() {
+function ShippingOnTheEdgeBody({ codeTokens }: { codeTokens?: PostCodeTokens }) {
   return (
     <>
       <ProseP>
@@ -53,7 +65,7 @@ function ShippingOnTheEdgeBody() {
         a frontend that feels native — even on a flaky 4G connection from a tunnel.
       </ProseP>
 
-      <CodeBlock>
+      <CodeBlock tokens={codeTokens?.['0']}>
         <code>{`export const getProfile = createServerFn({ method: "GET" })
   .middleware([requireAuth])
   .handler(async ({ context }) => {
@@ -90,7 +102,7 @@ function ShippingOnTheEdgeBody() {
   );
 }
 
-function NeonMotionDesignBody() {
+function NeonMotionDesignBody({ codeTokens }: { codeTokens?: PostCodeTokens }) {
   return (
     <>
       <ProseP>
@@ -108,7 +120,7 @@ function NeonMotionDesignBody() {
         tokens, never raw values.
       </ProseP>
 
-      <CodeBlock>
+      <CodeBlock tokens={codeTokens?.['0']}>
         <code>{`export const motionTokens = {
   quick: { duration: 0.18, ease: [0.4, 0, 0.2, 1] },
   emphasis: { type: "spring", stiffness: 480, damping: 32 },
@@ -125,7 +137,7 @@ function NeonMotionDesignBody() {
         accessibility.
       </ProseP>
 
-      <CodeBlock>
+      <CodeBlock tokens={codeTokens?.['1']}>
         <code>{`const reduce = useReducedMotion();
 return (
   <motion.div
@@ -176,7 +188,7 @@ return (
   );
 }
 
-function TypeSafetyOrDieBody() {
+function TypeSafetyOrDieBody({ codeTokens }: { codeTokens?: PostCodeTokens }) {
   return (
     <>
       <ProseP>
@@ -203,7 +215,7 @@ function TypeSafetyOrDieBody() {
 
       <ProseH2>A real query, end to end</ProseH2>
 
-      <CodeBlock>
+      <CodeBlock tokens={codeTokens?.['0']}>
         <code>{`const postQuery = (slug: string) =>
   queryOptions({
     queryKey: ["post", slug],
@@ -236,7 +248,7 @@ function PostPage() {
         <ProseInlineCode>User</ProseInlineCode> floating around, you&apos;re already drifting.
       </ProseP>
 
-      <CodeBlock>
+      <CodeBlock tokens={codeTokens?.['1']}>
         <code>{`export const UserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
@@ -256,10 +268,11 @@ export type User = z.infer<typeof UserSchema>;`}</code>
 // ── Post full type (meta + Body) ──────────────────────────────────────────────
 
 export interface BlogPost extends BlogPostMeta {
-  Body: () => ReactNode;
+  /** Render the post body. Pass codeTokens from the server for highlighting. */
+  Body: (props: { codeTokens?: PostCodeTokens }) => ReactNode;
 }
 
-const bodyComponents: Record<string, () => ReactNode> = {
+const bodyComponents: Record<string, (props: { codeTokens?: PostCodeTokens }) => ReactNode> = {
   'shipping-on-the-edge': ShippingOnTheEdgeBody,
   'neon-motion-design': NeonMotionDesignBody,
   'type-safety-or-die': TypeSafetyOrDieBody,
