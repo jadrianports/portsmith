@@ -1,27 +1,39 @@
 /**
  * Metrics section (edgerunner — the "by the numbers" stat block). Translated from the
- * export's `profile.stats` (D-08: `profile.stats → metrics`, the precedent aurora set).
- * A FIRST-CLASS mapped soft-enum type (`metrics` is in `sectionContentSchemas`). Mirrors
- * the FROZEN `SectionProps` contract + `present()` + content cast + null-guard +
- * hide-if-empty. `index.tsx` wraps this in `<ScrollReveal as="section">`, so this
- * renders the INNER content.
+ * export's `profile.stats` 4-stat grid inside `About.tsx` (D-08: stats extracted to a
+ * first-class `metrics` section so the index places it immediately after About → reads
+ * as one "About + stats" block visually). A FIRST-CLASS mapped soft-enum type (`metrics`
+ * is in `sectionContentSchemas`). Mirrors the FROZEN `SectionProps` contract + `present()`
+ * + content cast + null-guard + hide-if-empty. `index.tsx` wraps this in
+ * `<ScrollReveal as="section">`, so this renders the INNER content.
  *
  * Casts `section.content` to `MetricsContent` (`{ heading, subheading?, items: [{ id,
  * value, label, icon? }] }`).
  *
- * RENDER CONTRACT: a mono kicker + heading + optional subheading, then a responsive
- * grid of neon stat cards — each a large neon-clip `value` (e.g. "10M+") over a muted
- * `label`. The source's animated count-up + framer-motion are DROPPED (no client JS —
- * the aurora precedent); the stat is a static display string (the value carries its own
- * units). The `icon` slug is informational only here (the value is the visual focus).
+ * RENDER CONTRACT: a mono `03 / metrics` kicker + heading + optional subheading, then a
+ * responsive 2→4 col grid of holo-panel stat cards — each showing:
+ *   - `value` (big neon-gradient-clip display number, e.g. "10M+")
+ *   - `label` (muted mono, the stat name)
+ *   - `icon` (optional — skipped here; the value is the visual focus)
+ * The export's animated count-up + framer-motion are DROPPED (no client JS); the stat is
+ * a static display string (the value carries its own units, the schema's design).
+ *
+ * PER-STAT STAGGER: each stat is a `<ScrollReveal as="li" delay={i * 60}>` island inside
+ * a `<ul>` (list-style reset). Content is SSR-visible (the kit's no-JS / reduced-motion
+ * fallback renders opacity:1 from frame 1).
  *
  * COLOR: no hardcoded hex — every value reads a scoped `var(--token)` from theme.css.
  */
 import type { SectionProps } from './types';
 import type { MetricsContent, MetricItem } from '@/lib/validations';
+import { ScrollReveal } from '../../_kit';
 import { hairlineStyle, headingStyle, kickerStyle, present, sectionShellStyle } from './shared';
 
-/** A single stat card — the big neon-clip value over a muted label. */
+/**
+ * A single stat card — the big neon-gradient-clip value over a muted label.
+ * Reproduces the export's `rounded-xl border border-neon-purple/30 bg-card/60 p-4
+ * backdrop-blur-md` stat panel + Orbitron display number + VT323 label.
+ */
 function MetricCard({ item }: { item: MetricItem }) {
   const value = present(item.value) ? item.value : null;
   const label = present(item.label) ? item.label : null;
@@ -37,12 +49,16 @@ function MetricCard({ item }: { item: MetricItem }) {
         padding: '28px 24px',
         borderRadius: 'var(--radius-lg)',
         background: 'var(--surface)',
-        border: '1px solid var(--border)',
+        border: '1px solid color-mix(in oklab, var(--neon-purple) 30%, var(--border))',
+        backdropFilter: 'blur(8px)',
         textAlign: 'center',
         alignItems: 'center',
       }}
     >
       {value ? (
+        // Big neon-gradient-clip number (Orbitron 800, the export's `font-display
+        // text-3xl font-bold text-neon-pink text-glow-pink` treatment re-authored as
+        // a gradient-clip so no text-shadow is required here).
         <span
           style={{
             fontFamily: 'var(--font-display)',
@@ -50,7 +66,6 @@ function MetricCard({ item }: { item: MetricItem }) {
             fontSize: 'clamp(2rem, 5vw, 3rem)',
             lineHeight: 1.05,
             letterSpacing: '0.01em',
-            // Neon-gradient clip — the synthwave stat treatment.
             backgroundImage: 'var(--neon-gradient)',
             WebkitBackgroundClip: 'text',
             backgroundClip: 'text',
@@ -63,12 +78,15 @@ function MetricCard({ item }: { item: MetricItem }) {
         </span>
       ) : null}
       {label ? (
+        // Muted label — VT323 mono (the export's `font-mono-retro text-foreground/70`).
         <span
           style={{
-            fontFamily: 'var(--font-body)',
+            fontFamily: 'var(--font-mono)',
             fontWeight: 400,
             fontSize: '15px',
             lineHeight: 1.45,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
             color: 'var(--muted-fg)',
           }}
         >
@@ -93,6 +111,7 @@ export function Metrics({ section }: SectionProps) {
 
   return (
     <div className="tmpl-shell" style={sectionShellStyle}>
+      {/* Mono CRT kicker + neon hairline. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         <p style={kickerStyle}>03 / metrics</p>
         <div aria-hidden="true" style={hairlineStyle} />
@@ -116,17 +135,29 @@ export function Metrics({ section }: SectionProps) {
         </p>
       ) : null}
 
-      <div
+      {/* Responsive 2→4 col grid (the export's `grid-cols-2 gap-4 sm:grid-cols-4`).
+          Each stat is a ScrollReveal island with per-stat entrance stagger (i * 60ms)
+          — SSR-visible (opacity:1 before JS). The <ul> resets list styles. */}
+      <ul
         style={{
+          listStyle: 'none',
+          margin: 0,
+          padding: 0,
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-          gap: '24px',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+          gap: '16px',
         }}
       >
         {items.map((item, i) => (
-          <MetricCard key={present(item.id) ? item.id : `${item.label}-${i}`} item={item} />
+          <ScrollReveal
+            key={present(item.id) ? item.id : `${item.label}-${i}`}
+            as="li"
+            delay={i * 60}
+          >
+            <MetricCard item={item} />
+          </ScrollReveal>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
