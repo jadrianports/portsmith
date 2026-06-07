@@ -486,7 +486,10 @@ export function Projects({ section }: SectionProps) {
         {/* Section header — centered eyebrow + big neon-glow title. */}
         <SectionHeading eyebrow="// PROJECTS" title={heading} accent="pink" />
 
-        {/* 3-col responsive card grid as a <ul> (list-reset via inline style). */}
+        {/* 3-col responsive card grid as a <ul> (list-reset via inline style).
+            gridTemplateColumns is NOT set inline — the CSS class .tmpl-projects-grid
+            in theme.css drives the 1→2→3 col responsive breakpoints. Setting it
+            inline would override the CSS rules (inline > class specificity). */}
         <ul
           style={{
             listStyle: 'none',
@@ -494,7 +497,6 @@ export function Projects({ section }: SectionProps) {
             padding: 0,
             display: 'grid',
             gap: '24px',
-            gridTemplateColumns: 'repeat(1, 1fr)',
           }}
           className="tmpl-projects-grid"
         >

@@ -19,6 +19,7 @@
  * COLOR: no hardcoded hex — every value reads a scoped `var(--token)` from theme.css.
  */
 import Image from 'next/image';
+import type { CSSProperties } from 'react';
 
 import type { SectionProps } from './types';
 import type { AboutContent } from '@/lib/validations';
@@ -35,10 +36,26 @@ export function About({ section }: SectionProps) {
   // D-08 host-lock: only Supabase Storage origins pass isHttpImageSrc.
   const avatarUrl = isHttpImageSrc(content.avatar) ? content.avatar : null;
   const avatarAlt = present(content.avatar_alt) ? content.avatar_alt : null;
-  const showAvatar = Boolean(avatarUrl && avatarAlt);
+  const hasRealAvatar = Boolean(avatarUrl && avatarAlt);
 
   // hide-if-empty: nothing meaningful to show → render nothing.
-  if (!bio && !showAvatar) return null;
+  if (!bio && !hasRealAvatar) return null;
+
+  // Shared holographic card shell styles (used by both real-avatar and placeholder paths).
+  const holoCardStyle: CSSProperties = {
+    flex: '0 0 auto',
+    position: 'relative',
+    width: '240px',
+    // 3:4 aspect ratio (the export's `aspect-[3/4]` / `max-w-xs`).
+    aspectRatio: '3 / 4',
+    borderRadius: 'var(--radius-lg)',
+    overflow: 'hidden',
+    // Neon-cyan outer glow — the export's `shadow-neon-cyan`.
+    boxShadow:
+      '0 0 0 1.5px color-mix(in oklab, var(--neon-cyan) 60%, transparent), ' +
+      '0 0 32px -8px color-mix(in oklab, var(--neon-cyan) 50%, transparent), ' +
+      '0 18px 44px -28px color-mix(in oklab, var(--neon-cyan) 35%, transparent)',
+  };
 
   return (
     <div className="tmpl-shell" style={sectionShellStyle}>
@@ -55,34 +72,13 @@ export function About({ section }: SectionProps) {
           gap: '48px',
         }}
       >
-        {/* LEFT COL — holographic portrait. The export wraps the avatar in a
-            `.holo-panel` glass surface with a `shadow-neon-cyan` outer glow. We
-            reproduce that with:
-              - `.tmpl-holo-panel` (the glass gradient + blur + neon-cyan 30% border)
-              - a neon-cyan `boxShadow` glow (the `shadow-neon-cyan`)
-              - a scanline pseudo-overlay (a ::before in theme.css is not available here;
-                instead we compose the scanline as an absolutely-positioned `<div>`
-                with a CSS repeating-gradient — token-only, no hardcoded hex)
-            If no avatar, render a tasteful placeholder (initials-style holo panel so the
-            left column is never absent when the user has started filling in the bio). */}
-        {showAvatar ? (
-          <div
-            className="tmpl-holo-panel"
-            style={{
-              flex: '0 0 auto',
-              position: 'relative',
-              width: '240px',
-              // 3:4 aspect ratio (the export's `aspect-[3/4]` / `max-w-xs`).
-              aspectRatio: '3 / 4',
-              borderRadius: 'var(--radius-lg)',
-              overflow: 'hidden',
-              // Neon-cyan outer glow — the export's `shadow-neon-cyan`.
-              boxShadow:
-                '0 0 0 1.5px color-mix(in oklab, var(--neon-cyan) 60%, transparent), ' +
-                '0 0 32px -8px color-mix(in oklab, var(--neon-cyan) 50%, transparent), ' +
-                '0 18px 44px -28px color-mix(in oklab, var(--neon-cyan) 35%, transparent)',
-            }}
-          >
+        {/* LEFT COL — holographic portrait.
+            When a real avatar URL+alt exists: render it via next/image.
+            Otherwise (no avatar uploaded yet): render the designed placeholder card —
+            a pink→cyan gradient fill + "// avatar.holo" mono label. This ensures the
+            left column is ALWAYS present so the 2-col layout holds. */}
+        {hasRealAvatar ? (
+          <div className="tmpl-holo-panel" style={holoCardStyle}>
             {/* Portrait image (full-bleed, object-cover). */}
             <Image
               src={avatarUrl as string}
@@ -110,7 +106,71 @@ export function About({ section }: SectionProps) {
               }}
             />
           </div>
-        ) : null}
+        ) : (
+          /* Placeholder holographic portrait card — visible even when no avatar is
+             uploaded. Gradient fill (pink→cyan, the neon-gradient) + a centered
+             "// avatar.holo" mono label. Matches the reference's "KN"-monogram holo
+             card design: tall card, neon-cyan glow border, gradient background fill,
+             CRT scanlines, small retro label at bottom. */
+          <div
+            aria-hidden="true"
+            style={{
+              ...holoCardStyle,
+              background: 'var(--neon-gradient)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '16px',
+            }}
+          >
+            {/* Scanline overlay */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                pointerEvents: 'none',
+                backgroundImage:
+                  'repeating-linear-gradient(' +
+                  'to bottom, ' +
+                  'transparent 0, transparent 3px, ' +
+                  'color-mix(in oklab, var(--bg-deep) 20%, transparent) 4px, ' +
+                  'transparent 5px' +
+                  ')',
+              }}
+            />
+            {/* Neon glyph — the "◈" diamond mark used as a visual anchor */}
+            <span
+              style={{
+                position: 'relative',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '52px',
+                lineHeight: 1,
+                color: 'var(--bg-deep)',
+                opacity: 0.85,
+                userSelect: 'none',
+              }}
+            >
+              ◈
+            </span>
+            {/* "// avatar.holo" retro label */}
+            <span
+              style={{
+                position: 'relative',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                fontWeight: 500,
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+                color: 'var(--bg-deep)',
+                opacity: 0.75,
+                userSelect: 'none',
+              }}
+            >
+              {'// avatar.holo'}
+            </span>
+          </div>
+        )}
 
         {/* RIGHT COL — bio copy (Space Grotesk body, 18px/1.65, `var(--fg)` — matching
             the export's `text-lg leading-relaxed text-foreground/85`). */}

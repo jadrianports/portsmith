@@ -27,13 +27,12 @@
 import type { SectionProps } from './types';
 import type { MetricsContent, MetricItem } from '@/lib/validations';
 import { ScrollReveal } from '../../_kit';
-import { present, sectionShellStyle } from './shared';
-import { SectionHeading } from './ui/section-heading';
+import { present } from './shared';
 
 /**
- * A single stat card — the big neon-gradient-clip value over a muted label.
- * Reproduces the export's `rounded-xl border border-neon-purple/30 bg-card/60 p-4
- * backdrop-blur-md` stat panel + Orbitron display number + VT323 label.
+ * A single compact stat card — the big neon-gradient-clip value over a muted label.
+ * Compact variant: smaller padding, smaller value font, no hover lift.
+ * Reproduces the reference's inline stat band (4 cards in a tight row).
  */
 function MetricCard({ item }: { item: MetricItem }) {
   const value = present(item.value) ? item.value : null;
@@ -42,29 +41,27 @@ function MetricCard({ item }: { item: MetricItem }) {
 
   return (
     <div
-      className="tmpl-project-card"
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
-        padding: '28px 24px',
-        borderRadius: 'var(--radius-lg)',
+        gap: '6px',
+        padding: '16px 20px',
+        borderRadius: 'var(--radius-md)',
         background: 'var(--surface)',
         border: '1px solid color-mix(in oklab, var(--neon-purple) 30%, var(--border))',
         backdropFilter: 'blur(8px)',
         textAlign: 'center',
         alignItems: 'center',
+        flex: '1 1 120px',
       }}
     >
       {value ? (
-        // Big neon-gradient-clip number (Orbitron 800, the export's `font-display
-        // text-3xl font-bold text-neon-pink text-glow-pink` treatment re-authored as
-        // a gradient-clip so no text-shadow is required here).
+        // Neon-gradient-clip number — compact size matching the reference's stat band.
         <span
           style={{
             fontFamily: 'var(--font-display)',
             fontWeight: 800,
-            fontSize: 'clamp(2rem, 5vw, 3rem)',
+            fontSize: 'clamp(1.5rem, 3vw, 2rem)',
             lineHeight: 1.05,
             letterSpacing: '0.01em',
             backgroundImage: 'var(--neon-gradient)',
@@ -79,14 +76,14 @@ function MetricCard({ item }: { item: MetricItem }) {
         </span>
       ) : null}
       {label ? (
-        // Muted label — VT323 mono (the export's `font-mono-retro text-foreground/70`).
+        // Muted label — mono uppercase small.
         <span
           style={{
             fontFamily: 'var(--font-mono)',
             fontWeight: 400,
-            fontSize: '15px',
-            lineHeight: 1.45,
-            letterSpacing: '0.06em',
+            fontSize: '12px',
+            lineHeight: 1.4,
+            letterSpacing: '0.08em',
             textTransform: 'uppercase',
             color: 'var(--muted-fg)',
           }}
@@ -107,42 +104,36 @@ export function Metrics({ section }: SectionProps) {
     : [];
   if (items.length === 0) return null;
 
-  const heading = present(content.heading) ? content.heading : 'By the numbers';
-  const subheading = present(content.subheading) ? content.subheading : null;
-
   return (
-    <div className="tmpl-shell" style={sectionShellStyle}>
-      {/* Section header — centered eyebrow + big neon-glow title + optional subtitle. */}
-      <SectionHeading
-        eyebrow="// BY THE NUMBERS"
-        title={heading}
-        description={subheading ?? undefined}
-        accent="pink"
-      />
-
-      {/* Responsive 2→4 col grid (the export's `grid-cols-2 gap-4 sm:grid-cols-4`).
-          Each stat is a ScrollReveal island with per-stat entrance stagger (i * 60ms)
-          — SSR-visible (opacity:1 before JS). The <ul> resets list styles. */}
-      <ul
+    /* Compact stat band — NO SectionHeading (no big section title). Visually reads
+       as a continuation of the About section, not a standalone hero-sized section.
+       Tight vertical padding; centered shell; cards in a flex row that wraps on mobile. */
+    <div
+      className="tmpl-shell"
+      style={{
+        paddingTop: '0',
+        paddingBottom: '40px',
+      }}
+    >
+      {/* Compact flex row of stat cards — wraps gracefully on narrow viewports. */}
+      <div
         style={{
-          listStyle: 'none',
-          margin: 0,
-          padding: 0,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+          display: 'flex',
+          flexWrap: 'wrap',
           gap: '16px',
+          justifyContent: 'center',
         }}
       >
         {items.map((item, i) => (
           <ScrollReveal
             key={present(item.id) ? item.id : `${item.label}-${i}`}
-            as="li"
+            as="div"
             delay={i * 60}
           >
             <MetricCard item={item} />
           </ScrollReveal>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }
