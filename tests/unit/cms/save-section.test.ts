@@ -27,7 +27,12 @@ vi.mock('server-only', () => ({}));
 // section `content` BEFORE the UPDATE (WR-03 server-recompute) — the `sections`
 // branch exposes a `select` returning a prior-content row; the `profiles` fallback
 // branch returns a username. None of this touches a real DB — the gate runs first.
-const update = vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) }));
+// WR-03: the section UPDATE now chains `.eq(id).select('id')` so a 0-row write is
+// not reported as a successful save. The mock resolves the `.select('id')` with ONE
+// affected row (a real owner-scoped update), so a VALID payload reaches { ok:true }.
+const update = vi.fn(() => ({
+  eq: vi.fn(() => ({ select: vi.fn(async () => ({ data: [{ id: 's1' }], error: null })) })),
+}));
 // profiles.select(...).eq(...).single() → the username fallback row.
 const profileSingle = vi.fn(async () => ({ data: { username: 'tester' }, error: null }));
 const profileSelect = vi.fn(() => ({ eq: vi.fn(() => ({ single: profileSingle })) }));
