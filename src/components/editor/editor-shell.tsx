@@ -39,6 +39,7 @@
  * the panel is never a cramped two-pane.
  */
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, ExternalLink, Mail, X } from 'lucide-react';
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -47,18 +48,21 @@ import { cmsKeys } from '@/lib/query/cms-keys';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { deriveCompleteness } from '@/lib/cms/completeness';
 import { clearTemplateFallbackNotice } from '@/lib/cms/clear-template-fallback-action';
+import { isSupported } from '@/lib/templates/rail-grouping';
 import type { OwnerPortfolioData } from '@/lib/portfolio/get-portfolio-owner';
 import type { AllowedTemplate } from '@/lib/templates/available-templates';
 
 import { CompletenessChecklist } from './completeness-checklist';
 import { ItemManager, type ItemSectionType } from './item-card';
+import { MoodboardManager } from './moodboard-manager';
 import { ProfileForm } from './profile-form';
 import { PublishToggle } from './publish-toggle';
 import { SectionForm, type SimpleSectionType } from './section-form';
-import { SkillsForm } from './skills-form';
+import { SkillsNestedManager } from './skills-nested-manager';
 import { SectionList, type EditorSection } from './section-list-row';
 import { StorageMeter } from './storage-meter';
 import { TemplatePicker } from './template-picker';
+import { UnsupportedSectionBanner } from './unsupported-section-banner';
 import { UnsavedChangesGuard, useGuardedNavigate } from './unsaved-guard';
 
 /**
@@ -78,10 +82,27 @@ const TEMPLATE_PANEL_ID = '__template__';
 
 /** The simple (single-form) section types handled by SectionForm. */
 const SIMPLE_TYPES = new Set<string>(['hero', 'about', 'contact']);
-/** The item-bearing section types handled by ItemManager. */
-const ITEM_TYPES = new Set<string>(['projects', 'experience', 'testimonials']);
+/**
+ * The flat item-bearing section types handled by the generalized ItemManager
+ * (the bespoke 3 + the 4 new flat types — Plan 04 / D-10). `skills` + `moodboard`
+ * are NOT here (they route to their bespoke managers below).
+ */
+const ITEM_TYPES = new Set<string>([
+  'projects',
+  'experience',
+  'testimonials',
+  'education',
+  'metrics',
+  'services',
+  'certifications',
+]);
 
-/** Human-readable rail/panel titles per known section type. */
+/**
+ * Human-readable rail/panel titles per known section type — ALL 13 (the LOCKED D-19
+ * map). The rail row title + the picker title both read from this. `blog_preview`
+ * is present for the rail title (it can exist as a legacy row) even though it is NOT
+ * addable from the picker until 13.2 (D-19).
+ */
 const SECTION_TITLES: Record<string, string> = {
   hero: 'Hero',
   about: 'About',
@@ -90,10 +111,31 @@ const SECTION_TITLES: Record<string, string> = {
   skills: 'Skills',
   testimonials: 'Testimonials',
   contact: 'Contact',
+  education: 'Education',
+  metrics: 'Metrics',
+  services: 'Services',
+  moodboard: 'Moodboard / Gallery',
+  certifications: 'Certifications',
+  blog_preview: 'Blog teaser',
 };
 
 /** A loose record for reading the schemaless section content in the editor. */
 type ContentRecord = Record<string, unknown>;
+
+/**
+ * The D-21 first-fill seed content for an optimistically-added row — MIRRORS
+ * `seedContentFor` in `add-section-action.ts` so the panel opens with the same
+ * seeded heading the server persisted (before `router.refresh()` reconciles). The
+ * server re-validates the real seed; this client mirror is display-only.
+ */
+function optimisticSeedFor(type: string): ContentRecord {
+  if (type === 'about') return { bio: '', skills: [] };
+  const heading = SECTION_TITLES[type] ?? '';
+  if (type === 'hero' || type === 'contact') return { heading };
+  if (type === 'skills') return { heading, groups: [] };
+  // Item-based families (incl. moodboard's gallery items[]).
+  return { heading, items: [] };
+}
 
 /** A heading-or-type title for a section (the row Label). */
 function titleFor(type: string, content: ContentRecord): string {
@@ -103,7 +145,9 @@ function titleFor(type: string, content: ContentRecord): string {
 
 /** Whether a section has real content yet (drives the rail status dot). */
 function hasContentFor(type: string, content: ContentRecord): boolean {
-  if (ITEM_TYPES.has(type)) {
+  // Item-based families + moodboard's gallery (items[]) are "filled" once they have
+  // ≥1 item; the seeded heading-only row reads as empty (D-21 "started, not done").
+  if (ITEM_TYPES.has(type) || type === 'moodboard') {
     return Array.isArray(content.items) && content.items.length > 0;
   }
   if (type === 'about') return typeof content.bio === 'string' && content.bio.trim().length > 0;
@@ -162,10 +206,26 @@ export function EditorShell({
 }: EditorShellProps) {
   const queryClient = useQueryClient();
 
+  const router = useRouter();
+
   const activeSectionId = useUIStore((s) => s.activeSectionId);
   const setActiveSectionId = useUIStore((s) => s.setActiveSectionId);
   const dirty = useUIStore((s) => s.dirty);
   const guardedNavigate = useGuardedNavigate();
+
+  // D-18/D-21 + D-03: optimistic lifecycle overlay on top of the RSC-loaded rows.
+  // `addSectionAction` / `removeSectionAction` already `revalidatePath` server-side,
+  // but the client island does not re-receive RSC props without a router refresh, so
+  // a freshly-added row would be invisible until reload. We overlay the just-added
+  // rows (seeded heading, hidden, appended — mirroring the server seed) so the panel
+  // can open the new section FIRST-FILLED immediately, and overlay the just-removed
+  // ids so a removed row leaves the rail at once; then `router.refresh()` reconciles
+  // with the server truth. This is EPHEMERAL UI lifecycle state (not server data in
+  // Zustand — TanStack Query still owns the canonical section cache).
+  const [optimisticAdded, setOptimisticAdded] = useState<
+    { id: string; type: string }[]
+  >([]);
+  const [optimisticRemoved, setOptimisticRemoved] = useState<string[]>([]);
 
   // 12-04 / D-P12-10: the one-time post-fallback notice. Local UI-only state (NOT
   // Zustand, NOT server data) — it gates the chrome banner's visibility. Dismiss
@@ -186,19 +246,36 @@ export function EditorShell({
 
   // The section rows from the RSC load — INCLUDING hidden ones, each carrying its
   // REAL `visible` flag (CR-01: the dashboard loads with `includeHidden: true`).
-  // `content` is loose JSONB.
-  const rawSections = useMemo(
-    () =>
-      data.sections.map((s) => ({
+  // `content` is loose JSONB. The optimistic lifecycle overlay (D-18/D-21/D-03) is
+  // applied on top: removed ids are dropped, just-added rows that the RSC props have
+  // NOT yet caught up to are appended (seeded heading, hidden) so the panel + rail
+  // reflect the add/remove immediately; `router.refresh()` reconciles to the server.
+  const rawSections = useMemo(() => {
+    const removed = new Set(optimisticRemoved);
+    const base = data.sections
+      .filter((s) => !removed.has(s.id ?? ''))
+      .map((s) => ({
         id: s.id ?? '',
         type: s.type ?? '',
         // CR-01: carry the REAL visibility flag, not a hard-coded true. Default to
         // true only when the row genuinely omits it (it never should post-CR-01).
         visible: s.visible ?? true,
         content: (s.content ?? {}) as ContentRecord,
-      })),
-    [data.sections],
-  );
+      }));
+    const presentIds = new Set(base.map((s) => s.id));
+    // Append only the optimistic adds the RSC props have not yet caught up to (a
+    // refreshed prop set already containing the row supersedes the overlay).
+    for (const add of optimisticAdded) {
+      if (removed.has(add.id) || presentIds.has(add.id)) continue;
+      base.push({
+        id: add.id,
+        type: add.type,
+        visible: false, // D-04: a freshly-added section starts hidden.
+        content: optimisticSeedFor(add.type),
+      });
+    }
+    return base;
+  }, [data.sections, optimisticAdded, optimisticRemoved]);
 
   // Seed TanStack Query with the RSC-loaded section list + each section's content
   // ONCE on mount (server data lives in the query cache, never Zustand). The rail
@@ -214,6 +291,7 @@ export function EditorShell({
   useEffect(() => {
     const editorSections: EditorSection[] = rawSections.map((s) => ({
       id: s.id,
+      type: s.type, // D-06: the rail groups by template support over this type.
       title: titleFor(s.type, s.content),
       visible: s.visible, // CR-01: the REAL flag — the rail shows hidden sections as
       //                      "Hidden" and the eye-toggle round-trips against it.
@@ -240,6 +318,7 @@ export function EditorShell({
     initialData: () =>
       rawSections.map((s) => ({
         id: s.id,
+        type: s.type, // D-06: mirrors the seed above (the rail's grouping axis).
         title: titleFor(s.type, s.content),
         visible: s.visible, // CR-01: the REAL flag (mirrors the seed above)
         hasContent: hasContentFor(s.type, s.content),
@@ -259,16 +338,69 @@ export function EditorShell({
   // owner read's resolved slug (07-04 `templateSlug`) when the prop is omitted.
   const activeTemplateSlug = currentTemplateSlug ?? data.templateSlug;
 
+  // D-06/D-17: the active template's spec drives BOTH the rail grouping and the
+  // template-aware checklist. Reading `data.templateSpec` is allowed INSIDE the
+  // (chrome) EditorShell (the D-25 NOTE) — it never reaches the public bundle.
+  const templateSpec = data.templateSpec;
+  // The set of section types the active template RENDERS (the supported keys). Used
+  // for `deriveCompleteness` (D-17) so the checklist only nags about rendered sections.
+  const supportedTypes = useMemo(
+    () =>
+      Object.entries(templateSpec.sections)
+        .filter(([, entry]) => entry?.supported === true)
+        .map(([type]) => type),
+    [templateSpec],
+  );
+
+  // D-14: whether the ACTIVE section's type is unsupported on the active template
+  // (drives the form-panel banner mount + the moodboard storage nudge). `isSupported`
+  // is the pure mismatch predicate (allowed in the chrome shell per the D-25 NOTE).
+  const activeUnsupported =
+    activeRaw != null && !isSupported(templateSpec, activeRaw.type);
+
   // Advisory completeness (pure, data-derived — never a publish gate, D-P4-08).
+  // D-17: thread the active template's supported types so the checklist only
+  // evaluates sections the template renders (an unsupported empty section never reads
+  // as "incomplete").
   const checklistItems = useMemo(
     () =>
-      deriveCompleteness({
-        displayName: data.profile.display_name,
-        avatarUrl: data.profile.avatar_url,
-        sections: rawSections.map((s) => ({ type: s.type, content: s.content })),
-      }),
-    [data.profile.display_name, data.profile.avatar_url, rawSections],
+      deriveCompleteness(
+        {
+          displayName: data.profile.display_name,
+          avatarUrl: data.profile.avatar_url,
+          sections: rawSections.map((s) => ({ type: s.type, content: s.content })),
+        },
+        supportedTypes,
+      ),
+    [data.profile.display_name, data.profile.avatar_url, rawSections, supportedTypes],
   );
+
+  /**
+   * D-18/D-21: after the picker provisions a section, select it + open it
+   * first-filled. The optimistic overlay (above) makes the seeded row visible in the
+   * rail + panel immediately; `router.refresh()` reconciles to the server truth
+   * (which carries the persisted seed heading + the canonical sort_order/visibility).
+   * The new section opens SELECTED, with its seeded heading, "Hidden", appended.
+   */
+  function handleSectionAdded(sectionId: string, type: string) {
+    setOptimisticAdded((prev) =>
+      prev.some((a) => a.id === sectionId) ? prev : [...prev, { id: sectionId, type }],
+    );
+    setOptimisticRemoved((prev) => prev.filter((id) => id !== sectionId));
+    setActiveSectionId(sectionId); // open the freshly-added section first-filled.
+    router.refresh(); // reconcile RSC props with the server (revalidated by the action).
+  }
+
+  /**
+   * D-03: after a section is removed, drop it from the rail/panel immediately + clear
+   * the selection if it was active; `router.refresh()` reconciles to the server.
+   */
+  function handleSectionRemoved(sectionId: string) {
+    setOptimisticRemoved((prev) => (prev.includes(sectionId) ? prev : [...prev, sectionId]));
+    setOptimisticAdded((prev) => prev.filter((a) => a.id !== sectionId));
+    if (activeSectionId === sectionId) setActiveSectionId(null);
+    router.refresh();
+  }
 
   /** Select a section into the panel — guarded by the CMS-07 dirty dialog. */
   function selectSection(id: string) {
@@ -425,7 +557,10 @@ export function EditorShell({
               sections={sections}
               portfolioId={portfolioId}
               username={username}
-              onSelect={selectSection}
+              spec={templateSpec}
+              activeSlug={activeTemplateSlug}
+              onAdded={handleSectionAdded}
+              onRemoved={handleSectionRemoved}
             />
 
             {/* Advisory completeness — docked at the rail bottom (never a gate). */}
@@ -493,6 +628,8 @@ export function EditorShell({
                 type={activeRaw.type}
                 content={activeRaw.content}
                 username={username}
+                isUnsupported={activeUnsupported}
+                activeSlug={activeTemplateSlug}
               />
             ) : (
               <EmptyPane />
@@ -519,15 +656,30 @@ function RailSectionList({
   sections,
   portfolioId,
   username,
-  onSelect,
+  spec,
+  activeSlug,
+  onAdded,
+  onRemoved,
 }: {
   sections: EditorSection[];
   portfolioId: string;
   username: string;
-  onSelect: (id: string) => void;
+  spec: import('@/components/templates/minimal/spec').TemplateSpec;
+  activeSlug: string;
+  onAdded: (sectionId: string, type: string) => void;
+  onRemoved: (sectionId: string) => void;
 }) {
-  void onSelect; // selection happens inside SectionListRow; kept for symmetry.
-  return <SectionList sections={sections} portfolioId={portfolioId} username={username} />;
+  return (
+    <SectionList
+      sections={sections}
+      portfolioId={portfolioId}
+      username={username}
+      spec={spec}
+      activeSlug={activeSlug}
+      onAdded={onAdded}
+      onRemoved={onRemoved}
+    />
+  );
 }
 
 /**
@@ -603,20 +755,42 @@ function TemplateRailEntry({
   );
 }
 
-/** Route a section to its per-type editor (SectionForm vs ItemManager vs note). */
+/**
+ * Route a section to its per-type editor — EDIT-ALL (D-13): every form-having type
+ * is editable regardless of the active template; the template gates RENDERING only.
+ * Routes: SectionForm (hero/about/contact) · the generalized ItemManager (the
+ * bespoke 3 + the 4 flat types) · SkillsNestedManager (skills) · MoodboardManager
+ * (moodboard). When the active section's type is UNSUPPORTED on the active template,
+ * the calm UnsupportedSectionBanner (D-14) sits ABOVE the form (which stays fully
+ * editable) and the storage nudge (D-16) flows to the moodboard image surfaces. The
+ * "coming soon" fall-through is GONE — every form-having type now has its editor.
+ */
 function SectionPanel({
   sectionId,
   type,
   content,
   username,
+  isUnsupported,
+  activeSlug,
 }: {
   sectionId: string;
   type: string;
   content: ContentRecord;
   username: string;
+  /** D-14: the active template can't render this type (drives the banner + nudge). */
+  isUnsupported: boolean;
+  /** The active template slug — names the current template in the banner (D-15). */
+  activeSlug: string;
 }) {
+  // D-14: the calm, non-blocking unsupported banner above the form (the form below
+  // stays fully editable — EDIT-ALL). It names ONLY the current template (D-15).
+  const banner = isUnsupported ? (
+    <UnsupportedSectionBanner activeSlug={activeSlug} />
+  ) : null;
+
+  let form: React.ReactNode;
   if (SIMPLE_TYPES.has(type)) {
-    return (
+    form = (
       <SectionForm
         sectionId={sectionId}
         type={type as SimpleSectionType}
@@ -624,10 +798,8 @@ function SectionPanel({
         username={username}
       />
     );
-  }
-
-  if (ITEM_TYPES.has(type)) {
-    return (
+  } else if (ITEM_TYPES.has(type)) {
+    form = (
       <div className="flex flex-col gap-4">
         <h2 className="text-base font-semibold text-foreground">
           {SECTION_TITLES[type] ?? type}
@@ -640,29 +812,51 @@ function SectionPanel({
         />
       </div>
     );
-  }
-
-  // 13-06 (D-10): the skills type opens the NARROW skills-`level` editor (skills
-  // ONLY — every other unsupported type below keeps the "coming soon" placeholder;
-  // the systematic per-type-form overhaul is Phase 13.1). Routed BEFORE the
-  // fall-through note so skills never hits the placeholder.
-  if (type === 'skills') {
-    return (
-      <SkillsForm sectionId={sectionId} initialContent={content} username={username} />
+  } else if (type === 'skills') {
+    // D-11: the two-level (groups → skills) nested manager (supersedes the narrow form).
+    form = (
+      <SkillsNestedManager
+        sectionId={sectionId}
+        initialContent={content}
+        username={username}
+      />
+    );
+  } else if (type === 'moodboard') {
+    // D-12: the bespoke gallery + palette manager. D-16: the storage nudge renders
+    // near each gallery uploader when the section is unsupported on the active template.
+    form = (
+      <div className="flex flex-col gap-4">
+        <h2 className="text-base font-semibold text-foreground">
+          {SECTION_TITLES[type] ?? type}
+        </h2>
+        <MoodboardManager
+          sectionId={sectionId}
+          initialContent={content}
+          username={username}
+          isUnsupported={isUnsupported}
+        />
+      </div>
+    );
+  } else {
+    // A form-LESS type (only `blog_preview` today — no editor until 13.2). It is NOT
+    // addable from the picker, so this branch is only reachable for a legacy row.
+    form = (
+      <div className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold text-foreground">
+          {SECTION_TITLES[type] ?? type}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          This section doesn’t have an editor yet. Your existing content stays on your
+          page.
+        </p>
+      </div>
     );
   }
 
-  // Any OTHER unsupported known type (e.g. metrics, education) has no bespoke editor
-  // yet — surface a calm note rather than a void. (The per-type forms are Phase 13.1.)
   return (
-    <div className="flex flex-col gap-2">
-      <h2 className="text-base font-semibold text-foreground">
-        {SECTION_TITLES[type] ?? type}
-      </h2>
-      <p className="text-sm text-muted-foreground">
-        Editing for this section is coming soon. Your existing content stays on your
-        page.
-      </p>
+    <div className="flex flex-col gap-4">
+      {banner}
+      {form}
     </div>
   );
 }
