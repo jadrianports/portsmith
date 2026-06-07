@@ -71,12 +71,19 @@ import { Button } from '@/components/ui/button';
 import { CharCounter } from '@/components/ui/char-counter';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { saveSectionAction } from '@/lib/cms/save-section-action';
-import { validateSectionContent } from '@/lib/validations';
 
 import { ChipInput } from './chip-input';
 import { ImageUploader } from './image-uploader';
 import { UrlInput } from './url-input';
+// D-20 (folds 08-REVIEW WR-04): the SHARED trailing-debounce + sequence-token +
+// skip-invalid save hook (13.1-03). `isSaveableSnapshot` is its Zod-FREE structural
+// pre-check — importing it here keeps this file BARREL-FREE (the prior
+// `validateSectionContent` `@/lib/validations` import is REMOVED, improving the
+// bundle per D-25 / T-13.1-04-BUNDLE).
+import {
+  isSaveableSnapshot,
+  useDebouncedSectionSave,
+} from './use-debounced-section-save';
 
 // ---------------------------------------------------------------------------
 // Item model (the GENERIC, profession-agnostic shape)
@@ -907,107 +914,82 @@ export function ItemManager({
     : [];
 
   const [items, setItems] = useState<EditorItem[]>(initialItems);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [newItemId, setNewItemId] = useState<string | null>(null);
+  // A reorder-specific error (rollback). A generic save error is derived from the
+  // hook's `state === 'error'` below — these two are distinct copy (REORDER vs SAVE).
+  const [reorderError, setReorderError] = useState<string | null>(null);
 
-  /**
-   * Persist a new items array as a SECTION CONTENT WRITE (Pitfall 7): rebuild the
-   * WHOLE content with the mutated items array, then `saveSectionAction` re-parses
-   * it via `validateSectionContent` server-side and revalidates the public page.
-   *
-   * WR-03 orphan delete: the server recomputes the dropped item-image URLs by
-   * diffing the prior persisted `content.items` against the validated next content
-   * (`serverDroppedItemImageUrls`, inside `saveSectionAction`) and frees the prior
-   * Storage objects. So an item removed/replaced/cleared with an image still frees
-   * it (no orphan), and a reorder/no-op image change drops nothing — WITHOUT the
-   * client computing or passing any delete hint (the client `deleteUrls` plumbing
-   * was removed). The client only sends the new content.
-   *
-   * Returns whether the save succeeded so the caller can roll back optimism.
-   */
-  const persist = useCallback(
-    async (
-      nextItems: EditorItem[],
-    ): Promise<'saved' | 'skipped-invalid' | 'failed'> => {
-      const content = { ...initialContent, items: nextItems };
-      // Auto-save only when the WHOLE section currently validates. Item edits are
-      // debounce-free auto-saves (no per-item Save button), so a transient invalid
-      // state — an image set but its REQUIRED alt still empty (projectItem/
-      // testimonialItem alt refine), or a freshly-added blank item (title.min(1)) —
-      // would otherwise POST a payload the server rejects ({ok:false}) and surface a
-      // spurious "couldn’t save" toast the user never triggered (the storm of doomed
-      // saves seen in 05-05 UAT). Skip the network write while invalid and clear any
-      // stale error; the inline required fields (the ImageUploader alt Input, the
-      // Title field) guide the fix, and the save fires automatically on the next
-      // patch once the item validates. saveSectionAction's server-side re-parse stays
-      // the authoritative gate — this is only a client-side UX pre-check.
-      try {
-        validateSectionContent(type, content);
-      } catch {
-        // Not yet valid (e.g. an item image awaiting its required alt, or a blank
-        // new item's title). Skip the doomed save WITHOUT raising an error — this is
-        // semantically DISTINCT from a real save failure (WR-04): callers that care
-        // (handleDragEnd) must not show the failure toast for a skip.
-        setError(null);
-        return 'skipped-invalid';
-      }
-      setSaving(true);
-      setError(null);
-      try {
-        // WR-03: the server recomputes the delete set from the prior persisted
-        // content — the client no longer computes or passes a `deleteUrls` list.
-        const result = await saveSectionAction({
-          sectionId,
-          type,
-          content,
-          username,
-        });
-        if (!result.ok) {
-          setError(result.error ?? SAVE_ERROR);
-          return 'failed';
-        }
-        return 'saved';
-      } catch {
-        setError(SAVE_ERROR);
-        return 'failed';
-      } finally {
-        setSaving(false);
-      }
-    },
-    [initialContent, sectionId, type, username],
+  // D-20 (folds 08-REVIEW WR-04 at its PRIMARY site): the SHARED save hook owns the
+  // monotonic sequence-token stale-drop (Pitfall 7), the Zod-FREE skip-invalid
+  // pre-check (Pitfall 8), and the saving/saved/error lifecycle — the per-keystroke
+  // immediate save that used to live in `persist` is REPLACED. Field edits debounce
+  // (`scheduleSave`); add/remove/reorder stay IMMEDIATE (`immediateSave`).
+  const { state, scheduleSave, immediateSave } = useDebouncedSectionSave({
+    sectionId,
+    type,
+    username,
+  });
+
+  const saving = state === 'saving';
+  // The hook's error state drives the generic save Alert; the reorder path raises
+  // its own (REORDER_ERROR) on a confirmed real failure (not a skip-invalid).
+  const error = reorderError ?? (state === 'error' ? SAVE_ERROR : null);
+
+  /** Build the WHOLE next content (Pitfall 7 — mutate `content.items`, never an item
+   *  table). The server re-parses + recomputes dropped media (WR-03) on save. */
+  const buildContent = useCallback(
+    (nextItems: EditorItem[]) => ({ ...initialContent, items: nextItems }),
+    [initialContent],
   );
 
-  /** Add a fresh blank item (expanded), then persist. */
+  /**
+   * Whether an `immediateSave` `{ ok: false }` was a SKIP (structurally invalid →
+   * no network call) vs a REAL failure. The hook returns `{ ok: false }` for both;
+   * `isSaveableSnapshot` (its own Zod-FREE pre-check, the same one the hook applies)
+   * disambiguates so a reorder over a transient-invalid section does NOT raise the
+   * misleading REORDER_ERROR (WR-04 skip-vs-fail distinction, preserved).
+   */
+  const wasSkippedInvalid = useCallback(
+    (content: unknown) => !isSaveableSnapshot(type, content),
+    [type],
+  );
+
+  /** Add a fresh blank item (expanded), then save IMMEDIATELY (discrete action). */
   async function add() {
     if (items.length >= ITEMS_MAX[type]) return;
     const blank = cfg.blank();
     const next = [...items, blank];
     setItems(next);
     setNewItemId(blank.id);
-    await persist(next);
+    setReorderError(null);
+    await immediateSave(buildContent(next));
   }
 
-  /** Apply a partial field change to one item, then persist (debounce-free; the
-   *  parent SectionForm Save is the batch path — this keeps each card honest).
-   *  A REPLACED or CLEARED image is freed server-side on save (the server diff in
-   *  `saveSectionAction` — WR-03). */
-  async function patch(id: string, p: Partial<EditorItem>) {
+  /**
+   * Apply a partial field change to one item, then SCHEDULE a debounced save (D-20):
+   * a keystroke burst coalesces into ONE `saveSectionAction` (one DB UPDATE / one
+   * history row / one revalidate). This is the WR-04 `save-section-debounce` site —
+   * the per-patch immediate save is replaced by the shared trailing debounce. A
+   * REPLACED/CLEARED image is freed server-side on save (the server diff — WR-03).
+   */
+  function patch(id: string, p: Partial<EditorItem>) {
     const next = items.map((it) => (it.id === id ? { ...it, ...p } : it));
     setItems(next);
-    await persist(next);
+    setReorderError(null);
+    scheduleSave(buildContent(next));
   }
 
-  /** Remove an item, then persist. If the removed item had an image, its prior
-   *  Storage object is freed server-side on save (the server diff — WR-03). */
+  /** Remove an item, then save IMMEDIATELY (discrete action). If the removed item had
+   *  an image, its prior Storage object is freed server-side on save (WR-03). */
   async function remove(id: string) {
     const next = items.filter((it) => it.id !== id);
     setItems(next);
-    await persist(next);
+    setReorderError(null);
+    await immediateSave(buildContent(next));
   }
 
   // Reorder is OPTIMISTIC (SHARED-C, the only optimistic item op): flip the local
-  // order instantly, persist, roll back on failure + announce.
+  // order instantly, save IMMEDIATELY, roll back on a confirmed failure + announce.
   function handleDragEnd({ active, over }: DragEndEvent) {
     if (!over || active.id === over.id) return;
     const ids = items.map((it) => it.id);
@@ -1018,17 +1000,20 @@ export function ItemManager({
     );
     const previous = items;
     setItems(next); // optimistic
+    setReorderError(null);
+    const content = buildContent(next);
     // Reorder preserves the SAME items (and image URLs) — the server diff drops
     // nothing, so no delete fires (no false deletes on a reorder).
-    void persist(next).then((outcome) => {
-      if (outcome === 'failed') {
-        setItems(previous); // roll back to the truth (optimistic UI honesty)
-        setError(REORDER_ERROR);
-      }
+    void immediateSave(content).then((result) => {
+      if (result.ok) return; // 'saved' → nothing to do.
+      // The hook returns { ok:false } for BOTH a skip-invalid and a real failure.
       // 'skipped-invalid' (WR-04): the reorder itself is valid — only an unrelated
       // field (e.g. an item image awaiting its alt) is invalid, so the whole-section
       // save was skipped. Keep the optimistic order (it persists on the next valid
-      // save) and do NOT raise the misleading REORDER_ERROR. 'saved' → nothing to do.
+      // save) and do NOT raise the misleading REORDER_ERROR.
+      if (wasSkippedInvalid(content)) return;
+      setItems(previous); // a REAL failure → roll back to the truth (UI honesty)
+      setReorderError(REORDER_ERROR);
     });
   }
 
