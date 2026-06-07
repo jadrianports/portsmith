@@ -49,7 +49,8 @@ import { isHttpImageSrc } from '@/lib/safe-image';
 import { ScrollReveal } from '../../_kit';
 import { TiltCard } from './ui/tilt-card';
 import { GlowCard } from './ui/glow-card';
-import { present, kickerStyle, headingStyle, sectionShellStyle } from './shared';
+import { present, sectionShellStyle } from './shared';
+import { SectionHeading } from './ui/section-heading';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -482,11 +483,8 @@ export function Projects({ section }: SectionProps) {
         className="tmpl-shell"
         style={sectionShellStyle}
       >
-        {/* Mono section kicker */}
-        <p style={kickerStyle}>05 / work</p>
-
-        {/* Section heading (Orbitron display, foreground) */}
-        <h2 style={headingStyle}>{heading}</h2>
+        {/* Section header — centered eyebrow + big neon-glow title. */}
+        <SectionHeading eyebrow="// PROJECTS" title={heading} accent="pink" />
 
         {/* 3-col responsive card grid as a <ul> (list-reset via inline style). */}
         <ul

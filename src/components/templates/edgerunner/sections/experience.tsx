@@ -26,7 +26,7 @@
 import type { CSSProperties } from 'react';
 import type { SectionProps } from './types';
 import type { ExperienceContent, ExperienceItem } from '@/lib/validations';
-import { present } from './shared';
+import { present, sectionShellStyle } from './shared';
 import { SectionHeading } from './ui/section-heading';
 import { GlowCard } from './ui/glow-card';
 import { ScrollReveal } from '../../_kit';
@@ -201,14 +201,12 @@ export function Experience({ section }: SectionProps) {
     <div
       className="tmpl-shell"
       style={{
-        display: 'flex',
-        flexDirection: 'column',
+        ...sectionShellStyle,
         gap: '0',
-        paddingBlock: 'clamp(64px, 12vh, 120px)',
       }}
     >
       <SectionHeading
-        eyebrow="04 / experience"
+        eyebrow="// EXPERIENCE"
         title={heading}
         accent="pink"
         align="center"

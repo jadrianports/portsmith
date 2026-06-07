@@ -27,7 +27,8 @@
 import type { SectionProps } from './types';
 import type { MetricsContent, MetricItem } from '@/lib/validations';
 import { ScrollReveal } from '../../_kit';
-import { hairlineStyle, headingStyle, kickerStyle, present, sectionShellStyle } from './shared';
+import { present, sectionShellStyle } from './shared';
+import { SectionHeading } from './ui/section-heading';
 
 /**
  * A single stat card — the big neon-gradient-clip value over a muted label.
@@ -111,29 +112,13 @@ export function Metrics({ section }: SectionProps) {
 
   return (
     <div className="tmpl-shell" style={sectionShellStyle}>
-      {/* Mono CRT kicker + neon hairline. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <p style={kickerStyle}>03 / metrics</p>
-        <div aria-hidden="true" style={hairlineStyle} />
-      </div>
-
-      <h2 style={headingStyle}>{heading}</h2>
-
-      {subheading ? (
-        <p
-          style={{
-            fontFamily: 'var(--font-body)',
-            fontWeight: 400,
-            fontSize: '18px',
-            lineHeight: 1.55,
-            color: 'var(--muted-fg)',
-            margin: 0,
-            maxWidth: '60ch',
-          }}
-        >
-          {subheading}
-        </p>
-      ) : null}
+      {/* Section header — centered eyebrow + big neon-glow title + optional subtitle. */}
+      <SectionHeading
+        eyebrow="// BY THE NUMBERS"
+        title={heading}
+        description={subheading ?? undefined}
+        accent="pink"
+      />
 
       {/* Responsive 2→4 col grid (the export's `grid-cols-2 gap-4 sm:grid-cols-4`).
           Each stat is a ScrollReveal island with per-stat entrance stagger (i * 60ms)

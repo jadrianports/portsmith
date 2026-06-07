@@ -24,7 +24,8 @@ import { ContactForm } from '@/components/public/contact-form';
 import type { SectionProps } from './types';
 import type { ContactContent } from '@/lib/validations';
 import { safeHref } from '@/lib/safe-url';
-import { present } from './shared';
+import { present, sectionShellStyle } from './shared';
+import { SectionHeading } from './ui/section-heading';
 
 /**
  * The contact content as it flows through the section contract: `ContactContent`
@@ -51,28 +52,15 @@ export function Contact({ section }: SectionProps) {
     <div
       id="contact"
       className="tmpl-shell"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '32px',
-        paddingBlock: 'clamp(64px, 12vh, 120px)',
-      }}
+      style={sectionShellStyle}
     >
-      {/* Mono section label `07 / contact` (neon-cyan CRT label). */}
-      <p
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: '18px',
-          fontWeight: 400,
-          lineHeight: 1.2,
-          textTransform: 'uppercase',
-          letterSpacing: '0.18em',
-          color: 'var(--neon-cyan)',
-          margin: 0,
-        }}
-      >
-        07 / contact
-      </p>
+      {/* Section header — centered eyebrow + big neon-glow title + optional subtitle. */}
+      <SectionHeading
+        eyebrow="// CONTACT"
+        title={heading}
+        description={subheading}
+        accent="pink"
+      />
 
       {/* 2-col grid: Direct Lines panel (left) + spinning-border form (right).
           Stacks to single column on mobile. */}
@@ -103,34 +91,6 @@ export function Contact({ section }: SectionProps) {
           >
             Direct Lines
           </h3>
-
-          {/* Section heading (Orbitron display, foreground). */}
-          <h2
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'clamp(1.5rem, 3.5vw, 2rem)',
-              lineHeight: 1.2,
-              color: 'var(--fg)',
-              margin: 0,
-            }}
-          >
-            {heading}
-          </h2>
-
-          {/* Subheading — muted body copy. */}
-          <p
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontWeight: 400,
-              fontSize: '16px',
-              lineHeight: 1.55,
-              color: 'var(--muted-fg)',
-              margin: 0,
-            }}
-          >
-            {subheading}
-          </p>
 
           {/* Optional public email — neon mailto link (render-if-present). */}
           {emailPublic && mailtoHref ? (

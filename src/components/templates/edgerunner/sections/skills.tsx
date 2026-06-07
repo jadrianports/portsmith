@@ -33,7 +33,8 @@
 import type { SectionProps } from './types';
 import type { SkillsContent } from '@/lib/validations';
 import { TECH_ICONS } from './icons';
-import { present } from './shared';
+import { present, sectionShellStyle } from './shared';
+import { SectionHeading } from './ui/section-heading';
 
 // ── Gauge constants (faithful to the export's 72×72 viewBox, scaled to 80×80) ──
 const R = 32;
@@ -392,52 +393,12 @@ export function Skills({ section }: SectionProps) {
     <div
       className="tmpl-shell"
       style={{
-        display: 'flex',
-        flexDirection: 'column',
+        ...sectionShellStyle,
         gap: '48px',
-        paddingBlock: 'clamp(64px, 12vh, 120px)',
       }}
     >
-      {/* ── Section header ─────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <p
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '18px',
-            fontWeight: 400,
-            lineHeight: 1.2,
-            textTransform: 'uppercase',
-            letterSpacing: '0.18em',
-            color: 'var(--neon-cyan)',
-            margin: 0,
-          }}
-        >
-          06 / skills
-        </p>
-        <div
-          aria-hidden="true"
-          style={{
-            height: '2px',
-            width: '56px',
-            borderRadius: '2px',
-            background: 'var(--neon-gradient)',
-          }}
-        />
-      </div>
-
-      <h2
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: 'clamp(1.75rem, 3.5vw, 2.5rem)',
-          lineHeight: 1.15,
-          letterSpacing: '0.01em',
-          color: 'var(--fg)',
-          margin: 0,
-        }}
-      >
-        {heading}
-      </h2>
+      {/* ── Section header — centered eyebrow + big neon-glow title ─────── */}
+      <SectionHeading eyebrow="// STACK" title={heading} accent="cyan" />
 
       {/* ── Groups grid (2-col on md+, faithful to the export layout) ─────── */}
       <div className="tmpl-skills-groups">

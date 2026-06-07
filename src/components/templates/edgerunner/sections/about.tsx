@@ -23,7 +23,8 @@ import Image from 'next/image';
 import type { SectionProps } from './types';
 import type { AboutContent } from '@/lib/validations';
 import { isHttpImageSrc } from '@/lib/safe-image';
-import { hairlineStyle, kickerStyle, mutedBodyStyle, present, sectionShellStyle } from './shared';
+import { mutedBodyStyle, present, sectionShellStyle } from './shared';
+import { SectionHeading } from './ui/section-heading';
 
 export function About({ section }: SectionProps) {
   const content = (section?.content ?? null) as AboutContent | null;
@@ -41,11 +42,8 @@ export function About({ section }: SectionProps) {
 
   return (
     <div className="tmpl-shell" style={sectionShellStyle}>
-      {/* Mono CRT kicker + neon hairline (the export's eyebrow "About"). */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <p style={kickerStyle}>02 / about</p>
-        <div aria-hidden="true" style={hairlineStyle} />
-      </div>
+      {/* Section header — centered eyebrow + big neon-glow title. */}
+      <SectionHeading eyebrow="// ABOUT" title="About" accent="cyan" />
 
       {/* 2-col layout on desktop (roughly 1fr / 1.4fr via flex-grow weights — the
           export's `lg:grid-cols-[1fr_1.4fr]`). Stacks on mobile (flex-wrap). */}

@@ -44,7 +44,7 @@ export const sectionShellStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '32px',
-  paddingBlock: 'clamp(64px, 12vh, 120px)',
+  paddingBlock: 'clamp(80px, 14vh, 160px)',
 };
 
 /** A neon decorative hairline rule under the kicker (the signature neon gradient). */
