@@ -82,8 +82,29 @@ import { UrlInput } from './url-input';
 // Item model (the GENERIC, profession-agnostic shape)
 // ---------------------------------------------------------------------------
 
-/** The item-bearing section types (each stores `content.items[]`, max 20). */
-export type ItemSectionType = 'projects' | 'experience' | 'testimonials';
+/**
+ * The flat item-bearing section types (each stores `content.items[]`).
+ *
+ * The original three (`projects`/`experience`/`testimonials`) ship a bespoke
+ * per-type expanded-field JSX block (images, chip input, date pair). The four
+ * flat marketer/education types added in 13.1-04 (`education`/`metrics`/`services`/
+ * `certifications`, D-09/D-10) are pure FLAT field sets, so they are driven by the
+ * `FIELD_DESCRIPTORS` config map below (RESEARCH Open Q1 — a descriptor map keeps
+ * adding 4 types LINEAR rather than ballooning the in-place JSX). Both kinds share
+ * the SAME dnd-kit reorder + whole-section write + skip-invalid + destructive
+ * remove-item contract (Pitfall 7 — no item table).
+ */
+export type ItemSectionType =
+  | 'projects'
+  | 'experience'
+  | 'testimonials'
+  | 'education'
+  | 'metrics'
+  | 'services'
+  | 'certifications';
+
+/** The four flat types driven by the FIELD_DESCRIPTORS map (vs the bespoke 3). */
+type FlatItemSectionType = 'education' | 'metrics' | 'services' | 'certifications';
 
 /**
  * The loose item shape the editor manipulates. It is intentionally a superset of
@@ -101,7 +122,26 @@ export interface EditorItem {
 
 /** Zod `.max(...)` bounds mirrored from sections.ts (no magic numbers). */
 const DESCRIPTION_MAX = 1000;
-const ITEMS_MAX = 20;
+
+/**
+ * Per-type item cap — mirrors each content schema's `z.array(...).max(N)` in
+ * sections.ts (NO single magic `ITEMS_MAX = 20` driving every type, D-10): metrics
+ * caps at 12 (`metricsContentSchema`), the rest at 20. The server `.max()` re-parse
+ * inside `saveSectionAction` stays the authority — this is the inline UX bound.
+ */
+const ITEMS_MAX: Record<ItemSectionType, number> = {
+  projects: 20,
+  experience: 20,
+  testimonials: 20,
+  education: 20, // educationContentSchema.items.max(20)
+  metrics: 12, // metricsContentSchema.items.max(12)  ← NOT 20
+  services: 20, // servicesContentSchema.items.max(20)
+  certifications: 20, // certificationsContentSchema.items.max(20)
+};
+
+/** The inner string-list (`achievements[]`/`deliverables[]`) bounds (sections.ts). */
+const STRING_LIST_MAX_ITEMS = 10; // z.array(...).max(10)
+const STRING_LIST_ENTRY_MAX = 200; // z.string().max(200)
 
 /** Per-type copy + a builder for a fresh blank item (CONTEXT D-27, profession-agnostic). */
 const ITEM_CONFIG: Record<
@@ -146,7 +186,105 @@ const ITEM_CONFIG: Record<
       company: '',
     }),
   },
+  // ── 13.1-04 flat types (D-09/D-10) — blank() seeds the schema field keys ──
+  education: {
+    noun: 'qualification',
+    addLabel: 'Add qualification',
+    emptyLine: 'No education yet — add your first one.',
+    blank: () => ({ id: nanoid(), degree: '', school: '', year: '', achievements: [] }),
+  },
+  metrics: {
+    noun: 'metric',
+    addLabel: 'Add metric',
+    emptyLine: 'No metrics yet — add your first one.',
+    blank: () => ({ id: nanoid(), value: '', label: '', icon: '' }),
+  },
+  services: {
+    noun: 'service',
+    addLabel: 'Add service',
+    emptyLine: 'No services yet — add your first one.',
+    blank: () => ({ id: nanoid(), title: '', description: '', icon: '', deliverables: [] }),
+  },
+  certifications: {
+    noun: 'certification',
+    addLabel: 'Add certification',
+    emptyLine: 'No certifications yet — add your first one.',
+    blank: () => ({ id: nanoid(), title: '', issuer: '', year: '', description: '', url: '' }),
+  },
 };
+
+// ---------------------------------------------------------------------------
+// Field-descriptor map for the 4 FLAT types (RESEARCH Open Q1 — keeps adding
+// types linear instead of ballooning the in-place expanded-field JSX). Each
+// descriptor is sourced VERBATIM from the matching Zod schema in sections.ts —
+// the label is UI-SPEC §4, the `max`/`required` mirror the schema (the inline UX
+// bound; the server re-parse stays the authority).
+// ---------------------------------------------------------------------------
+
+/** A single flat field's render descriptor. */
+type FieldDescriptor =
+  /** A single-line text Input. */
+  | { key: string; label: string; primitive: 'input'; max: number; required: boolean; placeholder?: string }
+  /** A multi-line Textarea + CharCounter. */
+  | { key: string; label: string; primitive: 'textarea'; max: number; required: boolean }
+  /** An http(s)-gated UrlInput (e.g. certifications.url). */
+  | { key: string; label: string; primitive: 'url'; required: boolean }
+  /** The inner string-list sub-field (achievements[]/deliverables[]). */
+  | { key: string; label: string; primitive: 'string-list'; addLabel: string; itemNoun: string };
+
+/**
+ * Per-flat-type ordered field set — fields render top-to-bottom in this order.
+ * Sourced verbatim from sections.ts (lines cited inline):
+ *   education      — educationItemSchema      (degree/school req, year opt, achievements[] ≤10)
+ *   metrics        — metricItemSchema         (value/label req, icon opt)
+ *   services       — serviceItemSchema        (title req, description/icon opt, deliverables[] ≤10)
+ *   certifications — certificationItemSchema  (title req, issuer/year/description opt, url http(s)-gated)
+ */
+const FIELD_DESCRIPTORS: Record<FlatItemSectionType, FieldDescriptor[]> = {
+  education: [
+    { key: 'degree', label: 'Degree or program', primitive: 'input', max: 150, required: true },
+    { key: 'school', label: 'School or institution', primitive: 'input', max: 150, required: true },
+    { key: 'year', label: 'Year or range', primitive: 'input', max: 60, required: false, placeholder: '2016 – 2020' },
+    {
+      key: 'achievements',
+      label: 'Highlights',
+      primitive: 'string-list',
+      addLabel: 'Add highlight',
+      itemNoun: 'highlight',
+    },
+  ],
+  metrics: [
+    { key: 'value', label: 'Value', primitive: 'input', max: 40, required: true, placeholder: '10M+' },
+    { key: 'label', label: 'What it measures', primitive: 'input', max: 120, required: true },
+    { key: 'icon', label: 'Icon name (optional)', primitive: 'input', max: 60, required: false },
+  ],
+  services: [
+    { key: 'title', label: 'Service name', primitive: 'input', max: 120, required: true },
+    { key: 'description', label: 'Description', primitive: 'textarea', max: 500, required: false },
+    { key: 'icon', label: 'Icon name (optional)', primitive: 'input', max: 60, required: false },
+    {
+      key: 'deliverables',
+      label: 'Deliverables',
+      primitive: 'string-list',
+      addLabel: 'Add deliverable',
+      itemNoun: 'deliverable',
+    },
+  ],
+  certifications: [
+    { key: 'title', label: 'Certification', primitive: 'input', max: 150, required: true },
+    { key: 'issuer', label: 'Issuer', primitive: 'input', max: 120, required: false },
+    { key: 'year', label: 'Year', primitive: 'input', max: 60, required: false },
+    { key: 'description', label: 'Description', primitive: 'textarea', max: 300, required: false },
+    { key: 'url', label: 'Verification link', primitive: 'url', required: false },
+  ],
+};
+
+/** The four flat types render via the descriptor map (vs the bespoke 3). */
+const FLAT_TYPES = new Set<ItemSectionType>(['education', 'metrics', 'services', 'certifications']);
+
+function isFlatType(type: ItemSectionType): type is FlatItemSectionType {
+  return FLAT_TYPES.has(type);
+}
 
 /** Derive a lowercase url-friendly slug from a title (for the projects `slug`). */
 function deriveSlug(title: string, fallback: string): string {
@@ -172,6 +310,22 @@ function summaryOf(type: ItemSectionType, item: EditorItem): string {
     }
     case 'testimonials':
       return str(item.name) || 'Untitled testimonial';
+    case 'education': {
+      const degree = str(item.degree);
+      const school = str(item.school);
+      if (degree && school) return `${degree} · ${school}`;
+      return degree || school || 'Untitled qualification';
+    }
+    case 'metrics': {
+      const value = str(item.value);
+      const label = str(item.label);
+      if (value && label) return `${value} — ${label}`;
+      return value || label || 'Untitled metric';
+    }
+    case 'services':
+      return str(item.title) || 'Untitled service';
+    case 'certifications':
+      return str(item.title) || 'Untitled certification';
   }
 }
 
@@ -187,6 +341,188 @@ const SAVE_ERROR =
   'We couldn’t save your changes. Please try again.';
 const REORDER_ERROR =
   'We couldn’t save the new order — it’s been put back. Please try again.';
+
+// ---------------------------------------------------------------------------
+// StringListField — the inner achievements[]/deliverables[] sub-field (D-10, NEW)
+// ---------------------------------------------------------------------------
+
+interface StringListFieldProps {
+  label: string;
+  /** "Add highlight" / "Add deliverable" (UI-SPEC §4 Copywriting). */
+  addLabel: string;
+  /** Singular noun for the remove `aria-label` ("highlight" / "deliverable"). */
+  itemNoun: string;
+  /** The current list (each entry ≤200, list ≤10 — sections.ts). */
+  values: string[];
+  /** Persist the whole next list (routes through the parent onPatch → whole-section save). */
+  onChange: (next: string[]) => void;
+  /** Disable while a section save is in flight. */
+  disabled?: boolean;
+}
+
+/**
+ * A small vertical list of single-line Inputs, each ≤200 chars, bounded at 10 —
+ * the `achievements[]` (education) / `deliverables[]` (services) inner string-list.
+ * Each row carries a 44px `trash-2` remove; a dashed mini "Add {noun}" button mints
+ * a new blank entry (the AddItemCard idiom at a smaller scale). NO drag-reorder for
+ * these inner lists (they are short bullet lists, UI-SPEC §4). Chrome tokens only.
+ */
+function StringListField({
+  label,
+  addLabel,
+  itemNoun,
+  values,
+  onChange,
+  disabled,
+}: StringListFieldProps) {
+  const atMax = values.length >= STRING_LIST_MAX_ITEMS;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-semibold text-foreground">{label}</span>
+
+      {values.length > 0 ? (
+        <ul className="flex flex-col gap-2">
+          {values.map((entry, i) => (
+            // The list is index-keyed: entries are plain strings with no stable id,
+            // and there is no reorder (only append/edit/remove-by-index), so the
+            // index is a stable enough key for this short, non-sortable inner list.
+            <li key={i} className="flex items-start gap-2">
+              <Input
+                label={`${label} ${i + 1}`}
+                // The per-row label is for a11y only; the group heading above names
+                // the field. Hide the visible per-row label to keep the list compact.
+                value={entry}
+                maxLength={STRING_LIST_ENTRY_MAX}
+                disabled={disabled}
+                onChange={(e) => {
+                  const next = values.slice();
+                  next[i] = e.target.value;
+                  onChange(next);
+                }}
+                className="flex-1 [&>label]:sr-only"
+              />
+              <button
+                type="button"
+                onClick={() => onChange(values.filter((_, j) => j !== i))}
+                disabled={disabled}
+                aria-label={`Remove ${itemNoun}`}
+                className={
+                  'mt-0 flex size-11 shrink-0 items-center justify-center rounded-sm ' +
+                  'text-muted-foreground outline-none hover:text-destructive ' +
+                  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring ' +
+                  'disabled:cursor-not-allowed'
+                }
+              >
+                <Trash2 aria-hidden="true" className="size-5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {atMax ? (
+        <p className="text-[13px] leading-tight text-muted-foreground">
+          You’ve added the maximum of {STRING_LIST_MAX_ITEMS}.
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onChange([...values, ''])}
+          disabled={disabled}
+          className={
+            'flex min-h-11 w-full items-center justify-center gap-2 rounded-md ' +
+            'border-[1.5px] border-dashed border-border-strong bg-transparent ' +
+            'px-4 py-2 text-sm font-semibold text-brand outline-none transition-colors ' +
+            'hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+            'focus-visible:outline-ring disabled:cursor-not-allowed disabled:text-muted-foreground ' +
+            'motion-reduce:transition-none'
+          }
+        >
+          <Plus aria-hidden="true" className="size-4" />
+          {addLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FlatItemFields — the descriptor-driven expanded fields for the 4 flat types
+// ---------------------------------------------------------------------------
+
+interface FlatItemFieldsProps {
+  type: FlatItemSectionType;
+  item: EditorItem;
+  disabled: boolean;
+  onPatch: (id: string, patch: Partial<EditorItem>) => void;
+}
+
+/**
+ * Renders the flat type's field set from FIELD_DESCRIPTORS — input / textarea
+ * (+ CharCounter) / http(s)-gated UrlInput / the inner string-list sub-field. Each
+ * field's change routes through `onPatch` so it lands in the SAME whole-section
+ * `saveSectionAction` write (Pitfall 7).
+ */
+function FlatItemFields({ type, item, disabled, onPatch }: FlatItemFieldsProps) {
+  const str = (v: unknown) => (typeof v === 'string' ? v : '');
+  const strList = (v: unknown): string[] =>
+    Array.isArray(v) ? v.map((e) => (typeof e === 'string' ? e : String(e))) : [];
+
+  return (
+    <>
+      {FIELD_DESCRIPTORS[type].map((field) => {
+        switch (field.primitive) {
+          case 'input':
+            return (
+              <Input
+                key={field.key}
+                label={field.required ? `${field.label} (required)` : field.label}
+                value={str(item[field.key])}
+                maxLength={field.max}
+                placeholder={field.placeholder}
+                disabled={disabled}
+                onChange={(e) => onPatch(item.id, { [field.key]: e.target.value })}
+              />
+            );
+          case 'textarea':
+            return (
+              <Textarea
+                key={field.key}
+                label={field.label}
+                value={str(item[field.key])}
+                maxLength={field.max}
+                disabled={disabled}
+                onChange={(e) => onPatch(item.id, { [field.key]: e.target.value })}
+                trailing={<CharCounter value={str(item[field.key])} max={field.max} />}
+              />
+            );
+          case 'url':
+            return (
+              <UrlInput
+                key={field.key}
+                label={field.label}
+                value={str(item[field.key])}
+                onValueChange={(v) => onPatch(item.id, { [field.key]: v })}
+              />
+            );
+          case 'string-list':
+            return (
+              <StringListField
+                key={field.key}
+                label={field.label}
+                addLabel={field.addLabel}
+                itemNoun={field.itemNoun}
+                values={strList(item[field.key])}
+                disabled={disabled}
+                onChange={(next) => onPatch(item.id, { [field.key]: next })}
+              />
+            );
+        }
+      })}
+    </>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // ItemCard — one sortable, expandable item
@@ -352,6 +688,12 @@ export function ItemCard({
         {/* Expanded fields (per-type). Collapsed = summary only. */}
         {expanded && !confirmRemove ? (
           <div className="flex flex-col gap-4 border-t border-border px-4 py-4">
+            {/* The 4 flat marketer/education types render via the descriptor map
+                (D-10); the bespoke 3 keep their in-place blocks below. */}
+            {isFlatType(type) ? (
+              <FlatItemFields type={type} item={item} disabled={saving} onPatch={onPatch} />
+            ) : null}
+
             {type === 'projects' ? (
               <>
                 <Input
@@ -492,7 +834,7 @@ export function ItemCard({
 
 interface AddItemCardProps {
   type: ItemSectionType;
-  /** Whether the section is at the 20-item cap (disables the add affordance). */
+  /** Whether the section is at its per-type item cap (disables the add affordance). */
   atMax: boolean;
   disabled?: boolean;
   onAdd: () => void;
@@ -508,7 +850,7 @@ export function AddItemCard({ type, atMax, disabled, onAdd }: AddItemCardProps) 
   if (atMax) {
     return (
       <p className="text-[13px] leading-tight text-muted-foreground">
-        You’ve added the maximum of {ITEMS_MAX} items.
+        You’ve added the maximum of {ITEMS_MAX[type]} items.
       </p>
     );
   }
@@ -638,7 +980,7 @@ export function ItemManager({
 
   /** Add a fresh blank item (expanded), then persist. */
   async function add() {
-    if (items.length >= ITEMS_MAX) return;
+    if (items.length >= ITEMS_MAX[type]) return;
     const blank = cfg.blank();
     const next = [...items, blank];
     setItems(next);
@@ -751,7 +1093,7 @@ export function ItemManager({
 
       <AddItemCard
         type={type}
-        atMax={items.length >= ITEMS_MAX}
+        atMax={items.length >= ITEMS_MAX[type]}
         disabled={saving}
         onAdd={add}
       />
