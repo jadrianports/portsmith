@@ -1,278 +1,253 @@
 /**
- * Hero section (edgerunner section 1) — the synthwave centerpiece (translated from
- * `synthwave-founder/src/components/sections/Hero.tsx`). The SHARED `SectionProps`
- * signature + the `index.tsx` wiring are UNCHANGED. `index.tsx` already wraps this in
- * `<ScrollReveal as="section" priority>`, so this renders the hero's INNER content.
+ * Hero section (edgerunner section 1) — faithful 2-column synthwave hero
+ * (translated from `synthwave-founder/src/components/sections/Hero.tsx`).
  *
- * THE WEBGL CENTERPIECE (D-04): the Hero mounts `<HoloShape />` (the plan-03 thin
- * `'use client'` `{ssr:false}` island) as the ADDITIVE WebGL focal object. The CSS
- * synthwave backdrop (sky / retro-sun / perspective grid, all from theme.css tokens) is
- * painted UNDERNEATH and makes the hero complete WITHOUT WebGL — the scene loads after
- * paint and is never a loading gap (progressive enhancement). The RSC root imports only
- * this section (never `three`/R3F/`./Scene`) — D-11.
+ * LAYOUT: a full-bleed positioned root with:
+ *   - `<CityScene />` as the absolute backdrop (zIndex:0)
+ *   - a foreground `.tmpl-shell` container (zIndex:1) with a 2-column grid:
+ *       LEFT  — "System online" label → flickering Orbitron name → role →
+ *                "Available for work" status dot → NeonLink CTAs
+ *       RIGHT  — `<TerminalCard lines={...} />` (hidden below lg, same as export)
  *
- * DATA SOURCES (null-guarded — every `public_*` view column + JSONB content is `| null`).
- * Under the frozen `SectionProps` the Hero renders from the hero CONTENT:
- *   - `content.heading`    → the big neon-gradient NAME (the seed writes
- *     `profile.display_name` into the hero heading).
- *   - `content.subheading` → the tagline / role line (Muted-Body).
- *   - `content.cta_text`   → the CTA label (defaults "Work with me").
- *   - `content.cta_url`    → the Contact anchor (empty ⇒ in-page `#contact`).
- *   - `content.resume_url` → the "Download résumé" ghost button, render-if-present.
+ * DATA SOURCES (null-guarded — every `public_*` view column + JSONB content is `| null`):
+ *   - `content.heading`    → the big neon-gradient NAME (hide-if-empty anchor)
+ *   - `content.subheading` → the role / tagline (muted body, present-guarded)
+ *   - `content.cta_text`   → CTA label (defaults "Get in touch")
+ *   - `content.cta_url`    → Contact anchor (empty → in-page `#contact`)
+ *   - `content.resume_url` → "Download CV" ghost NeonLink (render-if-present)
  *
- * COLOR: no hardcoded hex for UI — UI via `var(--token)`; the only literal colors are
- * inside the documented decorative sky/sun/grid gradients (the atmospheric moment).
+ * TRANSLATION NOTES:
+ *   R1  framer-motion entrance animations removed (R5: ZERO entrance motion on LCP).
+ *       The name's neon flicker (`.tmpl-hero-name`) is decorative CSS — OK.
+ *   R3  All colors/fonts/radii via scoped `var(--token)` from theme.css — no hex.
+ *   R5  LCP/priority section → no entrance motion; content paints immediately.
+ *   R6  Server Component — CityScene is a Server Component; TerminalCard is a
+ *       client island imported here without 'use client' on this file.
+ *   R7  safeHref on every URL; no dangerouslySetInnerHTML, no inline on* strings.
+ *
+ * The export's contact pills (email/phone/location) and social row are NOT reproduced
+ * — `public_profiles` does not expose that data (it belongs to the Contact section).
  */
 import type { SectionProps } from './types';
 import type { HeroContent } from '@/lib/validations';
 import { safeHref } from '@/lib/safe-url';
 import { present } from './shared';
+import { CityScene } from './city-scene';
+import { TerminalCard } from './terminal-card';
+import { NeonLink } from './ui/neon-button';
 
-/**
- * The hero content as it flows through the section contract: `HeroContent` plus an
- * OPTIONAL `resume_url` the seed may surface from `profile.resume_url` for the
- * "Download résumé" button (D-14). Optional ⇒ the button simply hides when absent.
- */
+/** Hero content — `resume_url` is already on `HeroContent` (heroContentSchema). */
 type HeroSectionContent = HeroContent & { resume_url?: string | null };
 
 export function Hero({ section }: SectionProps) {
   const content = (section?.content ?? null) as HeroSectionContent | null;
   if (!content) return null;
 
+  // hide-if-empty: the display name is the non-negotiable hero anchor.
   const displayName = present(content.heading) ? content.heading : null;
-  if (!displayName) return null; // hide-if-empty: nothing to anchor the hero on
+  if (!displayName) return null;
 
   const tagline = present(content.subheading) ? content.subheading : null;
-  const ctaText = present(content.cta_text) ? content.cta_text : 'Work with me';
+  const ctaText = present(content.cta_text) ? content.cta_text : 'Get in touch';
   const ctaHref = safeHref(content.cta_url) ?? '#contact';
   const resumeUrl = safeHref(content.resume_url) ?? null;
+
+  // Terminal lines — built from the real content values.
+  // Only include lines whose values are present; filter(Boolean) removes nulls.
+  const terminalLines = [
+    '> whoami',
+    displayName,
+    tagline ? '> role --current' : null,
+    tagline ?? null,
+    '> status',
+    '● available for work',
+    '> uptime --mode=creative',
+    '100% committed',
+  ].filter(Boolean) as string[];
 
   return (
     <div
       style={{
         position: 'relative',
         minHeight: '92vh',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'flex-start',
-        gap: '24px',
-        padding: '64px 0',
         overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
       }}
     >
-      {/* Decorative synthwave backdrop — sky glow + retro-sun arc + perspective grid.
-          CSS/SVG only, reduced-motion-safe (theme.css zeroes any animation under
-          prefers-reduced-motion). aria-hidden: purely atmospheric. This is the D-04
-          CSS layer that paints the full aesthetic WITHOUT WebGL. */}
-      <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none' }}>
-        {/* Retro-sky sunset wash behind everything (the export's gradient-sky). */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'var(--sky-gradient)',
-            opacity: 0.4,
-            maskImage: 'radial-gradient(120% 90% at 50% 30%, #000 0%, transparent 75%)',
-            WebkitMaskImage: 'radial-gradient(120% 90% at 50% 30%, #000 0%, transparent 75%)',
-          }}
-        />
-        {/* Retro-sun arc — a banded neon-gradient circle (slow spin under no-reduce). */}
-        <div
-          style={{
-            position: 'absolute',
-            left: '50%',
-            top: '34%',
-            width: 'min(72vw, 460px)',
-            height: 'min(72vw, 460px)',
-            transform: 'translate(-50%, -50%)',
-            borderRadius: 'var(--radius-full)',
-            background: 'var(--neon-gradient)',
-            opacity: 0.22,
-            maskImage: 'repeating-linear-gradient(to bottom, #000 0 14px, transparent 14px 22px)',
-            WebkitMaskImage: 'repeating-linear-gradient(to bottom, #000 0 14px, transparent 14px 22px)',
-            animation: 'tmpl-edgerunner-spin 60s linear infinite',
-          }}
-        />
-        {/* Perspective grid-horizon — converging neon hairlines, low opacity. */}
-        <div
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: '38%',
-            background:
-              'repeating-linear-gradient(to right, var(--neon-cyan) 0 1px, transparent 1px 56px), repeating-linear-gradient(to top, var(--neon-purple) 0 1px, transparent 1px 48px)',
-            opacity: 0.1,
-            transform: 'perspective(420px) rotateX(62deg)',
-            transformOrigin: 'bottom',
-            maskImage: 'linear-gradient(to top, #000, transparent)',
-            WebkitMaskImage: 'linear-gradient(to top, #000, transparent)',
-          }}
-        />
-      </div>
+      {/* ── Backdrop: CityScene (absolute, zIndex:0) ── */}
+      {/* CityScene is a Server Component; it self-positions as position:absolute inset:0. */}
+      <CityScene />
 
-      {/* Foreground content (above the backdrop). SHELLED: `.tmpl-shell` gives the
-          centered column + gutter; the decorative layers stay FULL-BLEED siblings. */}
+      {/* ── Foreground content (position:relative, zIndex:1) ── */}
       <div
         className="tmpl-shell"
         style={{
           position: 'relative',
           zIndex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-start',
-          gap: '24px',
+          width: '100%',
+          paddingBlock: 'clamp(64px, 10vh, 96px)',
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '24px',
-            width: '100%',
-            maxWidth: '62ch',
-            marginRight: 'auto',
-          }}
-        >
-          {/* Mono section label `01 / intro` (neon-cyan CRT label). */}
-          <p
+        {/*
+         * 2-column grid — mirrors the export's `lg:grid-cols-[1.4fr_1fr]`.
+         * On mobile: single column (terminal card hidden via display:none / lg:flex).
+         * On lg+: side-by-side with items aligned to center.
+         * Pure Tailwind classes for the grid so responsive overrides work without
+         * inline-style specificity conflicts.
+         */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-10 items-center">
+          {/* ══ LEFT COLUMN ══════════════════════════════════════════════ */}
+          <div
             style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '18px',
-              fontWeight: 400,
-              lineHeight: 1.2,
-              textTransform: 'uppercase',
-              letterSpacing: '0.16em',
-              color: 'var(--neon-cyan)',
-              margin: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px',
             }}
           >
-            01 / intro
-          </p>
+            {/* "System online" mono label — static chrome, faithful to the export. */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '14px',
+                fontWeight: 400,
+                textTransform: 'uppercase',
+                letterSpacing: '0.4em',
+                color: 'var(--neon-cyan)',
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  display: 'inline-block',
+                  height: '1px',
+                  width: '48px',
+                  background: 'var(--neon-cyan)',
+                  flexShrink: 0,
+                }}
+              />
+              <span>System online</span>
+            </div>
 
-          {/* The big neon-gradient NAME (Orbitron, text-clipped + CRT flicker glow).
-              `.tmpl-hero-name` owns the flicker animation (reduced-motion-zeroed). */}
-          <h1
-            className="tmpl-hero-name"
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 800,
-              fontSize: 'clamp(3rem, 7vw, 4.5rem)',
-              lineHeight: 1.05,
-              letterSpacing: '0.01em',
-              textTransform: 'uppercase',
-              margin: 0,
-              backgroundImage: 'var(--neon-gradient)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              color: 'transparent',
-            }}
-          >
-            {displayName}
-          </h1>
+            {/* The big neon-gradient NAME (Orbitron, background-clip text).
+                `.tmpl-hero-name` owns the `tmpl-edgerunner-flicker` animation
+                (defined in theme.css, reduced-motion-zeroed by the blanket reset).
+                NO entrance motion (R5 — this is the LCP element). */}
+            <h1
+              className="tmpl-hero-name"
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontWeight: 800,
+                fontSize: 'clamp(3rem, 7vw, 5rem)',
+                lineHeight: 0.95,
+                letterSpacing: '-0.01em',
+                textTransform: 'uppercase',
+                margin: 0,
+                backgroundImage: 'var(--neon-gradient)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                color: 'transparent',
+              }}
+            >
+              {displayName}
+            </h1>
 
-          {/* Role line / tagline — Muted-Body. */}
-          {tagline ? (
+            {/* Role / tagline — muted body copy (present-guarded). */}
+            {tagline ? (
+              <p
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontWeight: 400,
+                  fontSize: '18px',
+                  lineHeight: 1.55,
+                  color: 'var(--muted-fg)',
+                  margin: 0,
+                  maxWidth: '50ch',
+                }}
+              >
+                {tagline}
+              </p>
+            ) : null}
+
+            {/* "Available for work" status line — neon-pink pulsing dot + mono label.
+                The dot animation is `tmpl-edgerunner-neon-pulse` (theme.css, reduced-motion-zeroed).
+                This is decorative static copy — not data-driven (no public profile status field). */}
             <p
               style={{
-                fontFamily: 'var(--font-body)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '14px',
                 fontWeight: 400,
-                fontSize: '16px',
-                lineHeight: 1.5,
+                textTransform: 'uppercase',
+                letterSpacing: '0.14em',
                 color: 'var(--muted-fg)',
                 margin: 0,
               }}
             >
-              {tagline}
+              <span
+                aria-hidden="true"
+                style={{
+                  display: 'inline-block',
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: 'var(--radius-full)',
+                  background: 'var(--neon-pink)',
+                  boxShadow: '0 0 8px var(--neon-pink)',
+                  animation: 'tmpl-edgerunner-neon-pulse 2.4s ease-in-out infinite',
+                  flexShrink: 0,
+                }}
+              />
+              Available for work
             </p>
-          ) : null}
 
-          {/* "Available for work" status dot — neon-pink dot, gentle pulse (disabled
-              under reduced-motion by theme.css's blanket reset). */}
-          <p
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '16px',
-              fontWeight: 400,
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              color: 'var(--muted-fg)',
-              margin: 0,
-            }}
-          >
-            <span
-              aria-hidden="true"
+            {/* CTAs — faithful to the export (Magnetic stripped; NeonLink server component).
+                Primary:   ctaText → ctaHref     (neon gradient fill)
+                Secondary: "View Projects" → #projects  (outline)
+                Ghost:     "Download CV" → resumeUrl    (render-if-present, external) */}
+            <div
               style={{
-                display: 'inline-block',
-                width: '10px',
-                height: '10px',
-                borderRadius: 'var(--radius-full)',
-                background: 'var(--accent)',
-                animation: 'tmpl-edgerunner-neon-pulse 2.4s ease-in-out infinite',
-              }}
-            />
-            Available for work
-          </p>
-
-          {/* CTAs — primary "Work with me" (neon-pink fill, var(--bg) label) + the
-              secondary "Download résumé" ghost button (render-only-if-present). */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginTop: '8px' }}>
-            <a
-              href={ctaHref}
-              style={{
-                display: 'inline-flex',
+                display: 'flex',
+                flexWrap: 'wrap',
                 alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: '44px',
-                padding: '0 24px',
-                borderRadius: 'var(--radius-md)',
-                fontFamily: 'var(--font-body)',
-                fontWeight: 600,
-                fontSize: '16px',
-                background: 'var(--accent)',
-                color: 'var(--bg)',
-                textDecoration: 'none',
-                boxShadow: '0 8px 28px -12px color-mix(in oklab, var(--neon-pink) 50%, transparent)',
+                gap: '16px',
+                marginTop: '8px',
               }}
             >
-              {ctaText}
-            </a>
+              <NeonLink href={ctaHref} variant="primary">
+                {ctaText}
+              </NeonLink>
 
-            {resumeUrl ? (
-              <a
-                href={resumeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: '44px',
-                  padding: '0 24px',
-                  borderRadius: 'var(--radius-md)',
-                  fontFamily: 'var(--font-body)',
-                  fontWeight: 600,
-                  fontSize: '16px',
-                  background: 'transparent',
-                  color: 'var(--fg)',
-                  border: '1px solid var(--border-strong)',
-                  textDecoration: 'none',
-                }}
-              >
-                Download résumé
-              </a>
-            ) : null}
+              <NeonLink href="#projects" variant="outline">
+                View Projects
+              </NeonLink>
+
+              {resumeUrl ? (
+                <NeonLink href={resumeUrl} variant="ghost" external>
+                  Download CV
+                </NeonLink>
+              ) : null}
+            </div>
+          </div>
+
+          {/* ══ RIGHT COLUMN — TerminalCard HUD ══════════════════════════
+              Faithful to the export's `hidden lg:flex lg:justify-end`.
+              TerminalCard is a 'use client' island; this file stays a Server Component.
+              NOTE: `hidden` (display:none) + `lg:flex` are Tailwind utilities that match
+              the chrome Tailwind scan. Using className-only (no inline display) so the
+              Tailwind responsive variant can override without specificity conflict. */}
+          <div className="hidden lg:flex lg:justify-end">
+            <TerminalCard lines={terminalLines} />
           </div>
         </div>
       </div>
 
-      {/* Scroll cue at the bottom (subtle bob; static under reduced-motion). */}
+      {/* Scroll cue — a subtle downward chevron (static under reduced-motion). */}
       <div
         aria-hidden="true"
         style={{
