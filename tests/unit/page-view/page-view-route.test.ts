@@ -97,7 +97,7 @@ const ALLOWED_INSERT_KEYS = [
   'utm_medium',
 ] as const;
 
-describe.skip('ANLY-01/02 — POST /api/page-view (GREENED BY 15-03)', () => {
+describe('ANLY-01/02 — POST /api/page-view (GREENED BY 15-03)', () => {
   beforeEach(() => {
     insert.mockClear();
     countAndRecord.mockClear();
