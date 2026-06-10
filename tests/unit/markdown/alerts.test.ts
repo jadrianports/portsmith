@@ -22,8 +22,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-// The not-yet-existing render entry point. Import failure here = RED.
-// @ts-expect-error — module is built in a later plan (Wave 0 RED).
+// The render entry point (GREEN as of 13.2-03).
 import { renderMarkdown } from '@/lib/markdown/render-markdown';
 
 async function html(md: string): Promise<string> {

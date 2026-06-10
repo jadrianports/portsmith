@@ -20,8 +20,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-// The not-yet-existing render entry point. Import failure here = RED.
-// @ts-expect-error — module is built in a later plan (Wave 0 RED).
+// The render entry point (GREEN as of 13.2-03).
 import { renderMarkdown } from '@/lib/markdown/render-markdown';
 
 const STORAGE_ORIGIN = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321').replace(
