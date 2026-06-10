@@ -222,6 +222,8 @@ export type Database = {
           path: string
           portfolio_id: string
           referrer: string | null
+          utm_medium: string | null
+          utm_source: string | null
         }
         Insert: {
           country?: string | null
@@ -230,6 +232,8 @@ export type Database = {
           path: string
           portfolio_id: string
           referrer?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
         }
         Update: {
           country?: string | null
@@ -238,6 +242,8 @@ export type Database = {
           path?: string
           portfolio_id?: string
           referrer?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
         }
         Relationships: [
           {
@@ -977,14 +983,43 @@ export type Database = {
       }
       initialize_portfolio: { Args: never; Returns: string }
       is_admin: { Args: never; Returns: boolean }
+      page_view_daily_series: {
+        Args: { p_days?: number }
+        Returns: {
+          day: string
+          views: number
+        }[]
+      }
+      page_view_top_portfolios: {
+        Args: { p_days?: number; p_limit?: number }
+        Returns: {
+          username: string
+          views: number
+        }[]
+      }
+      page_view_total_count: { Args: { p_days?: number }; Returns: number }
       portfolio_is_public: {
         Args: { p_portfolio_id: string }
         Returns: boolean
       }
       profile_is_public: { Args: { p_user_id: string }; Returns: boolean }
+      rate_limit_events_by_bucket: {
+        Args: { p_days?: number }
+        Returns: {
+          bucket: string
+          events: number
+        }[]
+      }
       reorder_sections: {
         Args: { p_ordered_ids: string[]; p_portfolio_id: string }
         Returns: undefined
+      }
+      report_volume_series: {
+        Args: { p_days?: number }
+        Returns: {
+          day: string
+          reports: number
+        }[]
       }
       request_account_deletion: { Args: never; Returns: undefined }
     }

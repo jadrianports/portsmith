@@ -62,10 +62,11 @@ const DEFINER_RPCS = [
 let ctx: TwoUsers;
 let adminUser: AdminUser;
 
-// ONE wrapping `describe.skip` so the live-stack fixture hooks (beforeAll/afterAll)
-// do NOT run this plan — a hook inside a skipped describe is inert, so no real users
-// are provisioned until 15-02 flips this outer `.skip` → `describe`.
-describe.skip('Phase 15 Insights — page_views RLS + DEFINER RPC self-gate (GREENED BY 15-02)', () => {
+// FLIPPED ACTIVE by 15-02 (migration 019 applied + database.ts regenerated): the
+// outer `.skip` is removed so the live-stack fixture hooks (beforeAll/afterAll) run
+// and the page_views RLS owner-read + cross-tenant denial + per-RPC is_admin()
+// self-gate now assert against the real schema.
+describe('Phase 15 Insights — page_views RLS + DEFINER RPC self-gate (GREENED BY 15-02)', () => {
   beforeAll(async () => {
     ctx = await setupTwoUsers('pvins', RUN);
     adminUser = await setupAdminUser('pvins', RUN);
