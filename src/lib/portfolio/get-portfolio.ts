@@ -111,6 +111,24 @@ export const getPortfolioByUsername = cache(
     }
     if (!settings) return null; // genuine not-found
 
+    // (4) D-16 homepage teaser — the LATEST published posts for this portfolio. This
+    // is a SECOND cookie-LESS query (still the anon `db` above, no cookies()/headers()),
+    // so it does NOT flip the route to dynamic — only a cookie/header read would
+    // (Pitfall 1 / D-22). The `public_blog_posts` view is published-only by
+    // construction (blog_post_is_public DEFINER helper). A real read error THROWS
+    // (WR-02 — an empty teaser must not mask a broken blog); a clean empty result is
+    // a clean empty array. The `blog_preview` section component reads this as its
+    // PRIMARY source, falling back to its legacy `content.items[]` only when empty.
+    const { data: recentPosts, error: recentPostsError } = await db
+      .from('public_blog_posts')
+      .select('*')
+      .eq('portfolio_id', portfolio.id)
+      .order('display_date', { ascending: false })
+      .limit(3);
+    if (recentPostsError) {
+      throw new Error(`public_blog_posts (teaser) read failed: ${recentPostsError.message}`);
+    }
+
     // Resolve the slug from `public_portfolios.template_id` (already in hand from
     // the `.select('*')` above — public_portfolios exposes it, 005:88) via the
     // STATIC slug↔UUID map. NO request-time `templates` read → the route stays
@@ -121,7 +139,8 @@ export const getPortfolioByUsername = cache(
       profile,
       settings,
       sections: sections ?? [],
-      recentPosts: [], // blog deferred (D-19)
+      portfolioId: portfolio.id, // feeds the dedicated blog routes' get-posts reads (D-16)
+      recentPosts: recentPosts ?? [], // D-16 teaser source (latest 3 published posts)
       templateSlug, // resolved from the static map — drives <TemplateRenderer slug>
       templateSpec: resolveSpec(templateSlug), // spec for the SAME slug (Pitfall 6)
     };

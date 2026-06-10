@@ -150,6 +150,7 @@ export function allNullPortfolioData(slug: string, variant: AllNullVariant = 'em
     profile: allNullProfile(),
     settings: allNullSettings(),
     sections: variant === 'null-content' ? nullContentSections(slug) : [],
+    portfolioId: null,
     recentPosts: [],
     templateSlug: slug,
     templateSpec: resolveSpec(slug),

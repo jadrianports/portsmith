@@ -218,7 +218,8 @@ export async function getPortfolioOwnerByUsername(
     profile: profileData,
     settings: settingsData,
     sections: projectedSections,
-    recentPosts: [], // blog deferred (D-19) — matches the public read.
+    portfolioId: portfolio.id, // owner's portfolio id (mirrors the public read).
+    recentPosts: [], // owner preview does not render the homepage teaser from posts.
     templateSlug, // owner's persisted slug (resolved from the static map).
     templateSpec: resolveSpec(templateSlug), // spec for the SAME slug (Pitfall 6).
     published: profile.published, // for the PreviewBanner "not public yet" caption.

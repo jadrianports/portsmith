@@ -30,9 +30,24 @@ import { ArrowRight, Calendar, Clock } from 'lucide-react';
 
 import type { SectionProps } from './types';
 import type { BlogPreviewContent } from '@/lib/validations';
+import type { PublicPost } from '../../types';
+import { readingTimeFromMarkdown } from '@/lib/markdown/reading-time';
 import { SectionHeading } from './ui/section-heading';
 
 type Accent = 'pink' | 'cyan' | 'purple';
+
+/** The normalized tile shape the grid renders — fed by recentPosts (D-16) OR the legacy items[]. */
+interface TeaserTile {
+  key: string;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  date: string | null;
+  reading_time: string | null;
+  tags: string[];
+  /** Optional stored accent (legacy items only); when absent the grid cycles by index. */
+  accent?: Accent;
+}
 
 // ── Per-accent token maps ─────────────────────────────────────────────────────
 
@@ -55,31 +70,63 @@ const accentTitleStyle: Record<Accent, string> = {
 export function BlogTeaser({
   section,
   username,
-}: SectionProps & { username?: string | null }) {
+  recentPosts,
+}: SectionProps & { username?: string | null; recentPosts?: PublicPost[] }) {
   const content = (section?.content ?? null) as BlogPreviewContent | null;
-  if (!content) return null;
 
-  const items = Array.isArray(content.items) ? content.items : [];
-  if (items.length === 0) return null;
+  // D-16: recentPosts (the DB read) is the PRIMARY source; the legacy content.items[]
+  // is the fallback ONLY when recentPosts is empty. The heading still comes from the
+  // section content when present (so the CMS-edited heading is honored).
+  const dbPosts = Array.isArray(recentPosts) ? recentPosts : [];
+  let tiles: TeaserTile[];
+  if (dbPosts.length > 0) {
+    tiles = dbPosts.slice(0, 3).map((p) => ({
+      key: p.id ?? p.slug ?? '',
+      slug: p.slug ?? '',
+      title: p.title ?? 'Untitled',
+      excerpt: p.excerpt,
+      date: p.display_date,
+      // reading time is derived (D-06), not stored on the view Row.
+      reading_time: p.body_md ? readingTimeFromMarkdown(p.body_md) : null,
+      tags: Array.isArray(p.tags) ? p.tags : [],
+    }));
+  } else {
+    // Legacy fallback: the manually-authored items[] on the blog_preview section.
+    const items = content && Array.isArray(content.items) ? content.items : [];
+    tiles = items.slice(0, 3).map((post) => ({
+      key: post.id || post.slug,
+      slug: post.slug,
+      title: post.title,
+      excerpt: post.excerpt ?? null,
+      date: post.date ?? null,
+      reading_time: post.reading_time ?? null,
+      tags: Array.isArray(post.tags) ? post.tags : [],
+      accent:
+        post.accent && ['pink', 'cyan', 'purple'].includes(post.accent)
+          ? (post.accent as Accent)
+          : undefined,
+    }));
+  }
 
-  const latest = items.slice(0, 3);
+  // Render nothing when there is neither a DB post nor a legacy item (and no section).
+  if (tiles.length === 0) return null;
+
+  const heading = content?.heading || 'Transmissions';
   const blogRoot = username ? `/${username}/blog` : '/blog';
 
   return (
     <section id="blog" className="relative mx-auto max-w-6xl px-6 py-24">
       <SectionHeading
         eyebrow="Transmissions"
-        title={content.heading || 'Transmissions'}
+        title={heading}
         description="Long-form notes on edge runtimes, motion design, and the craft of building software that feels alive."
         accent="cyan"
       />
 
       <div className="grid gap-6 md:grid-cols-3">
-        {latest.map((post, i) => {
+        {tiles.map((post, i) => {
           const accent: Accent =
-            post.accent && ['pink', 'cyan', 'purple'].includes(post.accent)
-              ? (post.accent as Accent)
-              : (['pink', 'cyan', 'purple'] as Accent[])[i % 3];
+            post.accent ?? (['pink', 'cyan', 'purple'] as Accent[])[i % 3];
 
           const postHref = username
             ? `/${username}/blog/${post.slug}`
@@ -100,7 +147,7 @@ export function BlogTeaser({
 
           return (
             <div
-              key={post.id || post.slug}
+              key={post.key}
             >
               <Link
                 href={postHref}

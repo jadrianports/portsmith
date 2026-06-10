@@ -120,6 +120,7 @@ export function goldenPortfolioData(slug: string): PortfolioData {
     profile: goldenProfile(),
     settings: goldenSettings(),
     sections: goldenSections(),
+    portfolioId: null,
     recentPosts: [],
     templateSlug: slug,
     templateSpec: resolveSpec(slug),

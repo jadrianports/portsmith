@@ -38,12 +38,29 @@ export type PublicSettings = V['public_portfolio_settings']['Row'];
 export type PublicSection = V['public_sections']['Row'];
 
 /**
+ * A published blog post as the public read returns it for the homepage teaser
+ * (D-16) — the full `public_blog_posts` view Row (EVERY column `| null`, the
+ * all-nullable view-Row rule). The dedicated `/blog` routes use the richer
+ * `PublishedPost` shape from `get-posts.ts` (the same view + a derived
+ * `reading_time`); the teaser only needs the raw projected columns and null-guards
+ * each one. Derived from the generated view type so it tracks `gen types`.
+ */
+export type PublicPost = V['public_blog_posts']['Row'];
+
+/**
  * The assembled portfolio data passed to a template.
  *
  * - `profile` / `settings` come from the corresponding public views (one row each).
  * - `sections` is the visible-only set, pre-sorted by `sort_order`.
- * - `recentPosts` is always `[]` in this milestone — the blog is deferred (D-19);
- *   `never[]` documents that nothing is ever pushed into it here.
+ * - `portfolioId` is the portfolio's id (from `public_portfolios.id`, `| null` per
+ *   the view-Row rule). The dedicated blog routes use it to read this portfolio's
+ *   published posts via the SEPARATE cookie-less `get-posts.ts` lane (D-22) — it
+ *   spares them a second `public_profiles`/`public_portfolios` round-trip.
+ * - `recentPosts` carries the latest N published posts (D-16), populated by a SECOND
+ *   cookie-less `public_blog_posts` read inside `get-portfolio.ts` (a second
+ *   cookie-LESS query does NOT break D-22 — only a cookies()/headers() read does).
+ *   The `blog_preview` teaser reads it as its PRIMARY source, falling back to the
+ *   legacy `content.items[]` only when empty. Empty `[]` when the blog is unused.
  * - `templateSlug` is the resolved template slug (`slugForTemplateId(
  *   portfolio.template_id)` — Phase 7 / D-P7-13), derived from the STATIC UUID map
  *   (NOT a request-time DB read, so `/[username]` stays ISR — Pitfall 6). The page
@@ -55,7 +72,10 @@ export interface PortfolioData {
   profile: PublicProfile;
   settings: PublicSettings;
   sections: PublicSection[];
-  recentPosts: never[];
+  /** The portfolio id (`public_portfolios.id`, `| null`) — feeds the blog post reads (D-16). */
+  portfolioId: string | null;
+  /** Latest N published posts for the homepage teaser (D-16); `[]` when unused. */
+  recentPosts: PublicPost[];
   templateSlug: string;
   templateSpec: TemplateSpec;
 }

@@ -138,3 +138,53 @@ export const getPublishedPostBySlug = cache(
     return withReadingTime(data);
   },
 );
+
+/**
+ * The published-post slugs for ONE username, for build-time `generateStaticParams`
+ * (Pattern 2 / SC-2). Resolves the username → portfolio via the cookie-less
+ * `public_profiles`/`public_portfolios` views, then lists that portfolio's published
+ * post slugs from `public_blog_posts` (newest first). Cookie-LESS throughout
+ * (Pitfall 2 — `await cookies()` here would flip the route to dynamic and break
+ * D-22). Returns `[]` for a missing/unpublished user OR a portfolio with no posts —
+ * the post route's `dynamicParams = true` then covers any non-prerendered slug
+ * on-demand. A real read error THROWS (WR-02 — never silently prerender zero pages
+ * for a published blog).
+ *
+ * NOT `cache()`'d: it runs only at build (`generateStaticParams`), where there is no
+ * request-scoped dedupe to share with.
+ */
+export async function getPublishedPostSlugs(username: string): Promise<string[]> {
+  const db = anonClient();
+
+  const { data: profile, error: profileError } = await db
+    .from('public_profiles')
+    .select('id')
+    .eq('username', username)
+    .maybeSingle();
+  if (profileError) {
+    throw new Error(`public_profiles (slugs) read failed: ${profileError.message}`);
+  }
+  if (!profile?.id) return []; // missing/unpublished user → nothing to prerender
+
+  const { data: portfolio, error: portfolioError } = await db
+    .from('public_portfolios')
+    .select('id')
+    .eq('user_id', profile.id)
+    .maybeSingle();
+  if (portfolioError) {
+    throw new Error(`public_portfolios (slugs) read failed: ${portfolioError.message}`);
+  }
+  if (!portfolio?.id) return [];
+
+  const { data, error } = await db
+    .from('public_blog_posts')
+    .select('slug')
+    .eq('portfolio_id', portfolio.id)
+    .order('display_date', { ascending: false });
+  if (error) {
+    throw new Error(`public_blog_posts (slugs) read failed: ${error.message}`);
+  }
+  return (data ?? [])
+    .map((r) => r.slug)
+    .filter((s): s is string => typeof s === 'string' && s.length > 0);
+}

@@ -1,26 +1,30 @@
 /**
- * Fenced-code → Shiki bridge (D-12, Q-CODE pre-pass).
+ * Fenced-code → Shiki bridge — the SERVER pre-pass (D-12, Q-CODE pre-pass).
  *
  * react-markdown's `components` functions are SYNCHRONOUS, but Shiki
- * (`highlightCode`) is async (Pitfall 2). The fix is a PRE-PASS: before
- * rendering, extract every fenced `{ code, lang }` block from the Markdown
- * source, `await Promise.all` them through `highlightCode()` into an
- * index-keyed array, then render the `code` component synchronously by reading
- * the pre-resolved tokens for the current fenced block (matched by source
- * order via a closure counter held in React context).
+ * (`highlightCode`) is async (Pitfall 2). The fix is a PRE-PASS: before rendering,
+ * extract every fenced `{ code, lang }` block from the Markdown source IN SOURCE
+ * ORDER, `await Promise.all` them through `highlightCode()` into an index-keyed
+ * array, then render the `code` component synchronously by reading the pre-resolved
+ * tokens for the current fenced block (matched by source order via a closure counter
+ * held in React context — the CLIENT half, `code-bridge-client.tsx`).
  *
- * Unknown languages degrade to the Task-1 plaintext fallback inside
- * `highlightCode` (never throws). Inline code (single backtick) renders as
- * `ProseInlineCode` — no highlighting.
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ SERVER/CLIENT SPLIT (13.2-05): this module is PURE + `highlightCode` is         │
+ * │ `server-only`, so it stays in the server graph. The React-context pieces        │
+ * │ (`createContext`/`useContext` — client-only APIs that Turbopack's prod build    │
+ * │ rejects in an RSC graph) live in `code-bridge-client.tsx` behind `'use client'`.│
+ * │ The `code-bridge-client` symbols are re-exported here for a single import site. │
+ * └─────────────────────────────────────────────────────────────────────────────┘
  *
- * This module is server-renderable (no 'use client'); the only client island is
- * `CodeBlock` itself (it owns the copy-button state).
+ * Unknown languages degrade to the Task-1 plaintext fallback inside `highlightCode`
+ * (never throws). Inline code (single backtick) renders as `ProseInlineCode`.
  */
-import { createContext, useContext, type ReactNode } from 'react';
-import type { Element } from 'hast';
-
-import { CodeBlock, ProseInlineCode, type CodeBlockTokens } from '@/components/templates/edgerunner-v2/pages/blog/prose';
+import type { CodeBlockTokens } from '@/components/templates/edgerunner-v2/pages/blog/prose';
 import { highlightCode } from '@/lib/shiki-highlight';
+
+// Re-export the client-side bridge pieces so the renderer imports from one place.
+export { CodeBridge, CodeBridgeProvider } from './code-bridge-client';
 
 // ── Pre-pass extraction ─────────────────────────────────────────────────────
 
@@ -60,65 +64,4 @@ export async function highlightFencedBlocks(blocks: FencedBlock[]): Promise<Code
       return { lines };
     }),
   );
-}
-
-// ── Render context (sync token lookup, source-ordered) ───────────────────────
-
-interface CodeBridgeState {
-  tokens: CodeBlockTokens[];
-  /** Mutable cursor — incremented as each fenced block renders, matching order. */
-  cursor: { i: number };
-}
-
-const CodeBridgeContext = createContext<CodeBridgeState | null>(null);
-
-/** Provider wrapping the <Markdown> tree with the pre-resolved token array. */
-export function CodeBridgeProvider({
-  tokens,
-  children,
-}: {
-  tokens: CodeBlockTokens[];
-  children: ReactNode;
-}) {
-  // A fresh cursor per render so re-renders re-walk the blocks in order.
-  return (
-    <CodeBridgeContext.Provider value={{ tokens, cursor: { i: 0 } }}>
-      {children}
-    </CodeBridgeContext.Provider>
-  );
-}
-
-// ── The `code` component (inline vs fenced) ──────────────────────────────────
-
-/**
- * react-markdown renders fenced code as `<pre><code class="language-xxx">` and
- * inline code as a bare `<code>` (no language class, no surrounding <pre>).
- * We distinguish: a `language-*` className OR a multi-line value ⇒ fenced.
- */
-export function CodeBridge({
-  className,
-  children,
-  node,
-}: {
-  className?: string;
-  children?: ReactNode;
-  node?: Element;
-}) {
-  const state = useContext(CodeBridgeContext);
-  const isFenced =
-    typeof className === 'string' && /\blanguage-/.test(className)
-      ? true
-      : // Fallback: a code element whose only child is multi-line text is fenced.
-        typeof children === 'string' && children.includes('\n');
-
-  if (!isFenced) {
-    return <ProseInlineCode>{children}</ProseInlineCode>;
-  }
-
-  // Fenced: pull the next pre-resolved token set by source order.
-  const tokens = state ? state.tokens[state.cursor.i++] : undefined;
-  // `node` is unused for rendering but kept in the signature so react-markdown's
-  // ExtraProps shape is satisfied without an unused-var lint hit.
-  void node;
-  return <CodeBlock tokens={tokens}>{children}</CodeBlock>;
 }

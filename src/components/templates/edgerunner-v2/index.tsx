@@ -255,6 +255,7 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
             <BlogTeaser
               section={sectionOfType(sections, 'blog_preview')}
               username={profile.username}
+              recentPosts={data.recentPosts}
             />
           </div>
         </ScrollReveal>

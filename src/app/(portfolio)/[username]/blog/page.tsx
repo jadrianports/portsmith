@@ -19,6 +19,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
+import { getPublishedPosts } from '@/lib/portfolio/get-posts';
 import { EdgerunnerV2PageShell } from '@/components/templates/edgerunner-v2/pages/page-shell';
 import { BlogIndexContent } from '@/components/templates/edgerunner-v2/pages/blog/blog-index-content';
 import { subRouteRobots } from '@/lib/seo/public-metadata';
@@ -88,9 +89,15 @@ export default async function BlogIndexPage({
   // saved as data on a non-granted template; the URL 404s).
   if (!data.templateSpec.pages?.includes('blog')) notFound();
 
+  // DB posts — a SECOND cookie-less anon read (Pitfall 2; D-22 preserved). Sorted
+  // newest-first by display_date in get-posts. The pink/cyan/purple accent is
+  // template decoration cycled BY INDEX in BlogIndexContent (D-06 — not stored).
+  // `portfolioId` is non-null here (a missing portfolio was notFound()-ed above).
+  const posts = data.portfolioId ? await getPublishedPosts(data.portfolioId) : [];
+
   return (
     <EdgerunnerV2PageShell data={data} activeNav="blog">
-      <BlogIndexContent username={username} />
+      <BlogIndexContent username={username} posts={posts} />
     </EdgerunnerV2PageShell>
   );
 }
