@@ -55,19 +55,22 @@ export async function generateMetadata({
 
   const displayName = data.profile.display_name ?? username;
   const canonical = siteUrl(`/${username}/blog`);
+  // Template-neutral, profession-agnostic blog description for the SHARED route
+  // metadata — NO template-specific voice (the on-page heading/intro is the
+  // template's own job, inside the template folder). Keeps the meta correct for any
+  // present/future template that opts into a blog page, not just edgerunner-v2.
+  const description = `Articles and writing by ${displayName}.`;
 
   return {
     title: `Blog — ${displayName}`,
-    description:
-      'Notes from the grid: essays on edge runtimes, motion design, and type-safe frontend craft.',
+    description,
     alternates: { canonical },
     // D-18: inherit the portfolio's isPublishReady noindex gate (no posts-as-indexable
     // side-door) — withheld-but-reachable while the parent portfolio is incomplete.
     ...subRouteRobots(data),
     openGraph: {
       title: `Blog — ${displayName}`,
-      description:
-        'Long-form essays on edge runtimes, motion design, and the craft of building software that feels alive.',
+      description,
       url: canonical,
       images: [data.settings.og_image_url ?? siteUrl('/og-default.png')],
     },
@@ -75,8 +78,7 @@ export async function generateMetadata({
     twitter: {
       card: 'summary_large_image',
       title: `Blog — ${displayName}`,
-      description:
-        'Notes from the grid: essays on edge runtimes, motion design, and type-safe frontend craft.',
+      description,
       images: [data.settings.og_image_url ?? siteUrl('/og-default.png')],
     },
   };

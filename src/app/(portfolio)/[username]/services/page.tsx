@@ -52,18 +52,19 @@ export async function generateMetadata({
 
   const displayName = data.profile.display_name ?? username;
   const canonical = siteUrl(`/${username}/services`);
+  // Template-neutral, profession-agnostic services description for the SHARED route
+  // metadata — NO template-specific voice (the on-page copy is the template's job).
+  const description = `Services offered by ${displayName}.`;
 
   return {
     title: `Services — ${displayName}`,
-    description:
-      'Full-stack engineering, API builds, UI/UX design, headless CMS, and custom automation — end-to-end ownership, edge-native architecture.',
+    description,
     alternates: { canonical },
     // D-18: inherit the portfolio's isPublishReady noindex gate (no side-door).
     ...subRouteRobots(data),
     openGraph: {
       title: `Services — ${displayName}`,
-      description:
-        'End-to-end product engineering: build, ship, and make it gnarly. Five focused offerings, no contracts, 30-day support.',
+      description,
       url: canonical,
       images: [data.settings.og_image_url ?? siteUrl('/og-default.png')],
     },
