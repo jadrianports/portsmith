@@ -22,6 +22,7 @@
     "gate:conformance": "npx playwright test e2e/template-conformance.spec.ts",
     "gate:a11y": "npx playwright test e2e/template-a11y.spec.ts",
     "gate:parity": "npx playwright test e2e/template-visual-parity.spec.ts",
+    "gate:blog-prod": "node scripts/gate-blog-prod-parity.mjs",
     "gate:budget": "npm run check:bundle",
     "preview:template": "tsx scripts/preview-template.ts"
   },

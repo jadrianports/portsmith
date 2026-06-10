@@ -27,6 +27,11 @@
  *             gate:conformance          PIPE-05 (no drop, no null/undef leak) + neg-control
  *             gate:a11y                 axe serious/critical hard-fail + the B1 neg-control RED
  *             gate:parity              golden-fixture visual parity (PIPE-11)
+ *   TIER 5  PRODUCTION-SERVED         ← `next start` over the Tier-2 build (--skip-build, no rebuild):
+ *             gate:blog-prod            D-22 production blog render — asserts the founder's /blog
+ *                                       serves the 3 seeded posts (NOT the empty state) + a
+ *                                       populated KEEP READING strip. Closes the dev-only blind
+ *                                       spot that let a stale prerender false-GREEN (13.2-07).
  *
  * ── FAIL POLICY (CICD-01 "blocks on ANY single failure") ─────────────────────────────────
  *   - Tiers 0/1/2 are FAIL-FAST: cheap + strictly ordering-dependent. A tsc failure, a static
@@ -171,6 +176,17 @@ function main() {
     ['gate:conformance (PIPE-05 + neg-control)', 'npm run gate:conformance'],
     ['gate:a11y (axe serious/critical + B1 neg-control)', 'npm run gate:a11y'],
     ['gate:parity (PIPE-11 golden-fixture parity)', 'npm run gate:parity'],
+  ]);
+  allFailed.push(...tier.failed);
+
+  // TIER 5 — PRODUCTION-SERVED gate (debug blog-posts-empty-prod-build / 13.2-07 hardening).
+  // The Tier-4 render gates run against `next dev`, which renders on-demand and CANNOT observe
+  // a stale/broken PRODUCTION prerender. This gate serves the Tier-2 build (`--skip-build`,
+  // NO double build) under `next start` and asserts the founder's blog routes serve the 3
+  // seeded posts (not the empty state). Runs LAST: it rebinds port 3000, so it must follow the
+  // dev-server render tier. Requires the local Supabase stack UP + `npm run seed:founder`.
+  tier = runAggregate('TIER 5 — production-served gate', [
+    ['gate:blog-prod (D-22 production blog render — stale-prerender lockout)', 'npm run gate:blog-prod -- --skip-build'],
   ]);
   allFailed.push(...tier.failed);
 

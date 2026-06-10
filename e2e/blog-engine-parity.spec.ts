@@ -20,6 +20,15 @@
  * the blocking human-verify (13.2-07 Task 2) confirms it matches the pre-engine
  * static transcription before the static files are deleted.
  *
+ * ── DEV-ONLY SCOPE — see `scripts/gate-blog-prod-parity.mjs` (LOAD-BEARING) ────
+ * This spec is a PIXEL-fidelity gate against `next dev` (on-demand render). It does
+ * NOT — and cannot — catch a stale/broken PRODUCTION prerender (a `.next` built before
+ * the posts were seeded serves the empty blog under `next start` while `next dev` shows
+ * all 3 posts). That CONTENT-level production assertion lives in the companion gate
+ * `npm run gate:blog-prod` (`scripts/gate-blog-prod-parity.mjs`), which owns a full
+ * `next build` → `next start` → fetch → assert lifecycle and is Tier 5 of `gate:template`.
+ * Keep the two together: pixels here (dev), production content there (prod serve).
+ *
  * ── PRECONDITION (LOAD-BEARING) ───────────────────────────────────────────────
  * Runs against the LIVE dev server (playwright.config.ts `webServer: npm run dev`,
  * baseURL http://127.0.0.1:3000) + the LOCAL Supabase stack, reading the SEEDED
