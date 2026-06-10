@@ -77,4 +77,15 @@ export interface TemplateSpec {
   sections: Partial<Record<string, TemplateSectionSpec>>;
   color_presets: readonly string[];
   font_presets: readonly string[];
+  /**
+   * D-14/D-15 — the dedicated sub-pages this template renders OUTSIDE the single
+   * scroll (`/[username]/blog`, `/[username]/blog/[slug]`, `/[username]/services`).
+   * OMITTED on a standard template (→ `undefined` → single-scroll, the D-15 default
+   * "no dedicated sub-pages" — the safe degrade). Only an EXCLUSIVE-lane template
+   * (today: `edgerunner-v2`) opts in. The three `(portfolio)` sub-routes 404 unless
+   * the resolved spec's `pages` includes the matching page name — so a non-granted
+   * template's posts stay SAVED as data but the URL 404s (D-14). Optional + a soft
+   * literal union so adding a future page (e.g. `'gallery'`) is backward-compatible.
+   */
+  pages?: readonly ('blog' | 'services')[];
 }

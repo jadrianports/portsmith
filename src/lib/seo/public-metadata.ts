@@ -49,6 +49,21 @@ function toGateInput(data: PortfolioData) {
 }
 
 /**
+ * D-18 — the SAFE-04 noindex gate fragment for the EXCLUSIVE-lane sub-routes
+ * (`/[username]/blog`, `/[username]/blog/[slug]`, `/[username]/services`). The
+ * sub-routes INHERIT the parent portfolio's `isPublishReady` gate rather than
+ * opening a posts-as-indexable side-door (threat T-13.2-13): when the portfolio
+ * is not publish-ready, every sub-route is withheld from indexes but stays
+ * reachable + followed (`{ index:false, follow:true }`), mirroring `:73` exactly.
+ * When ready, an EMPTY object is returned so the caller's `...spread` omits
+ * `robots` and the page is default-indexable. PURE — takes the already-loaded
+ * `PortfolioData`, no new request-time read (D-22 preserved).
+ */
+export function subRouteRobots(data: PortfolioData): Pick<Metadata, 'robots'> {
+  return isPublishReady(toGateInput(data)) ? {} : { robots: { index: false, follow: true } };
+}
+
+/**
  * Build the PUBLIC-page Metadata for a published portfolio: per-portfolio
  * title/description, the siteUrl canonical, the SAFE-04 robots gate, and the
  * static OG default. PURE over `data` + env (`siteUrl`); no request access.

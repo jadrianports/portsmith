@@ -5,8 +5,10 @@
  * same `generateStaticParams`, cookie-less anon data fetch via `getPortfolioByUsername`.
  * No cookies()/headers()/host-reads — stays ● SSG/ISR in the build output.
  *
- * GATE: resolves the portfolio's template slug from the fetched data; if it is NOT
- * `edgerunner-v2`, calls `notFound()`. Only this template ships a /services sub-page.
+ * GATE (D-14/D-15): consults the resolved template spec — if `spec.pages` does NOT
+ * include `'services'`, calls `notFound()`. Standard templates omit `pages` so they
+ * 404 here; only the exclusive-lane edgerunner-v2 opts in. The spec is already
+ * resolved in the cookie-less read, so the gate adds NO new DB read (D-22).
  *
  * NEXT 16 ASYNC PARAMS: `params` is a Promise — MUST be `await`ed in both
  * `generateMetadata` and the page body.
@@ -17,6 +19,7 @@ import type { Metadata } from 'next';
 import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
 import { EdgerunnerV2PageShell } from '@/components/templates/edgerunner-v2/pages/page-shell';
 import { ServicesPageContent } from '@/components/templates/edgerunner-v2/pages/services-page-content';
+import { subRouteRobots } from '@/lib/seo/public-metadata';
 import { siteUrl } from '@/lib/url';
 
 /** D-21 ISR backstop — matches [username]/page.tsx */
@@ -42,8 +45,8 @@ export async function generateMetadata({
     return { title: 'Not found', robots: { index: false, follow: false } };
   }
 
-  // Gate: only edgerunner-v2 has a /services sub-page
-  if (data.templateSlug !== 'edgerunner-v2') {
+  // D-14 gate: only a template whose spec opts into the 'services' page renders one.
+  if (!data.templateSpec.pages?.includes('services')) {
     return { title: 'Not found', robots: { index: false, follow: false } };
   }
 
@@ -55,6 +58,8 @@ export async function generateMetadata({
     description:
       'Full-stack engineering, API builds, UI/UX design, headless CMS, and custom automation — end-to-end ownership, edge-native architecture.',
     alternates: { canonical },
+    // D-18: inherit the portfolio's isPublishReady noindex gate (no side-door).
+    ...subRouteRobots(data),
     openGraph: {
       title: `Services — ${displayName}`,
       description:
@@ -76,8 +81,8 @@ export default async function ServicesPage({
   const data = await getPortfolioByUsername(username);
   if (!data) notFound(); // D-24 — missing/unpublished
 
-  // GATE: only edgerunner-v2 ships a /services sub-page
-  if (data.templateSlug !== 'edgerunner-v2') notFound();
+  // D-14 gate: 404 unless the resolved spec declares the 'services' page.
+  if (!data.templateSpec.pages?.includes('services')) notFound();
 
   return (
     <EdgerunnerV2PageShell data={data} activeNav="services">

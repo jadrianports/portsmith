@@ -6,8 +6,11 @@
  * `getPortfolioByUsername`. No cookies()/headers()/host-reads — stays ● SSG/ISR
  * in the build output.
  *
- * GATE: resolves the portfolio's template slug; if NOT `edgerunner-v2`, calls
- * `notFound()`. Only this template ships a /blog sub-page.
+ * GATE (D-14/D-15): consults the resolved template spec — if `spec.pages` does NOT
+ * include `'blog'`, calls `notFound()`. Standard templates omit `pages` (→ undefined)
+ * so they 404 here; only the exclusive-lane edgerunner-v2 opts in. The spec is already
+ * resolved in the cookie-less read (`get-portfolio.ts` → `resolveSpec`), so the gate
+ * adds NO new DB read — the route stays ● SSG/ISR (D-22).
  *
  * NEXT 16 ASYNC PARAMS: `params` is a Promise — MUST be `await`ed in both
  * `generateMetadata` and the page body.
@@ -18,6 +21,7 @@ import type { Metadata } from 'next';
 import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
 import { EdgerunnerV2PageShell } from '@/components/templates/edgerunner-v2/pages/page-shell';
 import { BlogIndexContent } from '@/components/templates/edgerunner-v2/pages/blog/blog-index-content';
+import { subRouteRobots } from '@/lib/seo/public-metadata';
 import { siteUrl } from '@/lib/url';
 
 /** D-21 ISR backstop — matches [username]/page.tsx */
@@ -43,8 +47,8 @@ export async function generateMetadata({
     return { title: 'Not found', robots: { index: false, follow: false } };
   }
 
-  // Gate: only edgerunner-v2 has a /blog sub-page
-  if (data.templateSlug !== 'edgerunner-v2') {
+  // D-14 gate: only a template whose spec opts into the 'blog' page renders one.
+  if (!data.templateSpec.pages?.includes('blog')) {
     return { title: 'Not found', robots: { index: false, follow: false } };
   }
 
@@ -56,6 +60,9 @@ export async function generateMetadata({
     description:
       'Notes from the grid: essays on edge runtimes, motion design, and type-safe frontend craft.',
     alternates: { canonical },
+    // D-18: inherit the portfolio's isPublishReady noindex gate (no posts-as-indexable
+    // side-door) — withheld-but-reachable while the parent portfolio is incomplete.
+    ...subRouteRobots(data),
     openGraph: {
       title: `Blog — ${displayName}`,
       description:
@@ -77,8 +84,9 @@ export default async function BlogIndexPage({
   const data = await getPortfolioByUsername(username);
   if (!data) notFound(); // D-24 — missing/unpublished
 
-  // GATE: only edgerunner-v2 ships a /blog sub-page
-  if (data.templateSlug !== 'edgerunner-v2') notFound();
+  // D-14 gate: 404 unless the resolved spec declares the 'blog' page (posts stay
+  // saved as data on a non-granted template; the URL 404s).
+  if (!data.templateSpec.pages?.includes('blog')) notFound();
 
   return (
     <EdgerunnerV2PageShell data={data} activeNav="blog">

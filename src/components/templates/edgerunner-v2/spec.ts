@@ -45,4 +45,10 @@ export const edgerunnerV2Spec = {
   },
   color_presets: ['default'],
   font_presets: ['default'],
+  // D-14/D-15 — edgerunner-v2 is the EXCLUSIVE-lane template that opts into the
+  // dedicated /blog (index + posts) and /services sub-pages. Standard templates omit
+  // `pages` entirely (→ undefined → single-scroll). This array is the route gate:
+  // the three `(portfolio)` sub-routes consult `resolveSpec(slug).pages?.includes(...)`
+  // — a template without the entry 404s that URL (posts stay saved as data).
+  pages: ['blog', 'services'],
 } as const;

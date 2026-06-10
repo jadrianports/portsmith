@@ -32,6 +32,7 @@ import { BlogPostContent } from '@/components/templates/edgerunner-v2/pages/blog
 import { getPostMetaBySlug, POST_SLUGS } from '@/components/templates/edgerunner-v2/pages/blog/post-data';
 import { POST_CODE_BLOCKS } from '@/components/templates/edgerunner-v2/pages/blog/code-data';
 import { highlightCode } from '@/lib/shiki-highlight';
+import { subRouteRobots } from '@/lib/seo/public-metadata';
 import { siteUrl } from '@/lib/url';
 import type { PostCodeTokens } from '@/components/templates/edgerunner-v2/pages/blog/posts';
 
@@ -67,7 +68,8 @@ export async function generateMetadata({
   }
 
   const data = await getPortfolioByUsername(username);
-  if (!data || data.templateSlug !== 'edgerunner-v2') {
+  // D-14 gate: only a template whose spec opts into the 'blog' page renders posts.
+  if (!data || !data.templateSpec.pages?.includes('blog')) {
     return { title: 'Not found', robots: { index: false, follow: false } };
   }
 
@@ -77,6 +79,8 @@ export async function generateMetadata({
     title: `${meta.title} — ${data.profile.display_name ?? username}`,
     description: meta.excerpt,
     alternates: { canonical },
+    // D-18: inherit the portfolio's isPublishReady noindex gate (no side-door).
+    ...subRouteRobots(data),
     openGraph: {
       title: meta.title,
       description: meta.excerpt,
@@ -98,8 +102,8 @@ export default async function BlogPostPage({
   const data = await getPortfolioByUsername(username);
   if (!data) notFound();
 
-  // GATE: only edgerunner-v2 ships /blog sub-pages
-  if (data.templateSlug !== 'edgerunner-v2') notFound();
+  // D-14 gate: 404 unless the resolved spec declares the 'blog' page.
+  if (!data.templateSpec.pages?.includes('blog')) notFound();
 
   // GATE: unknown slug — use server-safe post-data.ts (no 'use client')
   const meta = getPostMetaBySlug(slug);

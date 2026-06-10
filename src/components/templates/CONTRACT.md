@@ -53,6 +53,7 @@ interface TemplateSpec {
   sections: Partial<Record<string, TemplateSectionSpec>>; // keyed by soft-enum section type
   color_presets: readonly string[];
   font_presets: readonly string[];
+  pages?: readonly ('blog' | 'services')[]; // D-14/D-15 — dedicated sub-pages; omit → none
 }
 ```
 
@@ -73,7 +74,39 @@ interface TemplateSpec {
 `TemplateSpec` is defined ONCE (in `minimal/spec.ts`) as a STRUCTURAL widening, so a
 sibling template's spec satisfies it regardless of which sections it marks unsupported.
 `contract.ts` re-exports `TemplateSpec` / `TemplateSectionSpec` **type-only** for the
-Phase-10 gates.
+Phase-10 gates — the optional `pages` member rides along on that existing type-only
+re-export automatically (NO value re-export — that would breach the §7 bundle-split rule).
+
+### Dedicated sub-pages — `spec.pages` (D-14/D-15, EXCLUSIVE LANE)
+
+The single-scroll page model is the default and the wedge. A small set of templates may
+ALSO render **dedicated sub-pages** outside that scroll — a `/blog` index, `/blog/[slug]`
+post pages, and a `/services` page. Which sub-pages a template renders is declared on its
+spec:
+
+```ts
+// edgerunner-v2/spec.ts — the EXCLUSIVE-lane founder template opts in:
+pages: ['blog', 'services'],
+// minimal / editorial / aurora / edgerunner: OMIT `pages` entirely.
+```
+
+- **`pages` is OPTIONAL and defaults to NONE (D-15).** A template that does not declare it
+  (every standard template today) renders the single scroll only — the three `(portfolio)`
+  sub-routes (`/[username]/blog`, `/[username]/blog/[slug]`, `/[username]/services`) call
+  `notFound()` for it. This is the safe degrade: omission = single-scroll.
+- **Services, blogs and dedicated pages are an EXCLUSIVE-template perk, not a universal
+  capability (D-15).** Not all future deployments get them; declaring `pages` is the opt-in
+  that unlocks the dedicated-page routes for that template's users. Today only the founder's
+  `edgerunner-v2` opts in.
+- **Posts are DATA; the spec gates RENDERING (D-14).** A user on a non-granted template can
+  still have published posts saved in the DB — the blog routes simply 404 (the `pages` gate)
+  until they switch to a template whose spec declares `'blog'`. Switching templates is
+  therefore lossless for posts exactly as it is for sections.
+- **The gate adds NO request-time read.** Each sub-route consults the ALREADY-resolved
+  `data.templateSpec.pages?.includes('blog' | 'services')` (resolved in the cookie-less
+  `get-portfolio.ts` read via `resolveSpec`), so the routes stay ● SSG/ISR (D-22). The
+  sub-routes also INHERIT the portfolio's `isPublishReady` noindex gate (D-18 — no
+  posts-as-indexable side-door).
 
 ---
 
