@@ -21,10 +21,12 @@ import Link from 'next/link';
 import { m } from 'motion/react';
 import { ArrowRight, Calendar, Clock } from 'lucide-react';
 import { SectionHeading } from '../../sections/ui/section-heading';
-import type { Accent } from './post-data';
 import type { PublishedPost } from '@/lib/portfolio/get-posts';
 
 // ── Accent style maps (decoration, cycled by index — D-06) ──────────────────────
+
+/** Template decoration accent (D-06) — local union; the static post-data source is gone (D-17). */
+type Accent = 'pink' | 'cyan' | 'purple';
 
 const ACCENT_CYCLE: readonly Accent[] = ['pink', 'cyan', 'purple'];
 

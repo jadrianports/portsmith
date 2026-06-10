@@ -21,7 +21,9 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { m } from 'motion/react';
 import { ArrowLeft, Calendar, Clock } from 'lucide-react';
-import type { Accent } from './post-data';
+
+/** Template decoration accent (D-06) — local union; the static post-data source is gone (D-17). */
+type Accent = 'pink' | 'cyan' | 'purple';
 
 const accentTextClass: Record<Accent, string> = {
   pink:   'text-neon-pink text-glow-pink',
