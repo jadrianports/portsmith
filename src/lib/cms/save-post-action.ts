@@ -32,11 +32,13 @@
  *      404s — D-04). The homepage `/{u}` teaser auto-derives the latest posts (D-16).
  *   6. Return { ok: true }.
  *
- * The DELETE branch (`deletePostAction`) deletes the row under RLS, then frees the
- * post's own-storage body images via a SERVER-recomputed diff (`post-media-diff`,
- * WR-03) calling `deleteStorageObject(url, sub)` AFTER the delete confirms (WR-02
- * ordering) — so a failed delete never strands a live reference, and a missing /
- * cross-tenant target (0 rows) drops nothing.
+ * Both the UPDATE branch (on edit) and the DELETE branch (`deletePostAction`) free
+ * orphaned own-storage body images via a SERVER-recomputed diff (`post-media-diff`,
+ * WR-03) calling `deleteStorageObject(url, sub)` AFTER the write confirms (WR-02
+ * ordering) — so a failed write never strands a live reference, and a missing /
+ * cross-tenant target (0 rows) drops nothing. On UPDATE the diff is prior-vs-new
+ * body (an image removed/replaced in the edit is freed); on DELETE the next body is
+ * '' (all of the post's images freed).
  *
  * Source: the SHARED-A sequence from `save-section-action.ts:126-214` (the
  * `gateErrorToResult` loop is copied verbatim); the post schema from
@@ -193,10 +195,11 @@ export async function savePostAction(input: SavePostInput): Promise<SavePostResu
   // no prior slug (and the UPDATE below hits 0 rows → generic failure).
   const { data: priorRow } = await supabase
     .from('blog_posts')
-    .select('slug')
+    .select('slug, body_md')
     .eq('id', input.postId)
     .single();
   const oldSlug = (priorRow as { slug?: string } | null)?.slug;
+  const priorBody = (priorRow as { body_md?: string } | null)?.body_md ?? '';
 
   const { data: updatedRows, error } = await supabase
     .from('blog_posts')
@@ -208,6 +211,18 @@ export async function savePostAction(input: SavePostInput): Promise<SavePostResu
   // hit the RLS USING clause, or the row is missing). Enumeration-safe generic.
   if (!updatedRows || updatedRows.length === 0) {
     return { ok: false, error: SAVE_FAILED };
+  }
+
+  // 4b) WR-03 SERVER-RECOMPUTED orphan-delete on EDIT — AFTER the update confirms
+  //     (WR-02 ordering, mirrors deletePostAction + saveSectionAction). Diff the
+  //     prior body's own-storage images against the NEW body; an image removed or
+  //     replaced in this edit is freed and stops being publicly reachable at its
+  //     own-storage URL. `sub` is the server-verified subject (never client-supplied);
+  //     deleteStorageObject re-asserts the own-folder guard + origin-lock, so a
+  //     crafted cross-tenant URL is a safe no-op.
+  const droppedOnEdit = serverDroppedPostImageUrls(priorBody, parsed.body_md);
+  for (const url of droppedOnEdit) {
+    await deleteStorageObject(url, sub);
   }
 
   // 5) THREE literal revalidates + the old-slug path on a rename (D-18 / D-04).
