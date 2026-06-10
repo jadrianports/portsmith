@@ -24,7 +24,6 @@ import type { PortfolioData } from './types';
 import { minimalSpec, type TemplateSpec } from './minimal/spec';
 import { editorialSpec } from './editorial/spec';
 import { auroraSpec } from './aurora/spec';
-import { edgerunnerSpec } from './edgerunner/spec';
 import { edgerunnerV2Spec } from './edgerunner-v2/spec';
 
 /**
@@ -48,13 +47,11 @@ export const templateRegistry: Record<string, ComponentType<{ data: PortfolioDat
   // is `aurora/`) — required for proper per-template code-splitting (the ≤200kb chunk
   // budget). NEVER `{ ssr: false }` (build-forbidden on a Server-Component entry).
   aurora: dynamic(() => import('./aurora')),
-  // PIPE-09 / 13-05: the `edgerunner` template — the rich/viz-lane synthwave dogfood
-  // (the restricted/exclusive founder redesign). A PLAIN LITERAL `dynamic(() =>
-  // import('./edgerunner'))` (its folder is `edgerunner/`). NEVER `{ ssr: false }` here:
-  // the edgerunner ROOT (`edgerunner/index.tsx`) is a Server Component, so `{ ssr: false }`
-  // would be a build error. The WebGL `{ ssr: false }` lives DEEPER — inside
-  // `edgerunner/HoloShape.tsx` (a Client Component), the only sanctioned place for it.
-  edgerunner: dynamic(() => import('./edgerunner')),
+  // 13.2-08 / D-21: the v1 `edgerunner` template was TOMBSTONED — deregistered here in
+  // lockstep with migration 018 (which DELETEs the orphaned …0004 row + grant). The founder
+  // is on `edgerunner-v2` (…0005); v1 had no live portfolio. Its folder + every CI surface
+  // (slugs anchor, thumbnail SLUGS, conformance SPEC_BY_SLUG, seed self-heal) were removed in
+  // the same commit so no slug dangles. Do NOT re-add `edgerunner` (v1) here.
   // edgerunner-v2: bar-for-bar transcription of the synthwave Lovable export using
   // the export's EXACT class names (text-glow-pink, holo-panel, font-mono-retro, etc.)
   // scoped under .tmpl-edgerunner-v2 — verified hero-first before full section build.
@@ -90,12 +87,11 @@ const TEMPLATE_UUIDS = {
   // (…0002). It MUST equal the 010 seed migration's UUID exactly or `slugForTemplateId`
   // can't resolve and the public read falls back to minimal.
   aurora: '00000000-0000-4000-8000-000000000003',
-  // 13-05 / PIPE-09: the `edgerunner` template — the next pinned literal after aurora
-  // (…0003). It MUST equal the 015 seed migration's INSERT id exactly or
-  // `slugForTemplateId` can't resolve …0004 → edgerunner and the public read falls back
-  // to minimal (T-13-05-UUID). The migration row id and this literal are the single
-  // load-bearing pin.
-  edgerunner: '00000000-0000-4000-8000-000000000004',
+  // 13.2-08 / D-21: the v1 `edgerunner` UUID pin (…0004) was REMOVED in lockstep with
+  // migration 018 (the DB tombstone). With no pin, `slugForTemplateId(…0004)` resolves no
+  // entry and safely degrades to 'minimal' — but migration 018 also DELETEs the …0004 row,
+  // so no portfolio carries that UUID. The UUID …0004 is now permanently retired; do NOT
+  // reuse it for a future template (the next free literal is …0006).
   // edgerunner-v2: bar-for-bar faithful clone (UUID …0005)
   'edgerunner-v2': '00000000-0000-4000-8000-000000000005',
 } as const;
@@ -135,7 +131,7 @@ export const specRegistry: Record<string, TemplateSpec> = {
   minimal: minimalSpec,
   editorial: editorialSpec,
   aurora: auroraSpec,
-  edgerunner: edgerunnerSpec,
+  // edgerunner (v1) deregistered — see the tombstone note in templateRegistry above (D-21).
   'edgerunner-v2': edgerunnerV2Spec,
 };
 

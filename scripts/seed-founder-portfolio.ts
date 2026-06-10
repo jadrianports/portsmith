@@ -368,41 +368,40 @@ async function main(): Promise<void> {
   }
   log('founder→minimal template_grants upserted (self-healing, D-P12-04/OQ-1).');
 
-  // --- 4c. Self-healing founder→edgerunner grant (PIPE-09 / 13-05, T-13-05-ORDER). ---
-  // Phase 13 makes `edgerunner` the founder's RESTRICTED/exclusive live template. The 015
-  // migration grants it by deriving the founder FROM the data (the portfolio on the minimal
-  // UUID, BEFORE it switches that portfolio to edgerunner — the grant-then-switch order). But
-  // on a FRESH DB, if THIS seed script runs AFTER 015, no portfolio is on minimal at migration
-  // time → 015's INSERT…SELECT matches zero rows → the founder is ungranted-restricted on his
-  // OWN live template and GATE-03 would auto-fallback him to editorial. So we ALSO upsert the
-  // edgerunner grant here, order-independently — the SAME belt-and-suspenders idiom as the
-  // founder→minimal grant above (4b / OQ-1). We resolve the edgerunner template id by slug
-  // (mirroring the minimal lookup at step 3); if the row is absent (015 not yet applied) we
-  // skip silently — the migration's Step 2 will create the grant when it runs. `onConflict` on
-  // the composite PK with `ignoreDuplicates` makes a re-run (or a 015-already-ran DB) a no-op.
-  const { data: edgerunnerTemplate, error: edgerunnerLookupError } = await admin
+  // --- 4c. Self-healing founder→edgerunner-v2 grant (PIPE-09 / 13-05 / 016, T-13-05-ORDER). ---
+  // The founder's RESTRICTED/exclusive live template is now `edgerunner-v2` (016 superseded the
+  // v1 `edgerunner`, …0004 → …0005; v1 was TOMBSTONED in 018 / 13.2-08 — D-21). 016's migration
+  // grants v2 by deriving the founder FROM the data (the portfolio on the edgerunner lane). But
+  // on a FRESH DB, if THIS seed script runs AFTER 016, no portfolio may be on the right UUID at
+  // migration time → 016's INSERT…SELECT could match zero rows → the founder is ungranted on his
+  // OWN restricted template and GATE-03 would auto-fallback him to editorial. So we ALSO upsert
+  // the edgerunner-v2 grant here, order-independently — the SAME belt-and-suspenders idiom as the
+  // founder→minimal grant above (4b / OQ-1). We resolve the v2 template id by slug; if the row is
+  // absent (016 not yet applied) we skip silently — 016's Step 2 will create the grant when it
+  // runs. `onConflict` on the composite PK with `ignoreDuplicates` makes a re-run a no-op.
+  const { data: edgerunnerV2Template, error: edgerunnerV2LookupError } = await admin
     .from('templates')
     .select('id')
-    .eq('slug', 'edgerunner')
+    .eq('slug', 'edgerunner-v2')
     .maybeSingle();
-  if (edgerunnerLookupError) {
-    fail(`edgerunner template lookup failed: ${edgerunnerLookupError.message}`);
+  if (edgerunnerV2LookupError) {
+    fail(`edgerunner-v2 template lookup failed: ${edgerunnerV2LookupError.message}`);
   }
-  if (edgerunnerTemplate) {
-    const { error: edgerunnerGrantError } = await admin.from('template_grants').upsert(
+  if (edgerunnerV2Template) {
+    const { error: edgerunnerV2GrantError } = await admin.from('template_grants').upsert(
       {
-        template_id: edgerunnerTemplate.id,
+        template_id: edgerunnerV2Template.id,
         user_id: userId,
         granted_by: null,
       },
       { onConflict: 'template_id,user_id', ignoreDuplicates: true },
     );
-    if (edgerunnerGrantError) {
-      fail(`founder→edgerunner template_grants upsert failed: ${edgerunnerGrantError.message}`);
+    if (edgerunnerV2GrantError) {
+      fail(`founder→edgerunner-v2 template_grants upsert failed: ${edgerunnerV2GrantError.message}`);
     }
-    log('founder→edgerunner template_grants upserted (self-healing, PIPE-09/T-13-05-ORDER).');
+    log('founder→edgerunner-v2 template_grants upserted (self-healing, PIPE-09/016/T-13-05-ORDER).');
   } else {
-    log('edgerunner template row not present yet — skipping founder→edgerunner grant (migration 015 will create it).');
+    log('edgerunner-v2 template row not present yet — skipping founder→edgerunner-v2 grant (migration 016 will create it).');
   }
 
   // --- 5. Upsert portfolio_settings (UNIQUE on portfolio_id → idempotent). ----

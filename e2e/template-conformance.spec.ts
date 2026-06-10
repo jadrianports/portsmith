@@ -54,7 +54,6 @@ import type { TemplateSpec } from '@/components/templates/minimal/spec';
 import { minimalSpec } from '@/components/templates/minimal/spec';
 import { editorialSpec } from '@/components/templates/editorial/spec';
 import { auroraSpec } from '@/components/templates/aurora/spec';
-import { edgerunnerSpec } from '@/components/templates/edgerunner/spec';
 import { edgerunnerV2Spec } from '@/components/templates/edgerunner-v2/spec';
 import { goldenFixture } from '@/lib/fixtures/lovable-scaffold-golden';
 
@@ -74,7 +73,8 @@ const SPEC_BY_SLUG: Record<string, TemplateSpec> = {
   minimal: minimalSpec,
   editorial: editorialSpec,
   aurora: auroraSpec,
-  edgerunner: edgerunnerSpec,
+  // edgerunner (v1) tombstoned (D-21 / 13.2-08) — deregistered from the registry + folder
+  // deleted, so its spec import is gone in lockstep.
   'edgerunner-v2': edgerunnerV2Spec,
 };
 
