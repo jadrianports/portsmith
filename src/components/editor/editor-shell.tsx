@@ -52,6 +52,8 @@ import { isSupported } from '@/lib/templates/rail-grouping';
 import type { OwnerPortfolioData } from '@/lib/portfolio/get-portfolio-owner';
 import type { AllowedTemplate } from '@/lib/templates/available-templates';
 
+import { BlogPanel } from './blog-panel';
+import { BlogPreviewForm } from './blog-preview-form';
 import { CompletenessChecklist } from './completeness-checklist';
 import { ItemManager, type ItemSectionType } from './item-card';
 import { MoodboardManager } from './moodboard-manager';
@@ -80,8 +82,21 @@ const PROFILE_PANEL_ID = '__profile__';
  */
 const TEMPLATE_PANEL_ID = '__template__';
 
-/** The simple (single-form) section types handled by SectionForm. */
-const SIMPLE_TYPES = new Set<string>(['hero', 'about', 'contact']);
+/**
+ * The sentinel `activeSectionId` for the BLOG authoring panel (13.2-06 / D-19). The
+ * blog panel is not a `sections` row (posts are first-class `blog_posts` rows), so
+ * it gets its own non-UUID id; selecting the "Blog" rail entry sets this, routing
+ * the panel to the BlogPanel (posts list → post editor, in the same two-pane shell).
+ */
+const BLOG_PANEL_ID = '__blog__';
+
+/**
+ * The simple (single-form) section types handled by SectionForm. `blog_preview`
+ * (13.2-06 / D-16) routes to its own BlogPreviewForm BEFORE the SectionForm branch,
+ * but it is added here so it no longer hits the form-LESS "no editor yet"
+ * fall-through and is offered by the add-section picker.
+ */
+const SIMPLE_TYPES = new Set<string>(['hero', 'about', 'contact', 'blog_preview']);
 /**
  * The flat item-bearing section types handled by the generalized ItemManager
  * (the bespoke 3 + the 4 new flat types — Plan 04 / D-10). `skills` + `moodboard`
@@ -100,8 +115,8 @@ const ITEM_TYPES = new Set<string>([
 /**
  * Human-readable rail/panel titles per known section type — ALL 13 (the LOCKED D-19
  * map). The rail row title + the picker title both read from this. `blog_preview`
- * is present for the rail title (it can exist as a legacy row) even though it is NOT
- * addable from the picker until 13.2 (D-19).
+ * is now addable from the picker (13.2-06 / D-16) and routes to its own
+ * BlogPreviewForm — its title here drives both the rail row and the picker entry.
  */
 const SECTION_TITLES: Record<string, string> = {
   hero: 'Hero',
@@ -133,6 +148,9 @@ function optimisticSeedFor(type: string): ContentRecord {
   const heading = SECTION_TITLES[type] ?? '';
   if (type === 'hero' || type === 'contact') return { heading };
   if (type === 'skills') return { heading, groups: [] };
+  // 13.2-06 / D-16: blog_preview seeds heading + post_count (the teaser auto-derives
+  // from latest published posts; legacy items[] is fallback-only, not seeded).
+  if (type === 'blog_preview') return { heading, post_count: 3 };
   // Item-based families (incl. moodboard's gallery items[]).
   return { heading, items: [] };
 }
@@ -332,6 +350,8 @@ export function EditorShell({
   const profileActive = activeSectionId === PROFILE_PANEL_ID;
   // 07-05: whether the TEMPLATE picker panel is the active selection.
   const templateActive = activeSectionId === TEMPLATE_PANEL_ID;
+  // 13.2-06 / D-19: whether the BLOG authoring panel is the active selection.
+  const blogActive = activeSectionId === BLOG_PANEL_ID;
 
   // 07-05: the portfolio's CURRENT template slug — threaded into the picker so it can
   // mark the "● Current" card. The dashboard passes it explicitly; fall back to the
@@ -419,13 +439,15 @@ export function EditorShell({
           "Save and continue" runs the active panel's registered save (WR-01). */}
       <UnsavedChangesGuard
         sectionLabel={
-          templateActive
-            ? 'Template'
-            : profileActive
-              ? 'Profile'
-              : activeRaw
-                ? titleFor(activeRaw.type, activeRaw.content)
-                : undefined
+          blogActive
+            ? 'Blog'
+            : templateActive
+              ? 'Template'
+              : profileActive
+                ? 'Profile'
+                : activeRaw
+                  ? titleFor(activeRaw.type, activeRaw.content)
+                  : undefined
         }
       />
 
@@ -553,6 +575,14 @@ export function EditorShell({
               onSelect={() => selectSection(TEMPLATE_PANEL_ID)}
             />
 
+            {/* BLOG authoring entry (13.2-06 — D-19). Sits with the Profile/Template
+                entries at the top of the rail; selecting it routes the panel to the
+                BlogPanel (posts list → post editor). Dirty-guarded like every nav. */}
+            <BlogRailEntry
+              active={blogActive}
+              onSelect={() => selectSection(BLOG_PANEL_ID)}
+            />
+
             <RailSectionList
               sections={sections}
               portfolioId={portfolioId}
@@ -598,7 +628,16 @@ export function EditorShell({
           ) : null}
 
           <div className="mx-auto w-full max-w-2xl">
-            {templateActive ? (
+            {blogActive ? (
+              // 13.2-06 / D-19: the BLOG authoring panel (posts list → post editor),
+              // inside the existing two-pane shell — no new route. Chrome tokens only;
+              // the preview is a server action (no markdown lib / Zod on this bundle).
+              <BlogPanel
+                key={BLOG_PANEL_ID}
+                portfolioId={portfolioId}
+                username={username}
+              />
+            ) : templateActive ? (
               // 07-05: the TEMPLATE picker gallery (Surface B — platform chrome). The
               // cards navigate to the enable route (prefetch={false}) to open the
               // preview-before-commit flow; the rail entry just surfaces the gallery
@@ -756,6 +795,44 @@ function TemplateRailEntry({
 }
 
 /**
+ * The BLOG authoring rail entry (13.2-06 — D-19). A selectable row, styled
+ * identically to the Profile/Template entries, that routes the panel to the
+ * BlogPanel (posts list → post editor). Carries the active brand marker when
+ * selected (parity with the other rail entries). The panel itself is the authoring
+ * surface; this entry just surfaces it in the existing two-pane shell (no new route).
+ */
+function BlogRailEntry({
+  active,
+  onSelect,
+}: {
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      className={
+        'group relative flex min-h-11 items-center gap-2 rounded-md border border-border ' +
+        'bg-surface px-3 py-2 text-left outline-none transition-colors ' +
+        'hover:border-border-strong hover:text-accent ' +
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+        'motion-reduce:transition-none'
+      }
+    >
+      {active ? (
+        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] rounded-l-md bg-brand" />
+      ) : null}
+      <span className="text-sm font-semibold text-foreground">Blog</span>
+      <span className="ml-auto text-[13px] leading-tight text-muted-foreground">
+        Write posts
+      </span>
+    </button>
+  );
+}
+
+/**
  * Route a section to its per-type editor — EDIT-ALL (D-13): every form-having type
  * is editable regardless of the active template; the template gates RENDERING only.
  * Routes: SectionForm (hero/about/contact) · the generalized ItemManager (the
@@ -789,7 +866,18 @@ function SectionPanel({
   ) : null;
 
   let form: React.ReactNode;
-  if (SIMPLE_TYPES.has(type)) {
+  if (type === 'blog_preview') {
+    // 13.2-06 / D-16: the shrunk heading + shown-count form. Routed BEFORE the
+    // SectionForm branch (blog_preview is in SIMPLE_TYPES only so it is addable +
+    // skips the form-LESS fall-through — its real editor is this bespoke form).
+    form = (
+      <BlogPreviewForm
+        sectionId={sectionId}
+        initialContent={content}
+        username={username}
+      />
+    );
+  } else if (SIMPLE_TYPES.has(type)) {
     form = (
       <SectionForm
         sectionId={sectionId}
@@ -838,8 +926,9 @@ function SectionPanel({
       </div>
     );
   } else {
-    // A form-LESS type (only `blog_preview` today — no editor until 13.2). It is NOT
-    // addable from the picker, so this branch is only reachable for a legacy row.
+    // A form-LESS type — every registered type now has an editor (blog_preview got
+    // its BlogPreviewForm in 13.2-06). This branch is only reachable for an
+    // UNKNOWN/legacy row type the editor doesn't recognize.
     form = (
       <div className="flex flex-col gap-2">
         <h2 className="text-base font-semibold text-foreground">
