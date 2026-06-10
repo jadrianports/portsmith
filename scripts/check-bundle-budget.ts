@@ -16,6 +16,13 @@
  *       Pitfall 3 (the `simple-icons` bundle-leak risk: a non-tree-shaken barrel
  *       or a whole-set import ballooning the client chunk).
  *
+ *   (2b) any DEDICATED SUB-PAGE route (`/[username]/blog`, `/[username]/blog/[slug]`,
+ *       `/[username]/services`) **exceeds the 195 kB sub-page budget** — the 13.2-08
+ *       (D-21 / D-25) ADDITION. The exclusive-lane multi-page templates render these
+ *       server-side from the DB-Markdown blog engine; Shiki highlighting is build-time/
+ *       server-only and must NOT leak onto the client bundle. This turns the open
+ *       "rich-class bundle budget" note into an enforced number (T-13.2-22).
+ *
  *   (3) a per-template **async-island chunk exceeds the async-island cap
  *       (`ASYNC_ISLAND_CAP_BYTES`, 320 kB gz)** — the Phase-10 ADDITION (PIPE-08 /
  *       CONTRACT §5). A rich/viz-lane template may ship a lazy `{ ssr: false }` island
@@ -77,6 +84,26 @@ import { pathToFileURL } from 'node:url';
 const FIRST_LOAD_JS_BUDGET_BYTES = 200 * 1024; // 200 kB gzipped (D-25)
 
 /**
+ * The DEDICATED-SUB-PAGE First Load JS budget (D-21 / D-25, 13.2-08). The exclusive-lane
+ * multi-page templates ship three extra public routes — `/[username]/blog`,
+ * `/[username]/blog/[slug]`, `/[username]/services` — that render server-side from the
+ * cookie-less anon read + the DB-Markdown blog engine. Shiki syntax highlighting runs at
+ * BUILD time (server-only); it must NOT appear on these client bundles. This turns the
+ * previously-open "rich-class bundle budget" note into an ENFORCED number.
+ *
+ * Picked from the measured COLD build of the edgerunner-v2 engine routes (13.2-08-T2):
+ *   /[username]        167.2 kB   (root baseline)
+ *   /[username]/blog          176.3 kB
+ *   /[username]/blog/[slug]   177.4 kB
+ *   /[username]/services      179.9 kB   ← current max
+ * 195 kB stays UNDER the platform's 200 kB ceiling while leaving ~15 kB headroom above the
+ * current max — enough for routine drift, but a Shiki/markdown client leak (hundreds of kB)
+ * would blow far past it and trip the gate (T-13.2-22). Re-evaluate if the engine routes
+ * grow legitimately; never raise it above FIRST_LOAD_JS_BUDGET_BYTES.
+ */
+const SUBPAGE_FIRST_LOAD_JS_BUDGET_BYTES = 195 * 1024; // 195 kB gzipped (D-21 / D-25)
+
+/**
  * The per-template async-island sanity cap (PIPE-08 / CONTRACT §5). A rich/viz-lane
  * template's lazy `{ ssr: false }` island chunk is NOT counted in the route's First
  * Load JS (it appears in neither `rootMainFiles` nor the page client-reference-manifest),
@@ -120,6 +147,33 @@ const ROUTE_CLIENT_REF_MANIFEST = path.join(
   '[username]',
   'page_client-reference-manifest.js',
 );
+
+/**
+ * The dedicated sub-page routes (D-21 / D-25, 13.2-08). Each carries its parameterized
+ * `srcRoute` (for the log) and the Turbopack App Router manifest paths under
+ * `.next/server/app/(portfolio)/[username]/<segment>/page`. `segments` is the path under
+ * the `[username]` folder (e.g. `['blog']`, `['blog', '[slug]']`, `['services']`).
+ */
+interface SubRoute {
+  srcRoute: string;
+  buildManifest: string;
+  clientRefManifest: string;
+}
+
+function subRoute(srcRoute: string, segments: string[]): SubRoute {
+  const base = path.join(NEXT_DIR, 'server', 'app', '(portfolio)', '[username]', ...segments);
+  return {
+    srcRoute,
+    buildManifest: path.join(base, 'page', 'build-manifest.json'),
+    clientRefManifest: path.join(base, 'page_client-reference-manifest.js'),
+  };
+}
+
+const SUB_ROUTES: SubRoute[] = [
+  subRoute('/[username]/blog', ['blog']),
+  subRoute('/[username]/blog/[slug]', ['blog', '[slug]']),
+  subRoute('/[username]/services', ['services']),
+];
 
 function fail(message: string): never {
   console.error(`\n[check:bundle] FAIL: ${message}\n`);
@@ -210,22 +264,30 @@ function assertRouteIsIsrStatic(): void {
   );
 }
 
-/** Collect the unique `static/chunks/*.js` client files the route ships. */
-function collectRouteClientChunks(): string[] {
+/**
+ * Collect the unique `static/chunks/*.js` client files a route ships, from its
+ * per-route build-manifest + client-reference-manifest. Defaults to the root
+ * `/[username]` manifests; pass a sub-route's manifests to measure it (13.2-08).
+ */
+function collectRouteClientChunks(
+  buildManifest: string = ROUTE_BUILD_MANIFEST,
+  clientRefManifest: string = ROUTE_CLIENT_REF_MANIFEST,
+): string[] {
   interface RouteBuildManifest {
     rootMainFiles?: string[];
     pages?: Record<string, string[]>;
   }
-  const rbm = readJson<RouteBuildManifest>(ROUTE_BUILD_MANIFEST);
+  const rbm = readJson<RouteBuildManifest>(buildManifest);
 
   // The shared client entry chunks every route loads on first paint.
   const rootMain = Array.isArray(rbm.rootMainFiles) ? rbm.rootMainFiles : [];
 
-  // The route-specific client islands (ThemeToggle + ScrollReveal) — referenced
-  // from the page's client-reference-manifest as `static/chunks/*.js`.
+  // The route-specific client islands (ThemeToggle + ScrollReveal + any nav/island
+  // the dedicated pages add) — referenced from the page's client-reference-manifest
+  // as `static/chunks/*.js`.
   const routeChunks: string[] = [];
-  if (existsSync(ROUTE_CLIENT_REF_MANIFEST)) {
-    const crm = readFileSync(ROUTE_CLIENT_REF_MANIFEST, 'utf8');
+  if (existsSync(clientRefManifest)) {
+    const crm = readFileSync(clientRefManifest, 'utf8');
     const matches = crm.match(/static\/chunks\/[A-Za-z0-9_./-]+\.js/g) ?? [];
     for (const m of matches) routeChunks.push(m);
   }
@@ -237,6 +299,60 @@ function collectRouteClientChunks(): string[] {
   }
 
   return [...new Set([...rootMain, ...routeChunks, ...pageChunks])];
+}
+
+/** Gzip-sum a route's client chunks (level 9), failing on a manifest-listed missing file. */
+function gzippedFirstLoadJs(label: string, chunks: string[]): number {
+  if (chunks.length === 0) {
+    fail(
+      `could not resolve any client chunks for ${label} — the build manifests changed shape. ` +
+        'Inspect the route build-manifest.json under .next/server/app/(portfolio)/[username]/.',
+    );
+  }
+  let totalGz = 0;
+  for (const rel of chunks) {
+    const abs = path.join(NEXT_DIR, rel);
+    if (!existsSync(abs) || !statSync(abs).isFile()) {
+      fail(`${label}: chunk listed in the manifest does not exist on disk: ${rel}`);
+    }
+    totalGz += gzipSync(readFileSync(abs), { level: 9 }).length;
+  }
+  return totalGz;
+}
+
+/**
+ * Half 2b — the DEDICATED SUB-PAGE First Load JS budget (D-21 / D-25, 13.2-08). Measure
+ * each of the three exclusive-lane sub-routes the SAME way the root route is measured and
+ * FAIL if any exceeds {@link SUBPAGE_FIRST_LOAD_JS_BUDGET_BYTES} — the enforced "no markdown
+ * lib leak" line (Shiki is build-time/server-only; a client leak would blow far past 195 kB).
+ * A missing sub-route manifest is a hard fail: the dedicated pages MUST exist in the build
+ * (their absence would mean the multi-page template stopped emitting them).
+ */
+function assertSubPagesWithinBudget(): void {
+  const budgetKb = (SUBPAGE_FIRST_LOAD_JS_BUDGET_BYTES / 1024).toFixed(0);
+  for (const { srcRoute, buildManifest, clientRefManifest } of SUB_ROUTES) {
+    if (!existsSync(buildManifest)) {
+      fail(
+        `dedicated sub-route ${srcRoute} has no build-manifest at ${buildManifest} — the ` +
+          'multi-page template stopped emitting it, or the build is stale. Run `npm run build`.',
+      );
+    }
+    const chunks = collectRouteClientChunks(buildManifest, clientRefManifest);
+    const totalGz = gzippedFirstLoadJs(srcRoute, chunks);
+    const totalKb = (totalGz / 1024).toFixed(1);
+    if (totalGz > SUBPAGE_FIRST_LOAD_JS_BUDGET_BYTES) {
+      fail(
+        `${srcRoute} First Load JS is ${totalKb} kB gzipped — OVER the ${budgetKb} kB sub-page ` +
+          'budget (D-21 / D-25). The most likely cause is the markdown/Shiki lib leaking onto ' +
+          'the client bundle (it must stay build-time/server-only) or a new heavy client island. ' +
+          'Keep the dedicated-page client JS server-rendered and slim before merging (T-13.2-22).',
+      );
+    }
+    console.log(
+      `[check:bundle] PASS sub-page first-load-js: ${srcRoute} = ${totalKb} kB gzipped ` +
+        `(budget ${budgetKb} kB). Under cap.`,
+    );
+  }
 }
 
 /**
@@ -359,8 +475,9 @@ function main(): void {
   runBuildIfNeeded();
   assertRouteIsIsrStatic();
   assertFirstLoadJsWithinBudget();
+  assertSubPagesWithinBudget();
   assertTemplateAsyncIslandsWithinCap();
-  console.log('\n[check:bundle] OK — both deterministic TMPL-04 halves pass + async-island cap holds. (Lighthouse ≥90 is the separate holistic gate.)\n');
+  console.log('\n[check:bundle] OK — root + dedicated-sub-page First Load JS budgets pass + async-island cap holds. (Lighthouse ≥90 is the separate holistic gate.)\n');
 }
 
 /**

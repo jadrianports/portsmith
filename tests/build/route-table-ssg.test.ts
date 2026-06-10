@@ -1,6 +1,8 @@
 /**
  * D-22 — the SSG build-route INVARIANT assertion (Wave 0, Plan 06-01).
  * KEPT GREEN BY 06-03-T3 (metadata robots gate) + 06-04-T2 (the modal island).
+ * EXTENDED 13.2-08-T2 (D-21/D-22) to the three dedicated sub-routes (/blog, /blog/[slug],
+ * /services) — the multi-page portfolio MUST stay ● (SSG)/ISR exactly like the root page.
  *
  * The public `/[username]` route MUST be `● (SSG)`/ISR, NOT `ƒ` (dynamic). Three
  * Phase-6 features touch this page (SEO metadata, footer report link, deep-link
@@ -8,6 +10,13 @@
  * `no-store`/request-host read silently flips it to dynamic and breaks the
  * load-bearing perf budget. This test is the regression guard the modal slice
  * re-runs to prove it stayed static.
+ *
+ * The SAME invariant applies to the dedicated-page template class (D-14/D-21): the
+ * exclusive-lane sub-pages (`/[username]/blog`, `/[username]/blog/[slug]`,
+ * `/[username]/services`) render server-side from the cookie-less anon read + the DB-
+ * Markdown blog engine (Shiki highlighting runs at BUILD time, server-only — it must NOT
+ * leak onto a client bundle, asserted separately by `check:bundle`). Each must prerender a
+ * concrete ISR instance; a dynamic flip would break the same perf budget. T-13.2-22.
  *
  * It reads the SAME authoritative build artifact `scripts/check-bundle-budget.ts`
  * uses — `.next/prerender-manifest.json` — and asserts the concrete prerendered
@@ -31,6 +40,20 @@ import { describe, expect, it } from 'vitest';
 /** The parameterized public page + the concrete seeded instance it prerenders. */
 const ROUTE_SRC = '/[username]';
 const ROUTE_INSTANCE = '/jadrianports';
+
+/**
+ * The dedicated-page sub-routes (D-14/D-21, 13.2). Each row is `[srcRoute, instance]`:
+ * the parameterized page and a concrete prerendered instance `generateStaticParams`
+ * yields for the seeded founder. `/blog/[slug]` uses a REAL seeded post slug
+ * (`shipping-on-the-edge`, the 017 reconcile seed) so the instance genuinely exists in
+ * the manifest — a non-existent slug would (correctly) be absent and false-fail. The
+ * presence of each prerendered instance is the deterministic ● (SSG)/ISR proof.
+ */
+const SUB_ROUTES: ReadonlyArray<readonly [srcRoute: string, instance: string]> = [
+  ['/[username]/blog', '/jadrianports/blog'],
+  ['/[username]/blog/[slug]', '/jadrianports/blog/shipping-on-the-edge'],
+  ['/[username]/services', '/jadrianports/services'],
+];
 
 const NEXT_DIR = path.resolve('.next');
 const PRERENDER_MANIFEST = path.join(NEXT_DIR, 'prerender-manifest.json');
@@ -80,4 +103,33 @@ describe('D-22 — /[username] stays ● (SSG)/ISR, never ƒ (dynamic)', () => {
     expect(typeof revalidate).toBe('number');
     expect(revalidate as number).toBeGreaterThan(0);
   });
+});
+
+describe('D-21/D-22 — the dedicated sub-routes (/blog, /blog/[slug], /services) stay ● (SSG)/ISR', () => {
+  for (const [srcRoute, instance] of SUB_ROUTES) {
+    describe(`${srcRoute} → ${instance}`, () => {
+      it('has a concrete prerendered instance in the prerender manifest (SSG/ISR proof)', () => {
+        const pm = readPrerenderManifest();
+        expect(
+          pm.routes?.[instance],
+          `${srcRoute} is NOT ISR/static — no prerendered instance "${instance}" in ` +
+            'prerender-manifest.routes. The dedicated sub-page likely went DYNAMIC (ƒ): an ' +
+            'accidental searchParams/cookies()/headers()/no-store/request-host read flips it ' +
+            'to dynamic and breaks the D-22 perf budget (T-13.2-22).',
+        ).toBeTruthy();
+      });
+
+      it(`maps the prerendered instance back to the ${srcRoute} source route`, () => {
+        const pm = readPrerenderManifest();
+        expect(pm.routes?.[instance]?.srcRoute).toBe(srcRoute);
+      });
+
+      it('carries a positive ISR revalidate (the D-21 backstop), confirming ISR not dynamic', () => {
+        const pm = readPrerenderManifest();
+        const revalidate = pm.routes?.[instance]?.initialRevalidateSeconds;
+        expect(typeof revalidate).toBe('number');
+        expect(revalidate as number).toBeGreaterThan(0);
+      });
+    });
+  }
 });
