@@ -5,10 +5,11 @@
  * focus-trapped, flat, profession-neutral type picker that provisions a new
  * section on demand (the EDIT-ALL provisioning affordance, SC-1).
  *
- * It lists every FORM-HAVING type the portfolio does NOT already have, minus
- * `blog_preview` (no form until 13.2 — D-02/D-09/D-19). The list is a PLAIN,
- * ordered, self-contained const (title + blurb + lucide icon per the LOCKED D-19
- * map) — it does NOT import `@/lib/validations` or `@/components/templates/registry`
+ * It lists every FORM-HAVING type the portfolio does NOT already have — including
+ * `blog_preview` as of 13.2-06 / D-16 (it gained its BlogPreviewForm in the blog
+ * engine). The list is a PLAIN, ordered, self-contained const (title + blurb +
+ * lucide icon per the LOCKED D-19 map) — it does NOT import `@/lib/validations` or
+ * `@/components/templates/registry`
  * (D-25: keep Zod/specs off the bundle; the addable set is a constant, not the
  * schema map). The server `addSectionAction` allowlist (`ADDABLE_SECTION_TYPES`)
  * is the authoritative backstop behind this client filter.
@@ -40,6 +41,7 @@ import {
   Images,
   LoaderCircle,
   Mail,
+  Newspaper,
   PanelTop,
   Quote,
   User,
@@ -54,9 +56,9 @@ import { addSectionAction } from '@/lib/cms/add-section-action';
 /**
  * The LOCKED D-19 picker entries — title + one-line blurb + lucide icon, in the
  * profession-neutral D-19 order. This is a PLAIN const string-keyed list, NOT the
- * Zod registry/schema map (D-25). `blog_preview` is intentionally ABSENT (no form
- * until 13.2 — D-02/D-09/D-19); when its form ships, add a row here with icon
- * `newspaper`. The server `ADDABLE_SECTION_TYPES` allowlist is the backstop.
+ * Zod registry/schema map (D-25). `blog_preview` is now INCLUDED (13.2-06 / D-16) —
+ * its form (heading + shown-count) shipped with the blog engine. The server
+ * `ADDABLE_SECTION_TYPES` allowlist is the backstop.
  */
 interface PickerEntry {
   type: string;
@@ -138,7 +140,12 @@ const PICKER_ENTRIES: readonly PickerEntry[] = [
     blurb: 'Credentials, badges, and licenses.',
     Icon: Award,
   },
-  // NOTE: `blog_preview` is deliberately OMITTED (no form until 13.2 — D-02/D-19).
+  {
+    type: 'blog_preview',
+    title: 'Blog teaser',
+    blurb: 'Show your latest posts on your page (auto-filled from your blog).',
+    Icon: Newspaper,
+  },
 ] as const;
 
 /** Copy (UI-SPEC §3 / Copywriting Contract — LOCKED). */
@@ -188,9 +195,9 @@ export function AddSectionTypePicker({
   // The in-dialog destructive Alert message (the 23505 race backstop / failure).
   const [error, setError] = useState<string | null>(null);
 
-  // The addable list = the D-19 entries MINUS already-present types MINUS
-  // blog_preview (already absent from PICKER_ENTRIES). A plain client-side filter;
-  // the server allowlist is the authority.
+  // The addable list = the D-19 entries (incl. blog_preview as of 13.2-06) MINUS
+  // already-present types. A plain client-side filter; the server allowlist is the
+  // authority.
   const present = useMemo(() => new Set(presentTypes), [presentTypes]);
   const addable = useMemo(
     () => PICKER_ENTRIES.filter((e) => !present.has(e.type)),

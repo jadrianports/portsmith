@@ -8,9 +8,10 @@
  * sequence (a failure at step N never reaches step N+1):
  *
  *   0. ADDABLE allowlist backstop (Pitfall 6) — reject anything not in
- *      `ADDABLE_SECTION_TYPES` (the 12 form-having types, blog_preview excluded)
- *      BEFORE the DB. `blog_preview` IS Zod-registered, so the soft-enum gate would
- *      accept it; this allowlist is the only guard keeping a form-less row out.
+ *      `ADDABLE_SECTION_TYPES` (all 13 form-having types — `blog_preview` is now
+ *      INCLUDED as of 13.2-06 / D-16) BEFORE the DB. This allowlist is the guard
+ *      keeping an unregistered/crafted type out (the soft-enum gate does not know
+ *      the "form-having" subset).
  *   1. getVerifiedClaims() — verified JWT identity (AUTH-05). NEVER the unverified,
  *      spoofable cookie-session getter. A null claim ⇒ { ok:false }. WR-05: a
  *      verified claim MUST carry a `sub` — hard-fail on a missing one (never `?? ''`).
@@ -77,6 +78,7 @@ const SEED_HEADING: Record<string, string> = {
   services: 'Services',
   moodboard: 'Moodboard / Gallery',
   certifications: 'Certifications',
+  blog_preview: 'From the blog',
 };
 
 /**
@@ -102,6 +104,11 @@ function seedContentFor(type: string): unknown {
   }
   if (type === 'skills') {
     return { heading, groups: [] };
+  }
+  if (type === 'blog_preview') {
+    // 13.2-06 / D-16: heading + shown-count (the teaser auto-derives from latest
+    // published posts; the legacy items[] fallback is not seeded).
+    return { heading, post_count: 3 };
   }
   // The item-based families (incl. moodboard's gallery items[]).
   return { heading, items: [] };

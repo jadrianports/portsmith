@@ -1,13 +1,13 @@
 /**
  * addable-section-types — the ADDABLE_SECTION_TYPES allowlist (D-02 / Pitfall 6).
  *
- * The 12 FORM-HAVING soft-enum types a user may add via the Add-section picker:
- * the 13 registered types (`sectionContentSchemas`, `@/lib/validations/sections`)
- * MINUS `blog_preview` — which IS Zod-registered (so `validateSectionContent`
- * would accept it) but has NO editor form until Phase 13.2 (the blog engine). The
- * picker filters present types + omits `blog_preview`; this list is the defensive
- * backstop the action enforces BEFORE the DB (Pitfall 6 — the soft-enum gate does
- * NOT know about the "form-having" subset).
+ * The 13 FORM-HAVING soft-enum types a user may add via the Add-section picker — all
+ * the registered types (`sectionContentSchemas`, `@/lib/validations/sections`). As of
+ * 13.2-06 / D-16 `blog_preview` is INCLUDED: it gained its BlogPreviewForm (heading +
+ * shown-count) in the blog engine, so it is now a form-having, addable type like the
+ * rest. The picker filters present types; this list is the defensive backstop the
+ * action enforces BEFORE the DB (Pitfall 6 — the soft-enum gate does NOT know about
+ * the "form-having" subset, so an unregistered/crafted type is still refused here).
  *
  * ── WHY A SEPARATE PLAIN MODULE (a CLAUDE.md hard invariant) ──────────────────
  * This const CANNOT live in `add-section-action.ts`: that module is `'use server'`
@@ -21,10 +21,10 @@
  */
 
 /**
- * The 12 addable (form-having) section types — the 13 registered soft-enum types
- * minus `blog_preview`. Kept in registry order for a stable picker list. A crafted
- * `addSectionAction('blog_preview')` or `addSectionAction('not_a_real_type')` is
- * refused by this allowlist before any DB access.
+ * The 13 addable (form-having) section types — all the registered soft-enum types,
+ * including `blog_preview` (13.2-06 / D-16). Kept in registry order for a stable
+ * picker list. A crafted `addSectionAction('not_a_real_type')` is refused by this
+ * allowlist before any DB access.
  */
 export const ADDABLE_SECTION_TYPES = [
   'hero',
@@ -39,12 +39,13 @@ export const ADDABLE_SECTION_TYPES = [
   'services',
   'moodboard',
   'certifications',
+  'blog_preview',
 ] as const;
 
 /** A single addable section type (the picker/backstop allowlist member). */
 export type AddableSectionType = (typeof ADDABLE_SECTION_TYPES)[number];
 
-/** Type guard: is `type` one of the 12 addable form-having types? */
+/** Type guard: is `type` one of the addable form-having types? */
 export function isAddableSectionType(type: string): type is AddableSectionType {
   return (ADDABLE_SECTION_TYPES as readonly string[]).includes(type);
 }
