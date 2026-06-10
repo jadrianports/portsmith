@@ -44,7 +44,7 @@
  *   Prod:   SEED_TARGET=prod npm run seed:founder         (or `npm run seed:founder -- --confirm-prod`)
  */
 import { createClient } from '@supabase/supabase-js';
-import { profileSchema, validateSectionContent } from '@/lib/validations';
+import { profileSchema, validateSectionContent, postContentSchema } from '@/lib/validations';
 import { FOUNDER } from './seed/founder-content';
 
 // Load .env.local so `npm run seed:founder` works without manual `export`s.
@@ -468,9 +468,64 @@ async function main(): Promise<void> {
     );
   }
 
+  // --- 7. Upsert each blog post (UPSERT on (portfolio_id, slug) → idempotent). --
+  // 13.2-07 DOGFOOD (D-17 / SC-3): the founder's posts become REAL `blog_posts`
+  // rows through the SAME Markdown write gate the CMS uses — `postContentSchema`
+  // (SHARED-C). Each body is validated BEFORE the service-role upsert; a Zod throw
+  // aborts the seed (T-13.2-19 — the seed never bypasses the gate). The upsert key
+  // is the `(portfolio_id, slug)` natural key (the uq_blog_posts_portfolio_slug
+  // UNIQUE from migration 001), so a re-run UPDATEs in place and never duplicates.
+  // `published_at` is set from `display_date` (D-05) the first time and refreshed on
+  // re-run; `published: true` makes the post live (the public_blog_posts view + the
+  // blog_post_is_public DEFINER helper gate visibility). This is the sanctioned
+  // service-role seed write — like the sections above, it does NOT import
+  // `service-role.ts` (that module's `import 'server-only'` throws under tsx).
+  for (const post of FOUNDER.posts) {
+    let validatedPost: ReturnType<typeof postContentSchema.parse>;
+    try {
+      validatedPost = postContentSchema.parse(post);
+    } catch (err) {
+      fail(
+        `blog post "${post.slug}" failed the Zod gate (postContentSchema): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+    // `published_at` (a TIMESTAMPTZ) — derive from the editable D-05 `display_date`
+    // (a DATE) so the published timestamp matches the post's real date; fall back to
+    // now() when no display_date is given.
+    const publishedAt = validatedPost.display_date
+      ? new Date(`${validatedPost.display_date}T00:00:00.000Z`).toISOString()
+      : new Date().toISOString();
+    const { error: postError } = await admin.from('blog_posts').upsert(
+      {
+        portfolio_id: portfolioId,
+        title: validatedPost.title,
+        slug: validatedPost.slug,
+        body_md: validatedPost.body_md,
+        excerpt: validatedPost.excerpt ?? null,
+        display_date: validatedPost.display_date ?? null,
+        tags: validatedPost.tags ?? [],
+        published: validatedPost.published ?? false,
+        published_at: validatedPost.published ? publishedAt : null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'portfolio_id,slug' },
+    );
+    if (postError) {
+      fail(`blog post "${post.slug}" upsert failed: ${postError.message}`);
+    }
+    log(
+      `blog post upserted: ${validatedPost.slug} (published=${
+        validatedPost.published ?? false
+      }, display_date=${validatedPost.display_date ?? 'none'}).`,
+    );
+  }
+
   log(
     `SUCCESS: founder portfolio seeded for "${username}" (${userId}) — published, ` +
-      'dark+toggle, Testimonials hidden. Re-run any time; upserts are idempotent.',
+      `dark+toggle, Testimonials hidden, ${FOUNDER.posts.length} blog posts. Re-run any ` +
+      'time; upserts are idempotent.',
   );
 }
 

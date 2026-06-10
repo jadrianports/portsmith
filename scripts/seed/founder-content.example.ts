@@ -40,6 +40,7 @@ import type {
   ProjectsContent,
   ExperienceContent,
   ContactContent,
+  PostContent,
 } from '@/lib/validations';
 
 /**
@@ -114,6 +115,22 @@ export interface FounderContent {
     contact: ContactContent;
     // testimonials: intentionally omitted — seeded hidden, no placeholder quotes (D-06).
   };
+
+  /**
+   * Blog posts as MARKDOWN SOURCE bodies (13.2-07 dogfood / D-08 / D-17). The seed
+   * gates each `body_md` through `postContentSchema` (the SAME write gate the CMS
+   * uses) BEFORE a service-role upsert on `(portfolio_id, slug)`, then sets
+   * `published: true` + `published_at` + the editable `display_date` (D-05). Markdown
+   * is rendered server-side at ISR time through the single shared pipeline; callouts
+   * use GFM alert syntax (`> [!NOTE]`=cyan, `> [!WARNING]`=pink, `> [!IMPORTANT]`=purple),
+   * fenced code uses ```lang blocks (Shiki-highlighted), tables use GFM pipes. The accent
+   * cycle is template DECORATION cycled by index on the engine — NOT a stored field, so
+   * there is no `accent` here. `reading_time` is DERIVED from `body_md` on read (D-06).
+   *
+   * Replace these placeholder bodies with the founder's real Markdown in the gitignored
+   * `founder-content.ts`; an empty array is valid (no posts seeded).
+   */
+  posts: PostContent[];
 }
 
 /**
@@ -259,4 +276,36 @@ export const FOUNDER: FounderContent = {
       subheading: "Have an idea in mind? Let's talk", // D-12 — locked copy
     },
   },
+
+  // Blog posts (13.2-07 / D-17) — placeholder REPLACE-flagged Markdown. Each body is a
+  // valid Markdown SOURCE string; the seed Zod-gates it (postContentSchema) before the
+  // upsert on (portfolio_id, slug). Slugs are strict lowercase/digit/single-hyphen (D-04).
+  // Replace the title/excerpt/body_md/dates with the founder's real posts in the
+  // gitignored copy; an empty `posts: []` is also valid (no posts seeded).
+  posts: [
+    {
+      slug: 'replace-first-post',
+      title: 'REPLACE: First post title',
+      excerpt: 'REPLACE: A one-line summary shown on the blog card and post header.',
+      display_date: '2026-01-01', // D-05 — the editable, sorted display date (YYYY-MM-DD)
+      tags: ['REPLACE-tag-1', 'REPLACE-tag-2'], // up to 6 tags
+      published: true, // D-02/D-20 — set by the publish action; the seed publishes intentionally
+      body_md: `REPLACE: the post body as Markdown.
+
+## A heading
+
+Body paragraph. Lists, callouts, and fenced code all render through the shared pipeline:
+
+- a bullet
+- another bullet
+
+> [!NOTE]
+> A neon callout (cyan). Use [!WARNING] for pink, [!IMPORTANT] for purple.
+
+\`\`\`typescript
+// a fenced code block — Shiki-highlighted server-side
+export const example = 1;
+\`\`\``,
+    },
+  ],
 };
