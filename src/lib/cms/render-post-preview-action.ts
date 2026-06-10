@@ -53,9 +53,18 @@
  * (`renderMarkdown`, the SAME function the public route consumes — D-09/D-20);
  * `renderToStaticMarkup` from `react-dom/server` (the proven serialize seam,
  * `tests/unit/markdown/render.test.ts:19,27`).
+ *
+ * BUILD NOTE (13.2-07, Turbopack production build): `react-dom/server` is imported
+ * DYNAMICALLY inside the action body, NOT as a static top-level import. A static
+ * `import … from 'react-dom/server'` in a `'use server'` module makes Turbopack treat
+ * this server action as "a component that imports react-dom/server" and FAILS the
+ * production build ("render or return the content directly as a Server Component").
+ * Deferring the import to the async body keeps it out of the action module's static
+ * graph (it only ever runs server-side, behind the owner gate) while leaving the
+ * mechanism — `renderToStaticMarkup(await renderMarkdown(body))` — byte-for-byte
+ * identical to the unit-suite seam and the public render pipeline (D-20 "preview is
+ * truth" is preserved exactly).
  */
-import { renderToStaticMarkup } from 'react-dom/server';
-
 import { renderMarkdown } from '@/lib/markdown/render-markdown';
 import { getVerifiedClaims } from '@/lib/supabase/server';
 
@@ -91,6 +100,9 @@ export async function renderPostPreviewAction(
     // The SAME pipeline the public route renders (D-20). Rendered to a static
     // HTML string server-side (the only serializable form that crosses the action
     // boundary) — the drop rules (skipHtml/urlTransform) already ran inside it.
+    // `react-dom/server` is imported dynamically here (see the BUILD NOTE header) so
+    // the Turbopack production build does not reject this 'use server' module.
+    const { renderToStaticMarkup } = await import('react-dom/server');
     const element = await renderMarkdown(input.body_md);
     const html = renderToStaticMarkup(element);
     return { ok: true, html };
