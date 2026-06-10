@@ -27,3 +27,6 @@ export * from './posts';
 
 // Auth (signup/login/reset/update-password request bodies — server-boundary gate).
 export * from './auth';
+
+// Page-view beacon (POST /api/page-view request body — server gate, D-04; no Turnstile).
+export * from './page-view';
