@@ -267,6 +267,20 @@ export const ProseLi = ({ children }: { children?: ReactNode }) => (
   </li>
 );
 
+/**
+ * Ordered list. Distinct from ProseUl (pink-dot bullets) by using native
+ * decimal markers in the cyan accent. Uses `list-inside` so the marker shows
+ * even though ProseLi renders a flex row (the marker precedes the flex span).
+ */
+export const ProseOl = ({ children }: { children?: ReactNode }) => (
+  <ol
+    className="my-5 list-inside list-decimal space-y-2 pl-1 text-lg marker:text-neon-cyan"
+    style={{ color: 'color-mix(in oklab, var(--fg) 85%, transparent)' }}
+  >
+    {children}
+  </ol>
+);
+
 export const ProseBlockquote = ({ children }: { children?: ReactNode }) => (
   <blockquote
     className="my-8 border-l-2 px-6 py-4 font-display text-xl italic text-neon-purple text-glow-purple"

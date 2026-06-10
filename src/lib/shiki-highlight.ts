@@ -39,7 +39,25 @@ function getHighlighter(): Promise<Highlighter> {
     _highlighterPromise = createHighlighter({
       // synthwave-84 is a first-party shiki theme — perfect dark synthwave palette
       themes: ['synthwave-84'],
-      langs: ['typescript', 'tsx', 'javascript', 'jsx', 'bash', 'json'],
+      // D-12: curated common language set (~15). An unknown fence degrades to
+      // plaintext (see the codeToTokens try/catch below) rather than throwing.
+      langs: [
+        'typescript',
+        'tsx',
+        'javascript',
+        'jsx',
+        'json',
+        'bash',
+        'css',
+        'html',
+        'python',
+        'sql',
+        'yaml',
+        'go',
+        'rust',
+        'markdown',
+        'diff',
+      ],
     });
   }
   return _highlighterPromise;
@@ -57,10 +75,21 @@ export async function highlightCode(
 ): Promise<HighlightResult> {
   const hl = await getHighlighter();
 
-  const tokenResult = hl.codeToTokens(code, {
-    lang: lang as Parameters<Highlighter['codeToTokens']>[1]['lang'],
-    theme: 'synthwave-84',
-  });
+  let tokenResult: ReturnType<Highlighter['codeToTokens']>;
+  try {
+    tokenResult = hl.codeToTokens(code, {
+      lang: lang as Parameters<Highlighter['codeToTokens']>[1]['lang'],
+      theme: 'synthwave-84',
+    });
+  } catch {
+    // D-12 plaintext fallback: an unloaded/unknown language must never throw.
+    // Degrade to uncolored token lines that keep the serializable HighlightResult
+    // shape (one token per source line, color 'inherit').
+    return {
+      lines: code.split('\n').map((line) => [{ text: line, color: 'inherit' }]),
+      bg: 'transparent',
+    };
+  }
 
   const lines: HighlightToken[][] = tokenResult.tokens.map((lineTokens) =>
     lineTokens.map((token) => ({
