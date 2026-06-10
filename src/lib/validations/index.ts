@@ -22,5 +22,8 @@ export * from './contact';
 // Blog post (P2 feature, schema authored now per D-04).
 export * from './blog';
 
+// Markdown post write gate (13.2 — body_md source model; postContentSchema, D-03/D-04).
+export * from './posts';
+
 // Auth (signup/login/reset/update-password request bodies — server-boundary gate).
 export * from './auth';

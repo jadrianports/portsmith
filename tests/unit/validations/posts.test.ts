@@ -22,9 +22,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-// The not-yet-existing Markdown post schema. Import resolves to `undefined` until the
-// barrel re-exports it — the `.safeParse` calls below then throw, which IS the RED state.
-// @ts-expect-error — `postContentSchema` is added to the @/lib/validations barrel in a later plan (Wave 0 RED).
+// The Markdown post write schema, barrel-exported from @/lib/validations (13.2-02).
 import { postContentSchema } from '@/lib/validations';
 
 /** A syntactically valid base post; individual tests override one field to probe a bound. */

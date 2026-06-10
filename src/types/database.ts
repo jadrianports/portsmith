@@ -58,12 +58,49 @@ export type Database = {
         }
         Relationships: []
       }
+      blog_post_history: {
+        Row: {
+          blog_post_id: string
+          body_md: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blog_post_id: string
+          body_md: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blog_post_id?: string
+          body_md?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_post_history_blog_post_id_fkey"
+            columns: ["blog_post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blog_post_history_blog_post_id_fkey"
+            columns: ["blog_post_id"]
+            isOneToOne: false
+            referencedRelation: "public_blog_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blog_posts: {
         Row: {
-          body: Json
+          body_md: string
           cover_image_alt: string | null
           cover_image_url: string | null
           created_at: string
+          display_date: string | null
           excerpt: string | null
           id: string
           meta_description: string | null
@@ -77,10 +114,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          body: Json
+          body_md: string
           cover_image_alt?: string | null
           cover_image_url?: string | null
           created_at?: string
+          display_date?: string | null
           excerpt?: string | null
           id?: string
           meta_description?: string | null
@@ -94,10 +132,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          body?: Json
+          body_md?: string
           cover_image_alt?: string | null
           cover_image_url?: string | null
           created_at?: string
+          display_date?: string | null
           excerpt?: string | null
           id?: string
           meta_description?: string | null
@@ -665,9 +704,10 @@ export type Database = {
     Views: {
       public_blog_posts: {
         Row: {
-          body: Json | null
+          body_md: string | null
           cover_image_alt: string | null
           cover_image_url: string | null
+          display_date: string | null
           excerpt: string | null
           id: string | null
           meta_description: string | null
@@ -679,9 +719,10 @@ export type Database = {
           title: string | null
         }
         Insert: {
-          body?: Json | null
+          body_md?: string | null
           cover_image_alt?: string | null
           cover_image_url?: string | null
+          display_date?: string | null
           excerpt?: string | null
           id?: string | null
           meta_description?: string | null
@@ -693,9 +734,10 @@ export type Database = {
           title?: string | null
         }
         Update: {
-          body?: Json | null
+          body_md?: string | null
           cover_image_alt?: string | null
           cover_image_url?: string | null
+          display_date?: string | null
           excerpt?: string | null
           id?: string | null
           meta_description?: string | null
