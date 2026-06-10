@@ -71,6 +71,14 @@ export async function generateMetadata({
       url: canonical,
       images: [data.settings.og_image_url ?? siteUrl('/og-default.png')],
     },
+    // Twitter/X large-image card for the blog index.
+    twitter: {
+      card: 'summary_large_image',
+      title: `Blog — ${displayName}`,
+      description:
+        'Notes from the grid: essays on edge runtimes, motion design, and type-safe frontend craft.',
+      images: [data.settings.og_image_url ?? siteUrl('/og-default.png')],
+    },
   };
 }
 

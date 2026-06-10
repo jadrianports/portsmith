@@ -36,6 +36,8 @@ import {
   type KeepReadingItem,
 } from '@/components/templates/edgerunner-v2/pages/blog/blog-post-content';
 import { subRouteRobots } from '@/lib/seo/public-metadata';
+import { blogPostingLdScriptHtml } from '@/lib/seo/blogposting-jsonld';
+import { JsonLd } from '@/lib/seo/json-ld';
 import { siteUrl } from '@/lib/url';
 
 /** D-21 ISR backstop */
@@ -93,6 +95,23 @@ export async function generateMetadata({
       description,
       url: canonical,
       type: 'article',
+      // og:type=article sub-properties — the author-controlled publish date (D-05,
+      // falling back to published_at), the author, and the post tags for richer
+      // article/social unfurls.
+      ...(post.display_date ?? post.published_at
+        ? { publishedTime: (post.display_date ?? post.published_at) as string }
+        : {}),
+      authors: [data.profile.display_name ?? username],
+      ...(Array.isArray(post.tags) && post.tags.length > 0
+        ? { tags: post.tags.filter((t): t is string => typeof t === 'string' && t.length > 0) }
+        : {}),
+      images: [data.settings.og_image_url ?? siteUrl('/og-default.png')],
+    },
+    // Twitter/X large-image card — controls the link unfurl + CTR.
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
       images: [data.settings.og_image_url ?? siteUrl('/og-default.png')],
     },
   };
@@ -135,16 +154,22 @@ export default async function BlogPostPage({
     }));
 
   return (
-    <EdgerunnerV2PageShell data={data} activeNav="blog">
-      <BlogPostContent
-        username={username}
-        title={post.title ?? 'Untitled'}
-        tags={Array.isArray(post.tags) ? post.tags : []}
-        displayDate={post.display_date}
-        readingTime={post.reading_time}
-        others={others}
-        body={body}
-      />
-    </EdgerunnerV2PageShell>
+    <>
+      {/* schema.org BlogPosting rich-results data — server-rendered into the static
+          ISR HTML. Rendered via <JsonLd> (escaped serializer) outside the markdown
+          render path so the no-dsih gate stays intact. */}
+      <JsonLd html={blogPostingLdScriptHtml(post, data, username)} />
+      <EdgerunnerV2PageShell data={data} activeNav="blog">
+        <BlogPostContent
+          username={username}
+          title={post.title ?? 'Untitled'}
+          tags={Array.isArray(post.tags) ? post.tags : []}
+          displayDate={post.display_date}
+          readingTime={post.reading_time}
+          others={others}
+          body={body}
+        />
+      </EdgerunnerV2PageShell>
+    </>
   );
 }
