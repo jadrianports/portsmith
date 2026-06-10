@@ -1,10 +1,13 @@
 /**
- * 13.1-01 (Wave 0, Nyquist) — Pitfall 6: the addable-section allowlist EXCLUDES
- * `blog_preview` + any unregistered type, and INCLUDES the 12 form-having types.
+ * 13.1-01 (Wave 0, Nyquist) — Pitfall 6: the addable-section allowlist refuses any
+ * unregistered/crafted type, and INCLUDES every form-having type. As of 13.2-06 / D-16
+ * `blog_preview` gained its BlogPreviewForm (heading + shown-count), so it is now a
+ * form-having, addable type — the original 13.1 "exclude blog_preview until a form
+ * exists" guard has been satisfied, and there are now 13 form-having types.
  *
  * GREENED BY: the Wave-1 provisioning plan (the addable allowlist the picker filters
- * against + the defensive backstop inside the add path). RED now — the module + its
- * pure export do not yet exist, so the import fails to resolve (the impl-driven RED).
+ * against + the defensive backstop inside the add path). Updated by 13.2-06 to include
+ * `blog_preview` once its form shipped.
  *
  * ── WHY A SEPARATE PLAIN MODULE (a CLAUDE.md-driven contract) ─────────────────────
  * The plan names the allowlist a "pure const" living with the add path. But
@@ -31,7 +34,8 @@ import { describe, expect, it } from 'vitest';
 // plain sibling module (the `isRecoverySession` separate-module precedent).
 import { ADDABLE_SECTION_TYPES } from '@/lib/cms/addable-section-types';
 
-// The 12 form-having types = the 13 registered soft-enum types MINUS blog_preview.
+// The 13 form-having types = every registered soft-enum type. As of 13.2-06 / D-16
+// `blog_preview` has a form (BlogPreviewForm), so it is now form-having and addable.
 const FORM_HAVING_TYPES = [
   'hero',
   'about',
@@ -45,11 +49,12 @@ const FORM_HAVING_TYPES = [
   'services',
   'moodboard',
   'certifications',
+  'blog_preview',
 ] as const;
 
 describe('Pitfall 6 — ADDABLE_SECTION_TYPES (the picker/backstop allowlist)', () => {
-  it('EXCLUDES blog_preview (no form until 13.2 — the only blog_preview guard)', () => {
-    expect(ADDABLE_SECTION_TYPES).not.toContain('blog_preview');
+  it('INCLUDES blog_preview (13.2-06/D-16 shipped its BlogPreviewForm — now addable)', () => {
+    expect(ADDABLE_SECTION_TYPES).toContain('blog_preview');
   });
 
   it('EXCLUDES unregistered / unknown types (defensive against a crafted call)', () => {
@@ -58,14 +63,14 @@ describe('Pitfall 6 — ADDABLE_SECTION_TYPES (the picker/backstop allowlist)', 
     expect(ADDABLE_SECTION_TYPES).not.toContain('admin');
   });
 
-  it('INCLUDES every one of the 12 form-having types', () => {
+  it('INCLUDES every one of the 13 form-having types', () => {
     for (const type of FORM_HAVING_TYPES) {
       expect(ADDABLE_SECTION_TYPES).toContain(type);
     }
   });
 
-  it('is EXACTLY the 12 form-having types (no extras, no blog_preview)', () => {
+  it('is EXACTLY the 13 form-having types (no extras, no unregistered types)', () => {
     expect([...ADDABLE_SECTION_TYPES].sort()).toEqual([...FORM_HAVING_TYPES].sort());
-    expect(ADDABLE_SECTION_TYPES).toHaveLength(12);
+    expect(ADDABLE_SECTION_TYPES).toHaveLength(13);
   });
 });
