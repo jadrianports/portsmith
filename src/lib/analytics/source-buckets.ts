@@ -27,21 +27,44 @@ export const DIRECT_BUCKET = 'Direct / unknown';
  * is lowercased and the FIRST entry whose substring is contained wins. Kept as a
  * single exported const so buckets can be extended at READ time without a migration
  * (D-18). Order matters — list more-specific substrings before broader ones.
+ *
+ * NOTE: short two-letter domains (Twitter's `t.co`, Facebook's `fb.com`) are handled
+ * by a SEPARATE boundary-aware check (see {@link matchShortDomain}) rather than a bare
+ * substring, because `t.co` would otherwise greedily match inside `reddi`t.co`m`,
+ * `lis`t.co`m`, etc. Only full, distinctive brand substrings live in this map.
  */
 export const HOST_BUCKET_MAP: ReadonlyArray<readonly [substring: string, label: string]> =
   Object.freeze([
     ['linkedin', 'LinkedIn'],
     ['google', 'Google'],
     ['indeed', 'Indeed'],
-    // Twitter/X — the legacy domain, the short link domain, and the rebrand.
-    ['t.co', 'Twitter/X'],
+    ['reddit', 'Reddit'],
+    // Twitter/X — the legacy domain + the rebrand. The `t.co` short domain is handled
+    // by matchShortDomain (boundary-aware) to avoid false substring matches.
     ['twitter', 'Twitter/X'],
     ['x.com', 'Twitter/X'],
-    // Facebook — full domain + the `fb.` short forms.
+    // Facebook — full domain. The `fb.com` short domain → matchShortDomain.
     ['facebook', 'Facebook'],
-    ['fb.', 'Facebook'],
-    ['reddit', 'Reddit'],
   ] as const);
+
+/**
+ * Short brand domains that MUST match on a domain boundary (exact host or a real
+ * subdomain suffix `.<domain>`), never as a bare substring — `t.co` as a substring
+ * would false-match `reddit.com`, `latest.com`, etc.
+ */
+const SHORT_DOMAIN_MAP: ReadonlyArray<readonly [domain: string, label: string]> = Object.freeze([
+  ['t.co', 'Twitter/X'],
+  ['fb.com', 'Facebook'],
+  ['fb.me', 'Facebook'],
+] as const);
+
+/** True when `host` is exactly `domain` or a subdomain of it (boundary-aware). */
+function matchShortDomain(host: string): string | null {
+  for (const [domain, label] of SHORT_DOMAIN_MAP) {
+    if (host === domain || host.endsWith(`.${domain}`)) return label;
+  }
+  return null;
+}
 
 /**
  * Friendly-case a raw `utm_source` value. UTM sources are free-form and lowercase by
@@ -77,9 +100,12 @@ export function toSourceBucket(
   const trimmedUtm = utmSource?.trim();
   if (trimmedUtm) return friendlyUtmSource(trimmedUtm);
 
-  // 2) Map the referrer host via the substring table.
+  // 2) Map the referrer host: boundary-aware short domains first (t.co / fb.com),
+  //    then the distinctive brand-substring table.
   const host = referrerHost?.trim().toLowerCase();
   if (host) {
+    const short = matchShortDomain(host);
+    if (short) return short;
     for (const [substring, label] of HOST_BUCKET_MAP) {
       if (host.includes(substring)) return label;
     }
