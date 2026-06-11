@@ -115,8 +115,13 @@ export async function POST(req: Request): Promise<NextResponse> {
   // rejects; an absent/garbage/non-finite header degrades to the post-read check (never
   // a false 413 on a valid small upload).
   const lenHeader = req.headers.get('content-length');
-  if (lenHeader) {
-    const declared = Number(lenHeader);
+  if (lenHeader && /^\d+$/.test(lenHeader.trim())) {
+    // Only a plain decimal integer is a trustworthy length (WR-04). `Number()` would
+    // coerce a hex (`0x989680`) or whitespace-padded header to a small finite value that
+    // sails past this coarse guard on a genuinely oversized body, defeating the
+    // pre-buffer point. Reject only a clean decimal over the bound; anything else
+    // (hex/padded/garbage) degrades to the authoritative post-read byteLength check below.
+    const declared = Number(lenHeader.trim());
     if (Number.isFinite(declared) && declared > MAX_UPLOAD_CEILING) {
       return NextResponse.json({ error: 'too_large' }, { status: 413 });
     }
