@@ -63,7 +63,11 @@ export interface OwnerReferrerRow {
 export interface OwnerAnalytics {
   /** All-time total page views across the owner's portfolio (headline, D-12). */
   allTime: number;
-  /** Page views in the last 30 days (the trend figure, D-12/D-17). */
+  /**
+   * Page views in the last 30 days (the trend figure, D-12/D-17). A real DB
+   * `count` over the window (WR-01) — NOT the length of the capped windowed row
+   * pull, so it never saturates at {@link ROW_CAP} on a high-traffic portfolio.
+   */
   total30d: number;
   /** All-time blog views (rows whose `path` contains `/blog`) — a secondary figure. */
   blogAllTime: number;
@@ -153,27 +157,39 @@ function buildTopReferrers(rows: PageViewWindowRow[]): OwnerReferrerRow[] {
  * aggregate in TypeScript (D-13). Returns a typed {@link OwnerAnalytics} with calm
  * defaults on any read error (never throws — the card renders an error/empty state).
  *
- * Two reads, both under the authenticated RLS client (the policy scopes both to the
+ * Four reads, all under the authenticated RLS client (the policy scopes each to the
  * owner's portfolio — no `portfolio_id` filter, D-13):
  *   1. An all-time HEAD count (`{ count: 'exact', head: true }`) for the headline —
  *      cheap, pulls no rows (D-12).
- *   2. The last-30-day rows (`path, referrer, utm_source, utm_medium, created_at`,
- *      capped) for the trend series + the source-bucket counts.
- * The all-time blog total is a second cheap head count filtered on `path ~ /blog`.
+ *   2. An all-time blog HEAD count filtered on the `/blog` route segment.
+ *   3. A 30-day HEAD count (`.gte('created_at', since)`) for the headline `total30d`
+ *      — a real count, so it is unaffected by ROW_CAP (WR-01).
+ *   4. The last-30-day rows (`path, referrer, utm_source, utm_medium, created_at`,
+ *      capped) for the trend series + the source-bucket counts only.
  */
 export async function getOwnerAnalytics(): Promise<OwnerAnalytics> {
   const supabase = await createClient(); // authenticated identity — RLS is the boundary.
   const since = new Date(Date.now() - WINDOW_DAYS * DAY_MS).toISOString();
 
-  // 1) All-time headline + all-time blog total — cheap head counts (no rows pulled),
-  //    and 2) the windowed rows for the trend + referrer aggregation. All three run
-  //    under the same `page_views own select` RLS (owner-scoped, no explicit filter).
-  const [allTimeRes, blogRes, windowRes] = await Promise.all([
+  // 1) All-time headline + all-time blog total + the true 30-day total — three cheap
+  //    head counts (no rows pulled), and 2) the windowed rows for the trend + referrer
+  //    aggregation. All four run under the same `page_views own select` RLS
+  //    (owner-scoped, no explicit filter). The dedicated 30-day count (WR-01) is the
+  //    headline `total30d` source so it NEVER saturates at ROW_CAP the way a capped
+  //    `rows.length` would — the windowed read below stays capped for the glanceable
+  //    series/referrer breakdown only.
+  const [allTimeRes, blogRes, total30dRes, windowRes] = await Promise.all([
     supabase.from('page_views').select('id', { count: 'exact', head: true }),
     supabase
       .from('page_views')
       .select('id', { count: 'exact', head: true })
       .ilike('path', '%/blog%'),
+    // True 30-day count (WR-01) — unaffected by ROW_CAP; mirrors the all-time head
+    // count above, just scoped to the window with the same `since` instant.
+    supabase
+      .from('page_views')
+      .select('id', { count: 'exact', head: true })
+      .gte('created_at', since),
     supabase
       .from('page_views')
       .select('path, referrer, utm_source, utm_medium, created_at')
@@ -184,7 +200,7 @@ export async function getOwnerAnalytics(): Promise<OwnerAnalytics> {
 
   // Any read error → calm defaults + the error flag (the card shows the load-error
   // Alert, not a misleading "no views yet" empty state).
-  if (allTimeRes.error || blogRes.error || windowRes.error) {
+  if (allTimeRes.error || blogRes.error || total30dRes.error || windowRes.error) {
     return emptyAnalytics(true);
   }
 
@@ -192,7 +208,7 @@ export async function getOwnerAnalytics(): Promise<OwnerAnalytics> {
 
   return {
     allTime: allTimeRes.count ?? 0,
-    total30d: rows.length,
+    total30d: total30dRes.count ?? 0, // WR-01: a real 30-day count, not rows.length.
     blogAllTime: blogRes.count ?? 0,
     daily: buildDailySeries(rows),
     topReferrers: buildTopReferrers(rows),
