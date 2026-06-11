@@ -146,7 +146,9 @@ test.describe('public portfolio render (TMPL-03 / TMPL-07 / D-06 / D-24)', () =>
     }
   });
 
-  test('an unknown handle returns 404 with a detail-free body (D-24)', async ({ page }) => {
+  test('an unknown handle returns 404 with the generic on-brand "not live" body (D-24 / D-09)', async ({
+    page,
+  }) => {
     // A username that does not exist (and is not the seeded one) must 404 — the
     // page calls notFound() for missing/unpublished handles.
     const unknown = `definitely-not-a-real-user-${Date.now().toString(36)}`;
@@ -157,18 +159,19 @@ test.describe('public portfolio render (TMPL-03 / TMPL-07 / D-06 / D-24)', () =>
       `an unknown handle /${unknown} must return HTTP 404 (D-24), got ${response?.status()}`,
     ).toBe(404);
 
-    // The not-found body is generic and leaks no portfolio detail (T-03-14):
-    // it shows "404" / "This page could not be found." and no template tree.
-    await expect(page.getByText('404')).toBeVisible();
-    await expect(page.getByText('This page could not be found.')).toBeVisible();
+    // D-09 (supersedes TMPL-07): the not-found page is now the warm, on-brand
+    // "this page isn't live" page (Surface 7) — the Portsmith wordmark + the
+    // generic headline/support/CTA, shown IDENTICALLY for unpublished AND
+    // nonexistent (enumeration-safe; the byte-identity is pinned by
+    // not-found-enum.spec.ts). It still renders NO portfolio template tree and
+    // leaks no portfolio detail (T-03-14 / T-17-09A). NOTE: the old assertions
+    // ("404" / "This page could not be found." / no-Portsmith-branding) were
+    // superseded by D-09 — the not-found page is the ONE public surface that now
+    // consciously carries the platform wordmark.
+    // The headline renders with a CURLY apostrophe (&rsquo;) — match either glyph.
+    await expect(page.getByText(/This page isn[’']t live yet/)).toBeVisible();
+    await expect(page.getByText('Nothing to see here for now.')).toBeVisible();
+    await expect(page.getByRole('link', { name: /Make your own with Portsmith/ })).toBeVisible();
     await expect(page.locator('.tmpl-minimal')).toHaveCount(0);
-
-    // And it carries no platform branding either.
-    const bodyText = (await page.locator('body').innerText()) ?? '';
-    for (const needle of FORBIDDEN_BRANDING) {
-      expect(bodyText, `the 404 must carry no platform branding — found "${needle}"`).not.toContain(
-        needle,
-      );
-    }
   });
 });
