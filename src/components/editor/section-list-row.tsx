@@ -59,7 +59,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
@@ -139,6 +139,47 @@ export function reorderByIds(
   return next;
 }
 
+/** The direction a chevron move button shifts a row within its group (D-10). */
+export type MoveDirection = 'up' | 'down';
+
+/**
+ * Compute the NEW FULL ordered id list for a one-step (±1) move of `sectionId`
+ * WITHIN its group (D-10 — the chevron move buttons' commit math).
+ *
+ * The move buttons are the touch/keyboard reorder fallback for dnd-kit pointer drag.
+ * A press rebuilds the WHOLE shared `sort_order` (the single order the page reads),
+ * so it can be fed straight into the SAME optimistic `commitOrder` →
+ * `reorderSectionsAction` the drag uses (riding the D-13-hardened `reorderByIds`).
+ *
+ * GROUP-BOUNDED (the load-bearing safety, parity with the per-group drag
+ * SortableContexts): the permutation happens ONLY within `groupIds` (an `arrayMove`
+ * by ±1), then the new within-group order is written back into the group's slots in
+ * `allIds` while every NON-group id keeps its absolute position. A move therefore
+ * NEVER crosses groups. Edge presses are safe no-ops: moving the group's first row
+ * up or its last row down (or moving an id not in the group) returns `allIds`
+ * unchanged.
+ *
+ * Exported so the pure-helper unit suite (`tests/unit/editor/move-within-group.test.ts`)
+ * can assert the move/edge/bounding math render-free (the `node` unit project).
+ */
+export function moveWithinGroup(
+  allIds: string[],
+  groupIds: string[],
+  sectionId: string,
+  direction: MoveDirection,
+): string[] {
+  const from = groupIds.indexOf(sectionId);
+  if (from === -1) return allIds; // not in this group → group-bounded no-op.
+  const to = direction === 'up' ? from - 1 : from + 1;
+  if (to < 0 || to >= groupIds.length) return allIds; // at a group edge → no-op.
+  const nextGroup = arrayMove(groupIds, from, to);
+  // Rebuild the full order: walk the original full list, emitting this group's ids in
+  // their NEW relative order while leaving every other id exactly in place.
+  const groupSet = new Set(groupIds);
+  let cursor = 0;
+  return allIds.map((id) => (groupSet.has(id) ? nextGroup[cursor++] : id));
+}
+
 const REORDER_ERROR =
   'We couldn’t save the new order — it’s been put back. Please try again.';
 
@@ -155,6 +196,14 @@ interface SectionListRowProps {
   unsupported?: boolean;
   /** The active template's display name — woven into the unsupported badge (D-15). */
   templateName: string;
+  /** D-10: this row's group id list (the move buttons rebuild the shared order over it). */
+  groupIds: string[];
+  /** D-10: this row's 0-based index within its group (drives the up-edge disable). */
+  positionInGroup: number;
+  /** D-10: the number of rows in this row's group (drives the down-edge disable). */
+  groupSize: number;
+  /** D-10: commit a within-group ±1 move (the same optimistic commit as drag). */
+  onMove: (groupIds: string[], sectionId: string, direction: MoveDirection) => void;
   /** Open the uniform remove-section confirm for this row (D-03). */
   onRequestRemove: (section: EditorSection) => void;
 }
@@ -170,6 +219,10 @@ export function SectionListRow({
   username,
   unsupported = false,
   templateName,
+  groupIds,
+  positionInGroup,
+  groupSize,
+  onMove,
   onRequestRemove,
 }: SectionListRowProps) {
   const activeSectionId = useUIStore((s) => s.activeSectionId);
@@ -187,6 +240,12 @@ export function SectionListRow({
 
   const selected = activeSectionId === section.id;
   const { title, visible, hasContent } = section;
+
+  // D-10: the move buttons are disabled at the group edges (up on the group's first
+  // row, down on its last) — a move NEVER crosses groups. `aria-disabled` + muted +
+  // a no-op handler keep them focusable-but-inert per the UI-SPEC (Surface 8).
+  const atTop = positionInGroup <= 0;
+  const atBottom = positionInGroup >= groupSize - 1;
 
   // Reduced-motion-safe: dnd-kit still applies the translate transform (needed to
   // track the pointer), but we suppress the scale/shadow lift in the className.
@@ -279,9 +338,51 @@ export function SectionListRow({
           {badge}
         </button>
 
-        {/* status dot + eye-toggle + remove (their hit areas are excluded from
-            selection). */}
+        {/* status dot + move buttons + eye-toggle + remove (their hit areas are
+            excluded from selection). */}
         {statusDot}
+
+        {/* D-10 — chevron up/down move buttons (the touch/keyboard reorder fallback,
+            always visible; the drag handle stays the pointer-device nicety). Each is a
+            44px (`size-11`) icon-only target with the chrome focus ring; the glyph is
+            `aria-hidden` and the `aria-label` is the accessible name. A press commits a
+            within-group ±1 move through `onMove` — the SAME optimistic `commitOrder` →
+            `reorderSectionsAction` (riding the D-13-hardened `reorderByIds`) the drag
+            uses. Disabled (`aria-disabled` + muted + inert) on the group edges; a move
+            NEVER crosses groups (parity with the per-group SortableContext). */}
+        <button
+          type="button"
+          aria-label={`Move ${title} up`}
+          aria-disabled={atTop || undefined}
+          onClick={atTop ? undefined : () => onMove(groupIds, section.id, 'up')}
+          className={
+            'flex size-11 shrink-0 items-center justify-center rounded-sm outline-none ' +
+            'transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 ' +
+            'focus-visible:outline-ring motion-reduce:transition-none ' +
+            (atTop
+              ? 'cursor-default text-border-strong'
+              : 'text-muted-foreground hover:text-foreground')
+          }
+        >
+          <ChevronUp aria-hidden="true" className="size-4" />
+        </button>
+        <button
+          type="button"
+          aria-label={`Move ${title} down`}
+          aria-disabled={atBottom || undefined}
+          onClick={atBottom ? undefined : () => onMove(groupIds, section.id, 'down')}
+          className={
+            'flex size-11 shrink-0 items-center justify-center rounded-sm outline-none ' +
+            'transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 ' +
+            'focus-visible:outline-ring motion-reduce:transition-none ' +
+            (atBottom
+              ? 'cursor-default text-border-strong'
+              : 'text-muted-foreground hover:text-foreground')
+          }
+        >
+          <ChevronDown aria-hidden="true" className="size-4" />
+        </button>
+
         <EyeToggle
           sectionId={section.id}
           title={title}
@@ -436,6 +537,21 @@ export function SectionList({
     commitOrder(nextAll);
   }
 
+  /**
+   * D-10: the chevron move buttons' commit — a within-group ±1 move that rides the
+   * SAME optimistic `commitOrder` → `reorderSectionsAction` the drag uses. It rebuilds
+   * the WHOLE shared order via the pure `moveWithinGroup` (group-bounded; edge presses
+   * are no-ops, so an at-edge move that slips through is harmless — `commitOrder`
+   * receives the unchanged order). A move NEVER crosses groups (parity with the
+   * per-group SortableContexts).
+   */
+  function moveRow(groupIds: string[], sectionId: string, direction: MoveDirection) {
+    const nextAll = moveWithinGroup(allIds, groupIds, sectionId, direction);
+    // An edge/out-of-group press returns the order unchanged — skip a pointless commit.
+    if (nextAll === allIds) return;
+    commitOrder(nextAll);
+  }
+
   function handleAdded(sectionId: string, type: string) {
     setPickerOpen(false);
     onAdded(sectionId, type);
@@ -469,6 +585,7 @@ export function SectionList({
           unsupported={false}
           templateName={templateName}
           onReorder={reorderWithinGroup}
+          onMove={moveRow}
           onDragStateChange={setDragState}
           onRequestRemove={setPendingRemove}
         />
@@ -513,6 +630,7 @@ export function SectionList({
                 unsupported
                 templateName={templateName}
                 onReorder={reorderWithinGroup}
+                onMove={moveRow}
                 onDragStateChange={setDragState}
                 onRequestRemove={setPendingRemove}
               />
@@ -580,6 +698,11 @@ interface SectionGroupListProps {
   templateName: string;
   /** Reorder within this group (rebuilds the shared whole-list order). */
   onReorder: (groupIds: string[], activeId: string, overId: string) => void;
+  /**
+   * D-10: move a row ±1 within this group via the chevron buttons (the touch/keyboard
+   * reorder fallback) — rebuilds the shared whole-list order, the same commit as drag.
+   */
+  onMove: (groupIds: string[], sectionId: string, direction: MoveDirection) => void;
   onDragStateChange: (state: 'idle' | 'dragging') => void;
   onRequestRemove: (section: EditorSection) => void;
 }
@@ -599,6 +722,7 @@ function SectionGroupList({
   unsupported,
   templateName,
   onReorder,
+  onMove,
   onDragStateChange,
   onRequestRemove,
 }: SectionGroupListProps) {
@@ -648,7 +772,7 @@ function SectionGroupList({
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         <ul className="overflow-hidden rounded-md bg-surface-muted">
-          {rows.map((section) => (
+          {rows.map((section, index) => (
             <SectionListRow
               key={section.id}
               section={section}
@@ -656,6 +780,12 @@ function SectionGroupList({
               username={username}
               unsupported={unsupported}
               templateName={templateName}
+              // D-10: the move buttons commit a within-group ±1 move over the SHARED
+              // order via `onMove`; `positionInGroup`/`groupSize` drive the edge-disable.
+              groupIds={ids}
+              positionInGroup={index}
+              groupSize={ids.length}
+              onMove={onMove}
               onRequestRemove={onRequestRemove}
             />
           ))}
