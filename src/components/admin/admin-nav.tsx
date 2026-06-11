@@ -1,11 +1,12 @@
 'use client';
 
 /**
- * AdminNav (12-05) — the minimal two-tab `(admin)` navigation: "Trust & Safety"
- * (/admin) and "Templates" (/admin/templates). The `(admin)` group had no nav
- * before this phase (only the gate layout + the single report page); GATE-04 adds
- * a second operator surface, so this small tab bar lets the operator move between
- * the two.
+ * AdminNav (12-05; extended 15-04) — the `(admin)` navigation tab bar:
+ * "Trust & Safety" (/admin), "Templates" (/admin/templates), and "Insights"
+ * (/admin/insights). The `(admin)` group had no nav before 12-05 (only the gate
+ * layout + the single report page); 12-05 added the second operator surface, and
+ * 15-04 adds the third — the operator Insights surface (D-14) — so this small tab
+ * bar lets the operator move between the three.
  *
  * CHROME layer (Evergreen & Copper, Inter): Tailwind utilities → `globals.css
  * @theme` tokens + lucide glyphs ONLY; NO template `.tmpl-*` tokens (two-layer
@@ -19,13 +20,16 @@
  * Source: `next/navigation` `usePathname`; `next/link`; the chrome-token discipline
  * from `report-queue.tsx:5-7`.
  */
-import { LayoutTemplate, ShieldAlert } from 'lucide-react';
+import { LayoutTemplate, LineChart, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TABS = [
   { href: '/admin', label: 'Trust & Safety', Icon: ShieldAlert },
   { href: '/admin/templates', label: 'Templates', Icon: LayoutTemplate },
+  // D-14: the 3rd operator surface — passive Insights (Traffic + Abuse). Lights
+  // on its own subtree; /admin stays exact-only below so it doesn't light here.
+  { href: '/admin/insights', label: 'Insights', Icon: LineChart },
 ] as const;
 
 export function AdminNav() {
