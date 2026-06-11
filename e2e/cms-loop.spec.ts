@@ -57,6 +57,16 @@ test.describe('CMS-06 — the full edit → save → preview → publish → 404
     // 1) Sign in → the editor mounts (populated, not blank).
     await signInAsOwner(page, owner);
 
+    // D-03 (17-06) — the warmed completeness checklist: a fresh account is
+    // incomplete, so the advisory dock header reads the ENCOURAGING count ("Looking
+    // good — N sections to go"), NOT a bare ratio. The dock is advisory and NEVER
+    // gates Publish: the Publish button is enabled even while the checklist is
+    // incomplete (a fresh, unpublished account).
+    await expect(page.getByText(/Looking good — \d+ sections? to go/)).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole('button', { name: 'Publish', exact: true })).toBeEnabled();
+
     // The rail shows the visible bootstrapped sections; pick Hero.
     await page.getByRole('button', { name: 'Hero', exact: true }).click();
 
@@ -81,10 +91,31 @@ test.describe('CMS-06 — the full edit → save → preview → publish → 404
     await expect(page).toHaveURL(new RegExp(`/${owner.username}(\\b|/|\\?|$)`), {
       timeout: 30_000,
     });
-    // The PreviewBanner is the one chrome element over the template surface.
-    await expect(page.getByText('Draft preview', { exact: false })).toBeVisible({
+    // The PreviewBanner is the one chrome element over the template surface. D-07
+    // (17-06) recast its base draft line to the confident "Draft · only you can see
+    // this page" (+ the secondary "Previewing /{username} · nothing is public yet").
+    await expect(page.getByText('Draft · only you can see this page')).toBeVisible({
       timeout: 30_000,
     });
+    await expect(
+      page.getByText(`Previewing /${owner.username} · nothing is public yet`),
+    ).toBeVisible();
+    // D-07: the unpublished base-draft right cluster carries the reassuring "Publish"
+    // brand button (writes the existing setPublished path, no confirm) + the "Exit
+    // preview" ghost. (On this cookie-less public preview only the banner renders —
+    // no editor header — so "Publish" is unambiguous here.)
+    await expect(page.getByRole('button', { name: 'Publish', exact: true })).toBeVisible();
+    await expect(page.getByText(/exit preview/i)).toBeVisible();
+    // D-07 chrome-isolation (the two-layer identity boundary, T-17-07A): the banner
+    // sets an EXPLICIT font-family (`var(--font-sans)`) inline so it cannot inherit
+    // the previewed template's display face. Assert the isolation MECHANISM on the
+    // banner container (the public lean root intentionally ships no chrome font, so
+    // the proof is the explicit family declaration, not a computed Inter glyph).
+    const bannerStyle = await page
+      .getByRole('status')
+      .first()
+      .getAttribute('style');
+    expect(bannerStyle ?? '').toContain('var(--font-sans)');
     // The edited heading is rendered as the template <h1> in the preview.
     await expect(
       page.getByRole('heading', { level: 1, name: editedHeading }),

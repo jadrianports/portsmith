@@ -309,7 +309,10 @@ test.describe('TMPL-02 — lossless template round-trip (GREENED BY 07-05/07-06)
     await expect(page).toHaveURL(new RegExp(`/${owner.username}(\\b|/|\\?|$)`), {
       timeout: 30_000,
     });
-    await expect(page.getByText('Draft preview', { exact: false })).toBeVisible({
+    // D-07 (17-06): the reused banner's recast base primary line ("Draft · only you
+    // can see this page") sits ABOVE the unchanged switch-flow context line
+    // ("Previewing the Minimal template"). The switch-flow confirm bar is preserved.
+    await expect(page.getByText('Draft · only you can see this page')).toBeVisible({
       timeout: 30_000,
     });
     await expect(page.getByText(/previewing the minimal template/i)).toBeVisible();
