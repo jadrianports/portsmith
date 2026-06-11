@@ -43,8 +43,12 @@
  * request, `/dashboard` for the update). Returning rather than calling `redirect()`
  * keeps the surface symmetric with login-action / signup-action.
  */
+import { checkBotId } from 'botid/server';
+
 import { isRecoverySession } from '@/lib/auth/recovery-session';
+import { countAndRecord } from '@/lib/rate-limit/ledger';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
+import { hashClientIpFromHeaders } from '@/lib/trust/ip-hash';
 import { resetRequestSchema, updatePasswordSchema } from '@/lib/validations';
 
 // `isRecoverySession` (the CR-01 recovery-session predicate) lives in the plain
@@ -99,6 +103,29 @@ export async function requestReset(input: unknown): Promise<RequestResetResult> 
   }
 
   const { email } = parsed.data;
+
+  // 1b) BotID gate (D-06 / D-07 / HARD-02) — AFTER Zod, BEFORE the ledger write +
+  //     the email send (Pitfall 3). On isBot return the ALWAYS-generic outcome —
+  //     never a distinct bot signal (the request side is already always-generic,
+  //     so this changes nothing observable; enumeration-safe, Pitfall 2 / D-07).
+  //     No-ops to isBot:false off-Vercel/locally.
+  const { isBot } = await checkBotId();
+  if (isBot) {
+    return { ok: true, message: GENERIC_RESET_MESSAGE };
+  }
+
+  // 1c) Per-hashed-IP throttle (D-11 / HARD-04). Reset is rare and the costliest
+  //     to abuse (it sends email -> Supabase MAU/egress + victim spam), so the cap
+  //     is the tightest (5/h). A null subject (no IP, or no REPORT_IP_HASH_SECRET)
+  //     SKIPS the cap — degrade-when-no-secret. Over-cap returns the SAME
+  //     always-generic outcome (Pitfall 2 / D-07).
+  const subject = await hashClientIpFromHeaders();
+  if (subject) {
+    const allowed = await countAndRecord('auth_reset', subject, 60 * 60 * 1000, 5); // cap 5/h (OQ-1)
+    if (!allowed) {
+      return { ok: true, message: GENERIC_RESET_MESSAGE };
+    }
+  }
 
   // 2) Fire the reset email. EVERY path below collapses to the same generic
   //    outcome — we never inspect the result and never let an error change the

@@ -24,7 +24,23 @@ vi.mock('server-only', () => ({}));
 const verifyTurnstile = vi.fn();
 const isDisposableEmail = vi.fn();
 const signUp = vi.fn();
+// D-06/D-07: the BotID gate. Default no-op (isBot:false) so the unchanged gate
+// ladder is unaffected; the isBot:true case asserts the enumeration-safe reject.
+const checkBotId = vi.fn();
+// D-11: the per-IP throttle. Default allowed; the over-cap case asserts the
+// generic outcome + that signUp is never reached.
+const countAndRecord = vi.fn();
+const hashClientIpFromHeaders = vi.fn();
 
+vi.mock('botid/server', () => ({
+  checkBotId: (...args: unknown[]) => checkBotId(...args),
+}));
+vi.mock('@/lib/rate-limit/ledger', () => ({
+  countAndRecord: (...args: unknown[]) => countAndRecord(...args),
+}));
+vi.mock('@/lib/trust/ip-hash', () => ({
+  hashClientIpFromHeaders: (...args: unknown[]) => hashClientIpFromHeaders(...args),
+}));
 vi.mock('@/lib/auth/turnstile', () => ({
   verifyTurnstile: (...args: unknown[]) => verifyTurnstile(...args),
 }));
@@ -68,6 +84,12 @@ function input(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   process.env.NEXT_PUBLIC_SITE_URL = 'http://localhost:3000';
+  // D-06: default BotID to "human" so the existing gate ladder is unaffected.
+  checkBotId.mockReset().mockResolvedValue({ isBot: false });
+  // D-11: default to a present hashed-IP subject + allowed, so the unchanged
+  // happy path still reaches signUp. Over-cap / null-subject cases override.
+  hashClientIpFromHeaders.mockReset().mockResolvedValue('hashed-ip');
+  countAndRecord.mockReset().mockResolvedValue(true);
   verifyTurnstile.mockReset().mockResolvedValue(true);
   isDisposableEmail.mockReset().mockReturnValue(false);
   signUp.mockReset().mockResolvedValue({ data: { user: {} }, error: null });
@@ -97,6 +119,18 @@ describe('signupAction — ToS gate (step 2, D-09)', () => {
     const result = await signupAction(input({ tos_accepted: false }));
     expect(fail(result).fieldErrors?.tos_accepted).toBeTruthy();
     expect(verifyTurnstile).not.toHaveBeenCalled();
+    expect(signUp).not.toHaveBeenCalled();
+  });
+});
+
+describe('signupAction — BotID gate (step 2b, D-06/D-07 — enumeration-safe reject)', () => {
+  it('on isBot returns the GENERIC outcome and never reaches Turnstile/signUp', async () => {
+    checkBotId.mockResolvedValue({ isBot: true });
+    const result = await signupAction(input());
+    const f = fail(result);
+    expect(f.error).toMatch(/something went wrong/i); // GENERIC_ERROR — never a "bot" signal
+    expect(verifyTurnstile).not.toHaveBeenCalled(); // gate order: stops before Turnstile
+    expect(countAndRecord).not.toHaveBeenCalled(); // no ledger write for a bot (Pitfall 3)
     expect(signUp).not.toHaveBeenCalled();
   });
 });

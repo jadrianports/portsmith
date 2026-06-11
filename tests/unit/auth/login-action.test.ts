@@ -38,7 +38,22 @@ vi.mock('server-only', () => ({}));
 const signInWithPassword = vi.fn();
 const signOut = vi.fn().mockResolvedValue({ error: null });
 const profileSingle = vi.fn();
+// D-06/D-11: the BotID gate + per-IP throttle. Defaults: human + present subject +
+// allowed, so the unchanged credential contract is unaffected; the isBot/over-cap
+// cases assert the enumeration-safe GENERIC_ERROR (NOT GENERIC_INVALID).
+const checkBotId = vi.fn();
+const countAndRecord = vi.fn();
+const hashClientIpFromHeaders = vi.fn();
 
+vi.mock('botid/server', () => ({
+  checkBotId: (...args: unknown[]) => checkBotId(...args),
+}));
+vi.mock('@/lib/rate-limit/ledger', () => ({
+  countAndRecord: (...args: unknown[]) => countAndRecord(...args),
+}));
+vi.mock('@/lib/trust/ip-hash', () => ({
+  hashClientIpFromHeaders: (...args: unknown[]) => hashClientIpFromHeaders(...args),
+}));
 vi.mock('@/lib/supabase/server', () => ({
   // D-14: the verified-identity read used by assertNotLocked (post-sign-in).
   getVerifiedClaims: async () => ({ sub: 'u1' }),
@@ -101,6 +116,10 @@ function authErrorStatus(status: number, code?: string) {
 
 beforeEach(() => {
   process.env.NEXT_PUBLIC_SITE_URL = 'http://localhost:3000';
+  // D-06/D-11: default to "human" + present hashed-IP subject + allowed.
+  checkBotId.mockReset().mockResolvedValue({ isBot: false });
+  hashClientIpFromHeaders.mockReset().mockResolvedValue('hashed-ip');
+  countAndRecord.mockReset().mockResolvedValue(true);
   signInWithPassword.mockReset().mockResolvedValue({
     data: { session: { access_token: 'a' }, user: { id: 'u1' } },
     error: null,
@@ -125,6 +144,19 @@ describe('loginAction — Zod gate (server-side, before signInWithPassword)', ()
   it('rejects an empty password with a field error and never calls signIn', async () => {
     const result = await loginAction(input({ password: '' }));
     expect(fail(result).fieldErrors?.password).toBeTruthy();
+    expect(signInWithPassword).not.toHaveBeenCalled();
+  });
+});
+
+describe('loginAction — BotID gate (D-06/D-07 — GENERIC_ERROR, NOT credential)', () => {
+  const CREDENTIAL = /that email or password isn't right/i;
+  it('on isBot returns GENERIC_ERROR (not the credential message) and never signs in', async () => {
+    checkBotId.mockResolvedValue({ isBot: true });
+    const result = await loginAction(input());
+    const f = fail(result);
+    expect(f.error).toMatch(/something went wrong/i); // GENERIC_ERROR
+    expect(f.error).not.toMatch(CREDENTIAL); // bot != credential signal (Pitfall 2)
+    expect(countAndRecord).not.toHaveBeenCalled(); // no ledger write for a bot (Pitfall 3)
     expect(signInWithPassword).not.toHaveBeenCalled();
   });
 });

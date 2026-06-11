@@ -50,8 +50,11 @@
  * The enumeration-safe credential/unconfirmed/operational branches are untouched.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { checkBotId } from 'botid/server';
 
+import { countAndRecord } from '@/lib/rate-limit/ledger';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
+import { hashClientIpFromHeaders } from '@/lib/trust/ip-hash';
 import { loginSchema } from '@/lib/validations';
 
 /** Per-field validation messages, keyed by the login field name. */
@@ -152,6 +155,30 @@ export async function loginAction(input: unknown): Promise<LoginResult> {
   }
 
   const { email, password } = parsed.data;
+
+  // 1b) BotID gate (D-06 / D-07 / HARD-02) — AFTER Zod, BEFORE the credential
+  //     check + the ledger write (Pitfall 3). CRITICAL (Pitfall 2 / D-07): on
+  //     isBot return GENERIC_ERROR — NOT GENERIC_INVALID. A bot is NOT a
+  //     credential signal, and a distinct "bot" response would become an
+  //     enumeration oracle. No-ops to isBot:false off-Vercel/locally.
+  const { isBot } = await checkBotId();
+  if (isBot) {
+    return { ok: false, error: GENERIC_ERROR };
+  }
+
+  // 1c) Per-hashed-IP throttle (D-11 / HARD-04). Login is the loosest cap (20/h)
+  //     so a NAT-shared office / fat-fingering user never trips it. A null subject
+  //     (no IP, or no REPORT_IP_HASH_SECRET) SKIPS the cap — degrade-when-no-secret.
+  //     Over-cap JOINS the existing operational-failure branch and returns
+  //     GENERIC_ERROR (NOT GENERIC_INVALID) — the throttle must not become an
+  //     oracle (Pitfall 2 / Phase-2 D-07).
+  const subject = await hashClientIpFromHeaders();
+  if (subject) {
+    const allowed = await countAndRecord('auth_login', subject, 60 * 60 * 1000, 20); // cap 20/h (OQ-1)
+    if (!allowed) {
+      return { ok: false, error: GENERIC_ERROR };
+    }
+  }
 
   // 2) The credential check.
   const supabase = await createClient();

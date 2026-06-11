@@ -30,9 +30,12 @@
  * at all here — `signUp` writes the session cookies via the `@supabase/ssr`
  * server client.
  */
+import { checkBotId } from 'botid/server';
 import { headers } from 'next/headers';
 
+import { countAndRecord } from '@/lib/rate-limit/ledger';
 import { createClient } from '@/lib/supabase/server';
+import { hashClientIpFromHeaders } from '@/lib/trust/ip-hash';
 import { signupSchema } from '@/lib/validations';
 
 import { isDisposableEmail } from './disposable-email';
@@ -86,6 +89,16 @@ export async function signupAction(input: unknown): Promise<SignupResult> {
 
   const { email, password, username, turnstile_token } = parsed.data;
 
+  // 2b) BotID gate (D-06 / D-07 / HARD-02) — AFTER Zod, BEFORE the cheaper-still
+  //     Turnstile and the ledger write (Pitfall 3: a bot must not burn a
+  //     shared-IP human's per-IP budget). No-ops to isBot:false off-Vercel/locally.
+  //     On isBot return the SAME generic outcome a hard signUp error returns —
+  //     never a distinct "bot" signal (enumeration-safe, Pitfall 2 / D-07).
+  const { isBot } = await checkBotId();
+  if (isBot) {
+    return { ok: false, error: GENERIC_ERROR };
+  }
+
   // 3) Turnstile siteverify (D-05) — BEFORE any account creation.
   const ip = await clientIp();
   const human = await verifyTurnstile(turnstile_token, ip);
@@ -96,6 +109,19 @@ export async function signupAction(input: unknown): Promise<SignupResult> {
   // 4) Disposable-email block (SAFE-01 / D-03) — BEFORE any account creation.
   if (isDisposableEmail(email)) {
     return { ok: false, error: DISPOSABLE_MESSAGE };
+  }
+
+  // 4b) Per-hashed-IP throttle (D-11 / HARD-04) — the residual cap under BotID +
+  //     Turnstile, written BEFORE signUp so a flood is throttled before it reaches
+  //     gotrue (Pitfall 3). A null subject (no IP, or no REPORT_IP_HASH_SECRET)
+  //     SKIPS the cap — degrade-when-no-secret, never a lockout. Over-cap returns
+  //     the SAME generic outcome as a hard error (enumeration-safe, Pitfall 2).
+  const subject = await hashClientIpFromHeaders();
+  if (subject) {
+    const allowed = await countAndRecord('auth_signup', subject, 60 * 60 * 1000, 10); // cap 10/h (OQ-1)
+    if (!allowed) {
+      return { ok: false, error: GENERIC_ERROR };
+    }
   }
 
   // 5) Create the account. The live handle_new_user trigger reads options.data.

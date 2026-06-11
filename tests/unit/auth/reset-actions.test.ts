@@ -40,7 +40,22 @@ vi.mock('server-only', () => ({}));
 const resetPasswordForEmail = vi.fn();
 const updateUser = vi.fn();
 const getVerifiedClaims = vi.fn();
+// D-06/D-11: requestReset gains a BotID gate + per-IP throttle. Defaults: human +
+// present subject + allowed, so the always-generic contract is unaffected; the
+// isBot / over-cap cases assert it stays the same generic { ok:true, message }.
+const checkBotId = vi.fn();
+const countAndRecord = vi.fn();
+const hashClientIpFromHeaders = vi.fn();
 
+vi.mock('botid/server', () => ({
+  checkBotId: (...args: unknown[]) => checkBotId(...args),
+}));
+vi.mock('@/lib/rate-limit/ledger', () => ({
+  countAndRecord: (...args: unknown[]) => countAndRecord(...args),
+}));
+vi.mock('@/lib/trust/ip-hash', () => ({
+  hashClientIpFromHeaders: (...args: unknown[]) => hashClientIpFromHeaders(...args),
+}));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: {
@@ -91,6 +106,10 @@ const PASSWORD_CLAIMS = {
 
 beforeEach(() => {
   process.env.NEXT_PUBLIC_SITE_URL = 'http://localhost:3000';
+  // D-06/D-11: default to "human" + present hashed-IP subject + allowed.
+  checkBotId.mockReset().mockResolvedValue({ isBot: false });
+  hashClientIpFromHeaders.mockReset().mockResolvedValue('hashed-ip');
+  countAndRecord.mockReset().mockResolvedValue(true);
   resetPasswordForEmail.mockReset().mockResolvedValue({ data: {}, error: null });
   updateUser.mockReset().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
   // Default to a recovery session so the happy path proceeds; individual tests
@@ -158,6 +177,17 @@ describe('requestReset — always-generic (enumeration-safe, D-07 / T-02-17)', (
     ];
     expect(emailArg).toBe('real.user@gmail.com');
     expect(optsArg.redirectTo).toMatch(/\/auth\/confirm$/);
+  });
+});
+
+describe('requestReset — BotID gate (D-06/D-07 — stays always-generic)', () => {
+  it('on isBot returns the SAME generic { ok:true, message } and never sends', async () => {
+    checkBotId.mockResolvedValue({ isBot: true });
+    const result = await requestReset({ email: 'real.user@gmail.com' });
+    expect(result.ok).toBe(true); // never a distinct bot signal
+    if (result.ok) expect(result.message).toBeTruthy();
+    expect(countAndRecord).not.toHaveBeenCalled(); // no ledger write for a bot (Pitfall 3)
+    expect(resetPasswordForEmail).not.toHaveBeenCalled();
   });
 });
 
