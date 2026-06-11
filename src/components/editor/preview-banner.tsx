@@ -8,6 +8,20 @@
  * uncertain terms, that they are looking at a private draft only they can see, with a
  * one-click way out.
  *
+ * 17-06 — D-07 (17-UI-SPEC Surface 5): the BASE draft shape (the non-switch-flow
+ * path) is recast from a thin warning strip into a CONFIDENT, reassuring status bar
+ * that reads "I'm safe, nothing is public yet." The left cluster keeps the
+ * `circle-alert` glyph but the primary line is now "Draft · only you can see this
+ * page" (Label, `--color-foreground` — confident, NOT a caution color) over a
+ * secondary "Previewing /{username} · nothing is public yet" (Caption, muted). The
+ * right cluster, when the portfolio is UNPUBLISHED, adds a "Publish" brand-fill
+ * button (the reassuring "go live when you're ready" step — it writes the EXISTING
+ * `setPublished(true)` → revalidate path, the same no-confirm publish as the header
+ * PublishToggle, never a new write surface) alongside the existing "Exit preview"
+ * ghost. The recast touches ONLY the base shape: the chrome-isolation, the §11
+ * slide-in, `role="status"`, and the 07-05 switch-flow `SwitchConfirm` bar are all
+ * PRESERVED unchanged.
+ *
  * 07-05 — the SWITCH-FLOW confirm bar (REUSED, not redesigned — UI-SPEC B.5 #6):
  * when previewing a CANDIDATE template (`candidateSlug` present — the page sets it
  * from the vetted `preview-template` cookie), the banner additionally shows:
@@ -47,7 +61,9 @@
 import { CircleAlert, CircleCheck, ExternalLink, Loader2 } from 'lucide-react';
 import { useState, useTransition } from 'react';
 
+import { setPublished as setPublishedAction } from '@/lib/cms/publish-action';
 import { switchTemplateAction } from '@/lib/cms/switch-template-action';
+import { siteUrl } from '@/lib/url';
 import type { TemplateSpec } from '@/components/templates/minimal/spec';
 
 import { TemplateMismatchWarning } from './template-mismatch-warning';
@@ -86,7 +102,7 @@ export interface PreviewBannerProps {
 
 export function PreviewBanner({
   username,
-  published,
+  published: initialPublished,
   candidateSlug,
   candidateName,
   currentSlug,
@@ -94,6 +110,11 @@ export function PreviewBanner({
   filledVisibleTypes,
   candidateSpec,
 }: PreviewBannerProps) {
+  // D-07: the published bit is the server-truth INITIAL state; the banner's own
+  // "Publish" button (below) flips this locally on a resolved-ok publish so the
+  // base draft shape reflects the now-live state (drops the Publish button + swaps
+  // the "nothing is public yet" line for a live affordance) without a reload.
+  const [published, setPublishedState] = useState(initialPublished);
   // The switch-flow renders only when a vetted candidate is being previewed.
   const isSwitchFlow = Boolean(candidateSlug);
   // The candidate equals the current persisted template → the confirm is a no-op
@@ -109,16 +130,24 @@ export function PreviewBanner({
       // display face. `font-sans` maps to the chrome `--font-sans` (Inter) token.
       style={{ fontFamily: 'var(--font-sans)' }}
       className={
+        // D-07: `py-3` (12px — corrected from the off-grid `py-2.5`); NO base
+        // `text-warning` — the confident base draft reads in foreground/muted chrome
+        // tones, not a caution color (per-cluster colors set below). The switch-flow
+        // path sets its own colors, so dropping the base warning is safe for both.
         'preview-banner-enter font-sans fixed inset-x-0 top-0 z-50 flex flex-col gap-2 ' +
-        'border-b border-border bg-surface-muted px-4 py-2.5 text-warning'
+        'border-b border-border bg-surface-muted px-4 py-3 text-foreground'
       }
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
+          {/* Calm glyph (muted, not a warning tone) — the reassurance is the point. */}
+          <CircleAlert aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">
-              Draft preview — only you can see this
+            {/* D-07: the confident primary line (Label, foreground). It is accurate
+                in BOTH the base draft and the switch flow (you ARE looking at a
+                private draft); the switch-flow context line sits beneath it. */}
+            <p className="truncate text-sm font-semibold text-foreground">
+              Draft · only you can see this page
             </p>
             {isSwitchFlow ? (
               // The switch-flow context line (Label, chrome tokens). Uses foreground
@@ -127,10 +156,31 @@ export function PreviewBanner({
                 Previewing the {templateName} template
               </p>
             ) : !published ? (
+              // D-07: the secondary reassurance — which page + the safety (Caption,
+              // muted). The visible slug + the safety line in one read.
               <p className="truncate text-[13px] text-muted-foreground">
-                This page is not public yet.
+                Previewing /{username} · nothing is public yet
               </p>
-            ) : null}
+            ) : (
+              // D-07 published-preview: the safety line is replaced by a live
+              // affordance (the page IS public). The live URL derives from siteUrl()
+              // (host-independent — PUB-03 / D-22), never the request host.
+              <p className="truncate text-[13px] text-muted-foreground">
+                Previewing /{username} ·{' '}
+                <a
+                  href={siteUrl('/' + username)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={
+                    'font-semibold text-foreground underline-offset-2 outline-none ' +
+                    'hover:text-accent hover:underline focus-visible:outline-2 ' +
+                    'focus-visible:outline-offset-2 focus-visible:outline-ring'
+                  }
+                >
+                  view it live
+                </a>
+              </p>
+            )}
           </div>
           <span className="sr-only">Previewing /{username}</span>
         </div>
@@ -144,19 +194,26 @@ export function PreviewBanner({
             username={username}
           />
         ) : (
-          // Phase-4 plain exit: full navigation (not next/link) to the disable Route
-          // Handler — clears the draft cookie and returns to the dashboard.
-          <a
-            href={DISABLE_HREF}
-            className={
-              'inline-flex shrink-0 items-center justify-center rounded-md border border-border ' +
-              'bg-transparent px-3 py-1.5 text-sm font-semibold text-foreground outline-none ' +
-              'transition-colors hover:bg-surface focus-visible:outline-2 ' +
-              'focus-visible:outline-offset-2 focus-visible:outline-ring'
-            }
-          >
-            Exit preview
-          </a>
+          // D-07 base-draft right cluster: when UNPUBLISHED, the reassuring "Publish"
+          // brand-fill primary (writes the existing setPublished(true) path, no
+          // confirm) + always the "Exit preview" ghost (full nav to the disable
+          // route — not next/link, since prefetch can race the draft cookie).
+          <div className="flex shrink-0 items-center gap-2">
+            {!published ? (
+              <BannerPublish onPublished={() => setPublishedState(true)} />
+            ) : null}
+            <a
+              href={DISABLE_HREF}
+              className={
+                'inline-flex shrink-0 items-center justify-center rounded-md border border-border ' +
+                'bg-transparent px-3 py-1.5 text-sm font-semibold text-foreground outline-none ' +
+                'transition-colors hover:bg-surface focus-visible:outline-2 ' +
+                'focus-visible:outline-offset-2 focus-visible:outline-ring'
+              }
+            >
+              Exit preview
+            </a>
+          </div>
         )}
       </div>
 
@@ -170,6 +227,72 @@ export function PreviewBanner({
           filledVisibleTypes={filledVisibleTypes}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * D-07 — the base-draft "Publish" control. The reassuring "go live when you're
+ * ready" step: a BRAND-fill button that writes the EXISTING `setPublished(true)`
+ * path (the same authenticated, RLS-scoped, single-column publish the header
+ * PublishToggle uses — NO new write surface) with NO confirm (publishing is safe +
+ * reversible; only UNpublishing carries a confirm, and that lives elsewhere). On a
+ * resolved-ok publish it calls `onPublished` so the banner reflects the now-live
+ * state. On failure it surfaces a calm inline retry message (nothing was published).
+ */
+function BannerPublish({ onPublished }: { onPublished: () => void }) {
+  const [isPending, startTransition] = useTransition();
+  const [errored, setErrored] = useState(false);
+
+  function publish() {
+    setErrored(false);
+    startTransition(async () => {
+      try {
+        const res = await setPublishedAction(true);
+        if (res.ok) {
+          onPublished();
+        } else {
+          setErrored(true);
+        }
+      } catch {
+        setErrored(true);
+      }
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {errored ? (
+        // Calm inline retry (the destructive tone, Caption) — nothing was published.
+        <span role="alert" className="text-[13px] font-semibold text-destructive">
+          Couldn’t publish. Try again.
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={publish}
+        disabled={isPending}
+        aria-busy={isPending}
+        className={
+          'inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md bg-brand px-3 py-1.5 ' +
+          'text-sm font-semibold text-brand-foreground outline-none transition-colors ' +
+          'hover:bg-brand-hover focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+          'focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-70 ' +
+          'motion-reduce:transition-none'
+        }
+      >
+        {isPending ? (
+          <>
+            <Loader2
+              aria-hidden="true"
+              className="size-4 animate-spin motion-reduce:animate-none"
+            />
+            Publishing…
+          </>
+        ) : (
+          'Publish'
+        )}
+      </button>
     </div>
   );
 }

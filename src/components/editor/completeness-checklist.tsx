@@ -15,6 +15,15 @@
  * card's expansion never mirrors server data. A todo row links to its section by
  * setting the Zustand `activeSectionId` (UI selection only — D-P4-04).
  *
+ * D-03 (17-UI-SPEC Surface 3 / Copywriting "Warmed-up completeness checklist") —
+ * COPY/TONE delta only: the header leads with an ENCOURAGING sentence
+ * ("Looking good — {N} sections to go" / "Your page is looking complete") instead
+ * of a bare count, while keeping the `{done}/{total}` figure as a secondary `tnum`
+ * glance value. The rows stay calm hollow `circle` (todo) / `check` (done) — no
+ * red-X, no destructive color, no exclamation. The derivation
+ * (`deriveCompleteness`) is UNCHANGED, and it STAYS advisory — it never disables or
+ * gates Publish.
+ *
  * Accessibility / color-independence (SHARED-E): every row pairs a glyph with
  * text — a filled `check` (done, `--color-success`) or a hollow `circle` (todo,
  * `--color-muted-foreground`) — so state is never color-only. The header toggle
@@ -40,6 +49,15 @@ export function CompletenessChecklist({ items }: CompletenessChecklistProps) {
   const done = items.filter((i) => i.done).length;
   const allDone = total > 0 && done === total;
 
+  // D-03: the encouraging header count line. Incomplete → "Looking good — {N}
+  // section(s) to go" (pluralized; {N} = remaining), complete → "Your page is
+  // looking complete". The terse {done}/{total} survives as a secondary tnum glance
+  // value beside the sentence; the sentence is the lead.
+  const remaining = total - done;
+  const headline = allDone
+    ? 'Your page is looking complete'
+    : `Looking good — ${remaining} ${remaining === 1 ? 'section' : 'sections'} to go`;
+
   const ChevronIcon = open ? ChevronUp : ChevronDown;
 
   return (
@@ -58,10 +76,20 @@ export function CompletenessChecklist({ items }: CompletenessChecklistProps) {
           'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring'
         }
       >
-        <span className="text-sm font-semibold text-foreground">Get publish-ready</span>
+        {/* D-03: lead with the encouraging sentence (Caption when incomplete,
+            success when complete); keep the terse {done}/{total} as a secondary tnum
+            glance value beside the chevron. */}
         <span
           className={
-            'text-[13px] tabular-nums leading-tight ' +
+            'text-[13px] leading-tight ' +
+            (allDone ? 'text-success' : 'text-muted-foreground')
+          }
+        >
+          {headline}
+        </span>
+        <span
+          className={
+            'shrink-0 text-[13px] tabular-nums leading-tight ' +
             (allDone ? 'text-success' : 'text-muted-foreground')
           }
         >
@@ -73,10 +101,11 @@ export function CompletenessChecklist({ items }: CompletenessChecklistProps) {
       {open ? (
         <div className="px-3 pb-3">
           {allDone ? (
-            // All-complete: encouragement, NOT a gate (advisory only — D-P4-08).
+            // All-complete: encouragement, NOT a gate (advisory only — D-P4-08 /
+            // D-03). Calm check + the warmed "looking complete" line (no exclamation).
             <p className="flex items-center gap-2 text-[13px] leading-tight text-success">
               <Check aria-hidden="true" className="size-4 shrink-0" />
-              <span>You&apos;re ready to publish.</span>
+              <span>Your page is looking complete.</span>
             </p>
           ) : (
             <ul className="flex flex-col gap-1">
