@@ -1,6 +1,11 @@
 /**
- * D-05 (dedup) / D-06 (self-view) — RED scaffold (Wave 0, Plan 15-01). GREENED BY
- * Plan 15-03 (the `Beacon` client island + the jsdom test env).
+ * @vitest-environment jsdom
+ *
+ * D-05 (dedup) / D-06 (self-view) — GREENED BY Plan 15-03 (the `Beacon` client
+ * island + the jsdom test env, both shipped in 15-03). This file's specs run under
+ * the jsdom environment declared in the pragma above (jsdom + @testing-library/react
+ * were added in 15-03, per the 15-01 deferral). `renderBeacon` renders the REAL
+ * `<Beacon/>` keyed on a mocked `usePathname()`.
  *
  * Encodes the browser-only beacon contract (15-RESEARCH.md § Architecture Pattern 3):
  *   - fires `navigator.sendBeacon('/api/page-view', …)` ONCE on first render at a path
@@ -13,38 +18,41 @@
  *   - does NOT fire when there is NO `[data-portfolio-id]` marker (the `__fixture`
  *     route / draft-preview no-op — Pitfall 5).
  *
- * ── WHY SKIPPED (suite stays GREEN this plan) ─────────────────────────────────
- * (1) The `Beacon` component (`@/components/portfolio/beacon`) does NOT exist until
- *     Plan 15-03. (2) These specs need a DOM (`document`, `navigator.sendBeacon`,
- *     `localStorage`, `sessionStorage`), but the vitest `unit` project is the `node`
- *     env and jsdom is NOT installed in this repo (the [13-06] render-free precedent).
- *     Authoring this under `describe.skip(...)` keeps the suite GREEN (a RED suite
- *     would block the next plan's gates) AND avoids requiring jsdom now.
- *
- *     Plan 15-03, when it ships the component, will:
- *       (a) add jsdom + @testing-library/react, then a jsdom-environment docblock
- *           pragma (the "vitest-environment jsdom" directive) at the TOP of this file;
- *       (b) wire `renderBeacon` to render the real `<Beacon/>` (keyed on a mocked
- *           `usePathname`) via @testing-library/react;
- *       (c) FLIP `describe.skip` → `describe`.
- *     The assertion bodies below are written against that jsdom env so the flip is
- *     mechanical. They reference `document`/`navigator`/storage globals (present only
- *     under jsdom) — hence they MUST stay skipped until that env is added.
- *
- * NOTE: this scaffold deliberately does NOT carry the env-pragma directive yet — with
- * the directive present (and jsdom not installed), vitest would fail to start the
- * worker for this file even though every spec is skipped. 15-03 adds it with jsdom.
+ * ── HOW THE FLIP WORKS (15-03) ────────────────────────────────────────────────
+ * (a) the `@vitest-environment jsdom` pragma at the TOP gives this file `document`,
+ *     `navigator`, `localStorage`, `sessionStorage` (jsdom was added in 15-03);
+ * (b) `next/navigation` is mocked so `usePathname()` returns the `path` the current
+ *     `renderBeacon(path)` call set — letting one test render the same path twice
+ *     (dedup) or two different paths (re-fire);
+ * (c) `renderBeacon` renders the REAL `<Beacon/>` via @testing-library/react inside
+ *     `act(...)` so the beacon's `useEffect` flushes synchronously before assertions.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render } from '@testing-library/react';
+import { act } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// 15-03 replaces this stub with a real render of `<Beacon/>` under jsdom, keyed on a
-// mocked `usePathname()` returning `path`. Typed here so the skipped block compiles.
+import { Beacon } from '@/components/portfolio/beacon';
+
+// `usePathname()` is the only `next/navigation` hook the beacon uses. A mutable
+// holder lets each `renderBeacon(path)` call drive what the hook returns.
+let currentPath = '/';
+vi.mock('next/navigation', () => ({
+  usePathname: () => currentPath,
+}));
+
+// Render the real <Beacon/> at `path` under jsdom. Each call mounts a fresh root
+// (after cleaning up the prior one) so the path-keyed `useEffect` runs once per call;
+// `act(...)` flushes the effect synchronously before the test asserts.
 type RenderBeacon = (path: string) => void;
-const renderBeacon: RenderBeacon = (_path) => {
-  /* wired by 15-03: render the real Beacon island under jsdom */
+const renderBeacon: RenderBeacon = (path) => {
+  currentPath = path;
+  cleanup(); // unmount any prior render so this mount's effect fires fresh
+  act(() => {
+    render(<Beacon />);
+  });
 };
 
-describe.skip('D-05/D-06 — Beacon dedup + self-view + marker-absent (GREENED BY 15-03)', () => {
+describe('D-05/D-06 — Beacon dedup + self-view + marker-absent (GREENED BY 15-03)', () => {
   let sendBeacon: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -53,6 +61,11 @@ describe.skip('D-05/D-06 — Beacon dedup + self-view + marker-absent (GREENED B
     localStorage.clear();
     sendBeacon = vi.fn(() => true);
     Object.defineProperty(navigator, 'sendBeacon', { value: sendBeacon, configurable: true });
+  });
+
+  // Unmount any React root the test mounted so it cannot bleed into the next test.
+  afterEach(() => {
+    cleanup();
   });
 
   // A non-visual marker the public pages emit (Pattern 1A); the beacon reads it.

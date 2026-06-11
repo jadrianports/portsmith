@@ -13,6 +13,14 @@
  *   `TemplateErrorBoundary.Fallback` (NOT a 500 — T-03-12).
  * - Known slug → render the lazy template INSIDE the error boundary so a
  *   broken/throwing template degrades gracefully rather than crashing the route.
+ *
+ * PAGE-VIEW MARKER (ANLY-01 / 15-RESEARCH Pattern 1A): when `data.portfolioId` is
+ * non-null, this emits a STATIC, non-visual `data-portfolio-id` attribute that the
+ * client beacon (`beacon.tsx`, mounted in the `(portfolio)` layout) reads to know
+ * which portfolio to log. It is a plain server-rendered `data-` attribute — NO
+ * client JS, NO request-time read — so SSG/ISR is unaffected (D-20/D-22). When
+ * `portfolioId` is null (e.g. the `__fixture` route), NO marker is emitted and the
+ * beacon no-ops (Pitfall 5). The renderer stays a Server Component (no `'use client'`).
  */
 import { resolveTemplate } from './registry';
 import { TemplateErrorBoundary } from './error-boundary';
@@ -23,6 +31,8 @@ export function TemplateRenderer({ slug, data }: { slug: string; data: Portfolio
   if (!Template) return <TemplateErrorBoundary.Fallback />;
   return (
     <TemplateErrorBoundary>
+      {/* Static page-view marker (Pattern 1A) — emitted only when the id is known. */}
+      {data.portfolioId !== null && <div hidden data-portfolio-id={data.portfolioId} />}
       <Template data={data} />
     </TemplateErrorBoundary>
   );
