@@ -14,12 +14,12 @@ If everything else fails, *this* must hold: pick a template, fill in structured 
 
 ### Constraints
 
-- **Tech stack**: Next.js 16 (App Router / RSC), Tailwind, Supabase (Postgres / Auth / Storage), Zustand + TanStack Query, Zod (validation gate on *every* write), Resend (email), Cloudflare Turnstile (spam), Vercel (hosting); Vitest + Playwright + local-Supabase RLS integration tests. Three.js deferred. — Inherited from the handoff; proven and profession-agnostic.
+- **Tech stack**: Next.js 16 (App Router / RSC), Tailwind, Supabase (Postgres / Auth / Storage), Zustand + TanStack Query, Zod (validation gate on *every* write), Resend (email — still a deliberate no-op seam), Cloudflare Turnstile + Vercel BotID (spam/bots), Vercel (hosting); Vitest + Playwright + local-Supabase RLS integration tests. — Inherited from the handoff; proven and profession-agnostic. Heavy/3D (e.g. WebGL) libs are allowed only as lazy client islands under the template contract's opt-in **rich/viz lane** (none currently installed — the Phase-13 Three.js template was retired for a CSS clone).
 - **Security (non-negotiable invariants)**: RLS is the tenant boundary; a protected-columns trigger guards `role` / `username` / `storage_used_bytes` / etc.; contact and page-view writes go through a server-side service-role route, never the anon key; storage has MIME allowlists + size caps + a usage trigger; public profile reads must not leak private columns.
 - **Data model**: must stay profession-agnostic and additive — section `type` is a soft enum so marketer / other-profession expansion needs no migration.
 - **Budget**: **$0 on domains now** — launch on the free `*.vercel.app` (`portsmith.vercel.app/[username]`) with free-tier Supabase/Vercel. The first domain dollar is a public-launch / production-email expense, not a build expense. (`portsmith.app` is the intended future brand domain — handoff ADR-002.)
 - **Hosting / URLs**: build rendering hostname-aware and drive absolute URLs from `NEXT_PUBLIC_SITE_URL`, so switching `.vercel.app` → a real domain later is an env-var + DNS + 301-redirect change — done *before* any big public/SEO push.
-- **Page model**: single-page, one scroll; one section per type for the MVP.
+- **Page model**: single-scroll core page (`/[username]`), one section per type; v2.0 added opt-in multi-page public routes — `/[username]/blog`, `/blog/[slug]`, `/services`.
 
 <!-- GSD:project-end -->
 
@@ -33,7 +33,7 @@ Next.js 16 (App Router/RSC) · React 19 · Supabase (Postgres/RLS/Auth/Storage) 
 
 ### Pinned versions — do not drift
 
-`next 16.2.6` (pins React `19.2.6` transitively — don't re-pin) · `@supabase/supabase-js 2.106.2` + `@supabase/ssr 0.10.3` · `tailwindcss 4.3.0` + `@tailwindcss/postcss` · `@tanstack/react-query 5.100.14` · `zustand 5.0.14` · `zod 4.4.3` · `react-cropper 2.3.3` (pulls `cropperjs@^1` — never add v2) · `@dnd-kit/core 6.3.1` · `file-type 21.3.4`.
+`next 16.2.6` (pins React `19.2.6` transitively — don't re-pin) · `@supabase/supabase-js 2.106.2` + `@supabase/ssr 0.10.3` · `tailwindcss 4.3.0` + `@tailwindcss/postcss` · `@tanstack/react-query 5.100.14` · `zustand 5.0.14` · `zod 4.4.3` · `react-cropper 2.3.3` (pulls `cropperjs@^1` — never add v2) · `@dnd-kit/core 6.3.1` · `file-type 21.3.4`. **Added in v2.0:** `botid 1.5.11` (bot mitigation) · `react-markdown 10` + `remark-gfm 4` + `shiki 4` (CMS Markdown blog — NOT MDX) · `motion 12` (the one budget-gated animation island) · `@axe-core/playwright`/`axe-core` (the template a11y gate).
 
 **Not installed yet (roadmap):** `ai`/`@ai-sdk/*`, `unpdf`/`mammoth`, `octokit` (AI résumé + GitHub import); `resend` (the notify seam is a deliberate no-op). **Absent by choice:** ESLint (`tsc --noEmit` is the gate), Sharp, Prettier, shadcn.
 
@@ -46,7 +46,7 @@ Next.js 16 (App Router/RSC) · React 19 · Supabase (Postgres/RLS/Auth/Storage) 
 - **Tailwind v4:** single `@import "tailwindcss"` + `@theme` tokens. No `@tailwind base/components/utilities`, no `tailwind.config.js` as source of truth, no autoprefixer/postcss-import.
 - **State:** never mirror server data into Zustand (TanStack Query owns it).
 - **Images:** no Sharp / server image processing — client `react-cropper` → `<canvas>.toBlob('image/webp')`. Never add `cropperjs@2`.
-- **Anon writes:** App Router route handler running service-role (`/api/contact`, `/api/report`), never `pages/api`, never the anon key.
+- **Anon writes:** App Router route handler running service-role (`/api/contact`, `/api/report`, `/api/page-view`, `/api/media/upload`), never `pages/api`, never the anon key.
 
 <!-- GSD:stack-end -->
 
@@ -73,6 +73,9 @@ Full detail with `file:line` citations: `.planning/codebase/CONVENTIONS.md`. The
 - **Absolute URLs from `siteUrl()`** (`src/lib/url.ts`, driven by `NEXT_PUBLIC_SITE_URL`) — never the request Host. Domain switch = env + DNS + 301.
 - **`'use server'` modules export only `async` functions** (Next 16 Turbopack rejects sync exports — why `isRecoverySession` is a separate plain module).
 - **TS strict; `moduleResolution: bundler`; `tsc --noEmit` is the lint gate** (no ESLint). `z.infer` for write types; generated `Database` type (`src/types/database.ts`) for reads — regenerate after every schema change.
+- **Template gating (GATE):** `templates.visibility` (`public`/`restricted`, soft-enum, no CHECK) + a `template_grants` (template×user) m2m. The picker is a data-layer allowed-list (public ∪ granted), and switching/rendering an ungranted restricted template is rejected server-side (mirrors the switch-action Zod/RLS gate). Grants are operator-only from `/admin/templates`; the one cross-user write is a self-gated `SECURITY DEFINER` RPC, never service-role.
+- **Blog = CMS Markdown, never MDX:** posts are GFM Markdown rendered server-side to **sanitized HTML** with Shiki (display-only code, never executed). The only sanctioned `dangerouslySetInnerHTML` is that one sanitized path — no executable user content on the shared multi-tenant domain.
+- **BotID degrade-open:** every `checkBotId()` call is wrapped (try/catch → default `isBot=false`) so a BotID outage / missing `VERCEL_OIDC_TOKEN` never 500s; it is defense-in-depth layered *above* Turnstile + per-IP rate-limits (the primary gates). `/api/page-view` silent-drops bots (200 `{ok:true}`); `/api/contact`+`/api/report` return the generic 403; the gate sits after Zod.
 - **Conventional Commits**, scoped by phase (`feat(08-03): …`). Decision-ref comments (`// WR-05`, `// D-08`) point to the `.planning/STATE.md` decision log.
 
 <!-- GSD:conventions-end -->
@@ -85,14 +88,14 @@ Full detail (component table, data-flow diagrams, security layers): `.planning/c
 
 **Shape:** a multi-tenant CMS **write-path** (owner-authenticated Server Actions + service-role route handlers) and a separate anonymous **ISR/SSG read-path** (public portfolio pages). Two segregated Next 16 root layouts enforce the two-layer UI identity.
 
-- **Route groups:** `(chrome)` root (`src/app/(chrome)/`) = Inter + Evergreen/Copper tokens + TanStack Query/Zustand → `/login` `/signup` `/dashboard` `/admin` `/legal` `/`. `(portfolio)` root (`src/app/(portfolio)/[username]/`) = lean, cookie-less, no chrome → public pages. Plus bare `/auth/confirm` and `/api/*`.
+- **Route groups:** `(chrome)` root (`src/app/(chrome)/`) = Inter + Evergreen/Copper tokens + TanStack Query/Zustand → `/login` `/signup` `/dashboard` `/admin` (+ `/admin/templates`, `/admin/insights`) `/legal` `/`. `(portfolio)` root (`src/app/(portfolio)/[username]/`) = lean, cookie-less, no chrome → public pages: `/[username]`, `/[username]/blog`, `/blog/[slug]`, `/services`. Plus bare `/auth/confirm` and `/api/*`.
 - **Write path:** `EditorShell` → `saveSectionAction` (`'use server'`, SHARED-A) → RLS UPDATE → `revalidatePath`. Files: `src/lib/cms/*-action.ts`.
 - **Read path:** `/[username]/page.tsx` → `getPortfolioByUsername` (cookie-less anon read of `public_*` `security_invoker` views) → `slugForTemplateId` (static UUID→slug map, no DB join) → `<TemplateRenderer>` → lazy `next/dynamic` template root.
-- **Template engine:** `src/components/templates/` — `registry.ts` (slug→dynamic import + slug↔UUID map + `templateSlugSchema`), per-template folders (`minimal/`, `editorial/`), each a Server-Component root + scoped `theme.css` + 2 client islands (ThemeToggle, ScrollReveal). `PortfolioData` (`templates/types.ts`) is the one typed contract every template consumes (all view columns are `| null` — null-guard). Per-template `spec.ts` does field-gating + mismatch warnings.
-- **Service-role routes** (`runtime='nodejs'`, `supabaseAdmin`, bypass RLS): `/api/contact`, `/api/report`, `/api/media/upload` — each Zod + Turnstile(fail-closed) + rate-limit gated. These are the only sanctioned RLS bypass.
+- **Template engine:** `src/components/templates/` — `registry.ts` (slug→dynamic import + slug↔UUID map + `templateSlugSchema`), a shared chrome-free **`_kit/`** (the 2 client islands ThemeToggle + ScrollReveal + the pre-paint FOUC guard — slug-agnostic, zod-free, imported never re-implemented), and per-template folders (live: `minimal/`, `editorial/`, `aurora/`, `edgerunner-v2/`), each a Server-Component root + scoped `theme.css`. The formalized contract is `contract.ts`/`CONTRACT.md`; `PortfolioData` (`templates/types.ts`) is the one typed contract every template consumes (all view columns are `| null` — null-guard). Per-template `spec.ts` does field-gating + mismatch warnings. New templates are gated by the `gate:template` umbrella (`scripts/gate-template.mjs`) + the CI `template-gate` job.
+- **Service-role routes** (`runtime='nodejs'`, `supabaseAdmin`, bypass RLS): `/api/contact`, `/api/report`, `/api/page-view`, `/api/media/upload` — each Zod + rate-limit gated, with Turnstile(fail-closed) on the human-facing ones and a degrade-open BotID layer. These are the only sanctioned RLS bypass.
 - **Security:** RLS is the tenant boundary (`*.own_all` policies on `auth.uid()`; cross-tenant writes hit 0 rows); protected-columns trigger; three-layer public-column safety (anon REVOKE + column GRANT + `security_invoker` views) keeps `email`/`role`/`storage_used_bytes`/`locked` off anon; service-role is `server-only`. Migrations in `supabase/migrations/`.
 - **Entry points:** `middleware.ts` (session refresh + redirect-unauth from `/dashboard`,`/admin`), `src/app/(portfolio)/[username]/page.tsx` (ISR `revalidate=3600`; the `draftMode().isEnabled` owner branch is the single sanctioned dynamic path), `src/app/(chrome)/(dashboard)/dashboard/page.tsx`, seed `scripts/seed-founder-portfolio.ts`.
-- **Data model:** 12-table Postgres; `sections.content` schemaless JSONB gated only by Zod; one section per type (`UNIQUE(portfolio_id, type)`); soft-enum `type` (8: hero/about/projects/testimonials/experience/contact/blog_preview/skills). Profession-agnostic + additive by design — a new profession's section is a code change, not a migration.
+- **Data model:** 14-table Postgres (v1.0's 12 + `template_grants` (gating) + `blog_post_history` (blog)); `sections.content` schemaless JSONB gated only by Zod; one section per type (`UNIQUE(portfolio_id, type)`); soft-enum `type` (13: hero/about/projects/testimonials/experience/contact/blog_preview/skills + education/metrics/services/moodboard/certifications). Profession-agnostic + additive by design — a new profession's section is a code change, not a migration.
 
 <!-- GSD:architecture-end -->
 
