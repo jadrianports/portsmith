@@ -69,7 +69,11 @@ export interface OwnerAnalytics {
    * pull, so it never saturates at {@link ROW_CAP} on a high-traffic portfolio.
    */
   total30d: number;
-  /** All-time blog views (rows whose `path` contains `/blog`) — a secondary figure. */
+  /**
+   * All-time blog views — rows whose `path` is on the `/blog` route segment
+   * (`…/blog` or `…/blog/<slug>`, NOT substrings like `/blogging`, WR-02). A
+   * secondary figure.
+   */
   blogAllTime: number;
   /** Per-day series for the 30-day sparkline (contiguous, empty days filled, D-12). */
   daily: OwnerDailyRow[];
@@ -183,7 +187,11 @@ export async function getOwnerAnalytics(): Promise<OwnerAnalytics> {
     supabase
       .from('page_views')
       .select('id', { count: 'exact', head: true })
-      .ilike('path', '%/blog%'),
+      // WR-02: anchor to the `/blog` route segment (the real routes are
+      // `/[username]/blog` and `/[username]/blog/[slug]`). The two-pattern `.or`
+      // matches `…/blog` and `…/blog/<slug>` but NOT substrings like
+      // `…/blogging-tips` or `…/weblog`, which a bare `%/blog%` would over-count.
+      .or('path.ilike.%/blog,path.ilike.%/blog/%'),
     // True 30-day count (WR-01) — unaffected by ROW_CAP; mirrors the all-time head
     // count above, just scoped to the window with the same `since` instant.
     supabase
