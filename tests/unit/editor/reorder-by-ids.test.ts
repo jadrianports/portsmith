@@ -80,12 +80,12 @@ describe('D-13 / WR-04 — reorderByIds (single byId source of truth)', () => {
 
 describe('D-13 / WR-04 — reorderByIds dev-only id-set assertion (non-throwing)', () => {
   let errorSpy: ReturnType<typeof vi.spyOn>;
-  const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 
   beforeEach(() => {
     // Force the dev branch so the assertion is evaluated (it is guarded by
     // NODE_ENV !== 'production'). Vitest defaults NODE_ENV to 'test' which already
-    // satisfies the guard, but pin it explicitly for intent + isolation.
+    // satisfies the guard, but pin it explicitly for intent + isolation. `vi.stubEnv`
+    // is the type-safe setter; `vi.unstubAllEnvs()` (afterEach) restores it.
     vi.stubEnv('NODE_ENV', 'development');
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -93,7 +93,6 @@ describe('D-13 / WR-04 — reorderByIds dev-only id-set assertion (non-throwing)
   afterEach(() => {
     errorSpy.mockRestore();
     vi.unstubAllEnvs();
-    process.env.NODE_ENV = ORIGINAL_NODE_ENV;
   });
 
   it('fires a dev diagnostic when orderedIds is MISSING an id present in sections (and still returns every row)', () => {

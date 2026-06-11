@@ -91,16 +91,51 @@ export interface EditorSection {
   hasContent: boolean;
 }
 
-/** Reorder a section array to match an explicit ordered id list (optimistic helper). */
-function reorderByIds(sections: EditorSection[], orderedIds: string[]): EditorSection[] {
+/**
+ * Reorder a section array to match an explicit ordered id list (optimistic helper).
+ *
+ * D-13 / WR-04 — rebuilt from a SINGLE source of truth: the `byId` map is the only
+ * row provider, so a malformed/duplicate `orderedIds` list can never drop or
+ * duplicate a row. Named ids come first (in `orderedIds` order); any row present in
+ * `sections` but NOT named is appended in its ORIGINAL `sections` index order via a
+ * `Set(orderedIds)` membership test — NOT the old per-element `Array.includes` scan.
+ *
+ * Exported so the pure-helper unit suite (`tests/unit/editor/reorder-by-ids.test.ts`)
+ * can assert the reorder/append/identity behavior + the dev id-set assertion; it is
+ * also the single commit BOTH drag and the D-10 move buttons ride.
+ */
+export function reorderByIds(
+  sections: EditorSection[],
+  orderedIds: string[],
+): EditorSection[] {
   const byId = new Map(sections.map((s) => [s.id, s]));
+  const named = new Set(orderedIds);
   const next: EditorSection[] = [];
   for (const id of orderedIds) {
     const s = byId.get(id);
     if (s) next.push(s);
   }
-  // Append any not named in the ordered list (defensive; keeps every row present).
-  for (const s of sections) if (!orderedIds.includes(s.id)) next.push(s);
+  // Append any row not named in the ordered list, in ORIGINAL index order (Set
+  // membership, not Array.includes) — defensive; keeps every present row visible.
+  for (const s of sections) if (!named.has(s.id)) next.push(s);
+
+  // D-13 / WR-04: dev-only id-set assertion — surface (never throw) when `orderedIds`
+  // and `sections` cover DIFFERENT id sets (an extra id, or a missing one), since the
+  // durable `reorder_sections` RPC expects the two to agree. A true set-equality check
+  // (same size AND every named id known to byId) catches a missing id, an extra id, and
+  // a same-size-but-swapped-member list alike. Stripped from the production bundle.
+  if (process.env.NODE_ENV !== 'production') {
+    const sameIdSet =
+      named.size === byId.size && orderedIds.every((id) => byId.has(id));
+    if (!sameIdSet) {
+      console.error(
+        '[reorderByIds] orderedIds and sections cover different id sets — ' +
+          'the optimistic order may not match the persisted order (D-13 / WR-04).',
+        { orderedIds, sectionIds: sections.map((s) => s.id) },
+      );
+    }
+  }
+
   return next;
 }
 
