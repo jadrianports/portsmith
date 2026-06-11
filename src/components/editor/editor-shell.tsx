@@ -40,7 +40,7 @@
  */
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ExternalLink, Mail, X } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Eye, Mail, X } from 'lucide-react';
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -48,6 +48,7 @@ import { cmsKeys } from '@/lib/query/cms-keys';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { deriveCompleteness } from '@/lib/cms/completeness';
 import { clearTemplateFallbackNotice } from '@/lib/cms/clear-template-fallback-action';
+import { siteUrl } from '@/lib/url';
 import { isSupported } from '@/lib/templates/rail-grouping';
 import type { OwnerPortfolioData } from '@/lib/portfolio/get-portfolio-owner';
 import type { AllowedTemplate } from '@/lib/templates/available-templates';
@@ -507,6 +508,21 @@ export function EditorShell({
             <ExternalLink aria-hidden="true" className="size-3.5" />
           </Link>
 
+          {/* D-08 — the persistent "View my page" control (Surface 6). Distinct from
+              the same-tab "Preview" link above: this ALWAYS opens the public page in a
+              NEW tab — anchoring the everyday "edit → see what visitors see" loop.
+                • PUBLISHED → the live public page directly at siteUrl('/' + username)
+                  (target=_blank rel=noopener noreferrer), the SAME host-independent URL
+                  the PublishToggle "View live ↗" uses.
+                • UNPUBLISHED → the draft-enable path (/api/preview/enable, full nav,
+                  prefetch={false} — the draft-cookie caveat) so the owner sees their
+                  work-in-progress as the banner-wrapped private draft, opened in a new tab.
+              The URL ORIGIN ALWAYS comes from siteUrl() (NEXT_PUBLIC_SITE_URL), NEVER the
+              request Host (D-08). CRITICAL: this adds NO cookies()/headers()/host-read to
+              the public read branch — /[username] stays ● SSG (D-22). The glyph is
+              aria-hidden; the aria-label names the destination + the new-tab behavior. */}
+          <ViewMyPageLink username={username} published={published} />
+
           {/* Publish/Unpublish + ● Live/Draft status + View live ↗ (04-06). */}
           <PublishToggle username={username} initialPublished={published} />
         </div>
@@ -677,6 +693,80 @@ export function EditorShell({
         </section>
       </div>
     </div>
+  );
+}
+
+/**
+ * The persistent "View my page" header control (D-08 / Surface 6). A NEW affordance,
+ * distinct from the same-tab "Preview" link — it ALWAYS opens the public page in a
+ * NEW tab so the everyday "edit → see what visitors see" loop is one click.
+ *
+ *   - PUBLISHED → a plain `<a>` to `siteUrl('/' + username)` (the host-independent
+ *     live URL — reuses the PublishToggle "View live ↗" idiom), `target="_blank"
+ *     rel="noopener noreferrer"`.
+ *   - UNPUBLISHED → a `<Link prefetch={false}>` to the draft-enable route
+ *     (`/api/preview/enable`), which sets the draft cookie then redirects to the
+ *     owner's own slug (the banner-wrapped private draft). `prefetch={false}` is
+ *     MANDATORY — a next/link prefetch can race/delete the draft cookie (RESEARCH
+ *     Pattern 2 / the Preview link's carry-forward caveat) — and it opens in a new
+ *     tab too (`target="_blank"`), per UI-SPEC Surface 6.
+ *
+ * THE URL ORIGIN ALWAYS COMES FROM `siteUrl()` (NEXT_PUBLIC_SITE_URL), NEVER the
+ * request Host (D-08). This control adds NO `cookies()`/`headers()`/host-read to the
+ * public read branch — `/[username]` stays `● SSG` (D-22). The glyph is `aria-hidden`;
+ * the `aria-label` names the destination + the new-tab behavior (UI-SPEC § "View my
+ * page" Copywriting); a visually-hidden " (opens in a new tab)" mirrors the shipped
+ * "View live ↗" pattern.
+ */
+function ViewMyPageLink({
+  username,
+  published,
+}: {
+  username: string;
+  published: boolean;
+}) {
+  // The shared chrome idiom (the Preview-link styling at editor-shell :495-508).
+  const className =
+    'inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border px-4 ' +
+    'text-sm font-semibold text-foreground outline-none transition-colors ' +
+    'hover:border-border-strong hover:text-accent ' +
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+    'motion-reduce:transition-none';
+
+  const glyphAndLabel = (
+    <>
+      <Eye aria-hidden="true" className="size-3.5" />
+      <span>View my page</span>
+    </>
+  );
+
+  if (published) {
+    // PUBLISHED → the live public page directly, host-independent URL via siteUrl().
+    return (
+      <a
+        href={siteUrl('/' + username)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={className}
+        aria-label="View my published page (opens in a new tab)"
+      >
+        {glyphAndLabel}
+      </a>
+    );
+  }
+
+  // UNPUBLISHED → the draft-enable path (full nav, prefetch={false}); a new tab.
+  return (
+    <Link
+      href="/api/preview/enable"
+      prefetch={false}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={className}
+      aria-label="View a private preview of my page (opens in a new tab)"
+    >
+      {glyphAndLabel}
+    </Link>
   );
 }
 
