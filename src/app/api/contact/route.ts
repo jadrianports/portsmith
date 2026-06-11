@@ -50,20 +50,28 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'bad_request' }, { status: 400 });
   }
 
-  // D-06 / HARD-02 — layered BotID gate (no-op off-Vercel); generic 403, no detail
-  // leak. An ADDED layer ABOVE the existing Turnstile + ledger ladder, NOT a
-  // replacement; reuses the route's generic error shape (never a "bot" message).
-  const { isBot } = await checkBotId();
-  if (isBot) {
-    return NextResponse.json({ error: 'unavailable' }, { status: 403 });
-  }
-
   // 1) Zod re-parse at the boundary — the server gate (D-02). Client parse is UX.
   const parsed = contactFormSchema.safeParse(bodyJson);
   if (!parsed.success) {
     return NextResponse.json({ error: 'bad_request' }, { status: 400 });
   }
   const data = parsed.data;
+
+  // D-06 / HARD-02 — layered BotID gate (no-op off-Vercel); generic 403, no detail leak.
+  // Now AFTER the cheap Zod shape check (cheap-local-checks-first, WR-03): a malformed
+  // body is a 400 for bot and human alike, and a billed BotID call is never spent on
+  // garbage. An ADDED layer ABOVE Turnstile + the ledger, NOT a replacement. A transient
+  // BotID/OIDC outage degrades OPEN (isBot=false), matching the ledger's fail-open posture
+  // (WR-01); reuses the route's generic error shape (never a "bot" message).
+  let isBot = false;
+  try {
+    ({ isBot } = await checkBotId());
+  } catch {
+    isBot = false;
+  }
+  if (isBot) {
+    return NextResponse.json({ error: 'unavailable' }, { status: 403 });
+  }
 
   // 2) Turnstile siteverify — fail-CLOSED. A failed verify blocks the write entirely.
   const verified = await verifyTurnstile(data.turnstile_token);
