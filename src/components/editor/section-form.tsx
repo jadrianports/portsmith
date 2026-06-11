@@ -80,6 +80,33 @@ const SEED_SENTINELS: Record<
   },
 };
 
+// D-02 (UI-SPEC Surface 2 + Copywriting "Per-field helper text"): the per-field
+// helper Caption + `e.g. …` example placeholder for the SIMPLE forms, copied
+// VERBATIM from the UI-SPEC Copywriting table. Helper = aria-describedby/muted
+// (informational, never an error — the Input/Textarea `error` prop supersedes it);
+// placeholder = the native `e.g. …` example value. These helpers are the 17→18
+// base the Phase-18 wizard wraps.
+const FIELD_GUIDANCE = {
+  heroHeading: {
+    helper: 'One line that says who you are and what you do.',
+    placeholder: 'e.g. Product designer crafting calm, useful interfaces',
+  },
+  heroSubheading: {
+    helper: 'A short supporting line under your headline.',
+    placeholder: 'e.g. 8 years turning complex problems into simple products',
+  },
+  aboutBio: {
+    helper:
+      "A few sentences in your own voice — your story, focus, and what you're known for.",
+    placeholder:
+      "e.g. I'm a marketer who helps early-stage teams find their first 1,000 customers…",
+  },
+  contactHeading: {
+    helper: 'Invite visitors to reach out.',
+    placeholder: "e.g. Let's work together",
+  },
+} as const;
+
 /**
  * D-01 — does this block's current content STILL hold the untouched bootstrap seed?
  * Compares the section's field values against the seed sentinel for its type. Only
@@ -285,6 +312,19 @@ export function SectionForm({ sectionId, type, initialContent, username }: Secti
               markDirty();
             }}
             error={fieldErrors.heading}
+            // D-02: helper (aria-describedby) + `e.g.` placeholder; the error prop
+            // supersedes the helper (never both). Hero + Contact share the field
+            // shape but carry their OWN copy from the UI-SPEC table.
+            helper={
+              type === 'hero'
+                ? FIELD_GUIDANCE.heroHeading.helper
+                : FIELD_GUIDANCE.contactHeading.helper
+            }
+            placeholder={
+              type === 'hero'
+                ? FIELD_GUIDANCE.heroHeading.placeholder
+                : FIELD_GUIDANCE.contactHeading.placeholder
+            }
             trailing={<CharCounter value={heading} max={HEADING_MAX} />}
           />
           <Input
@@ -296,6 +336,12 @@ export function SectionForm({ sectionId, type, initialContent, username }: Secti
               markDirty();
             }}
             error={fieldErrors.subheading}
+            // D-02: the Hero subheading carries its own helper + example placeholder;
+            // Contact's subheading is not in the UI-SPEC field table (no helper).
+            helper={type === 'hero' ? FIELD_GUIDANCE.heroSubheading.helper : undefined}
+            placeholder={
+              type === 'hero' ? FIELD_GUIDANCE.heroSubheading.placeholder : undefined
+            }
           />
         </>
       )}
@@ -312,6 +358,9 @@ export function SectionForm({ sectionId, type, initialContent, username }: Secti
             markDirty();
           }}
           error={fieldErrors.bio}
+          // D-02: the About bio helper + example placeholder (UI-SPEC table).
+          helper={FIELD_GUIDANCE.aboutBio.helper}
+          placeholder={FIELD_GUIDANCE.aboutBio.placeholder}
           trailing={<CharCounter value={bio} max={BIO_MAX} />}
         />
       )}
