@@ -73,6 +73,12 @@ export interface OperatorInsights {
   buckets: RateLimitBucketRow[];
   /** Per-day report-volume series (14-day window). */
   reports: ReportVolumeRow[];
+  /**
+   * True when at least one RPC returned an error (the data fields then hold their
+   * calm defaults). The view shows the `<Alert variant="error">` load-error state
+   * instead of reading an empty result as a genuine "no traffic" empty state.
+   */
+  error: boolean;
 }
 
 /**
@@ -84,20 +90,30 @@ export async function getOperatorInsights(): Promise<OperatorInsights> {
   const supabase = await createClient(); // authenticated identity — the layout proved is_admin().
 
   // Each RPC self-gates on is_admin(); a non-admin would get an error (defense-in-depth).
-  const [{ data: total }, { data: top }, { data: daily }, { data: buckets }, { data: reports }] =
-    await Promise.all([
-      supabase.rpc('page_view_total_count', { p_days: 30 }),
-      supabase.rpc('page_view_top_portfolios', { p_days: 30, p_limit: 10 }),
-      supabase.rpc('page_view_daily_series', { p_days: 30 }),
-      supabase.rpc('rate_limit_events_by_bucket', { p_days: 7 }),
-      supabase.rpc('report_volume_series', { p_days: 14 }),
-    ]);
+  const [totalRes, topRes, dailyRes, bucketsRes, reportsRes] = await Promise.all([
+    supabase.rpc('page_view_total_count', { p_days: 30 }),
+    supabase.rpc('page_view_top_portfolios', { p_days: 30, p_limit: 10 }),
+    supabase.rpc('page_view_daily_series', { p_days: 30 }),
+    supabase.rpc('rate_limit_events_by_bucket', { p_days: 7 }),
+    supabase.rpc('report_volume_series', { p_days: 14 }),
+  ]);
+
+  // A transient read error degrades to calm defaults + the `error` flag (so the
+  // view shows the load-error Alert, not a misleading "no traffic" empty state).
+  const error = Boolean(
+    totalRes.error ||
+      topRes.error ||
+      dailyRes.error ||
+      bucketsRes.error ||
+      reportsRes.error,
+  );
 
   return {
-    total: (total as number | null) ?? 0,
-    top: (top as TopPortfolioRow[] | null) ?? [],
-    daily: (daily as DailyViewsRow[] | null) ?? [],
-    buckets: (buckets as RateLimitBucketRow[] | null) ?? [],
-    reports: (reports as ReportVolumeRow[] | null) ?? [],
+    total: (totalRes.data as number | null) ?? 0,
+    top: (topRes.data as TopPortfolioRow[] | null) ?? [],
+    daily: (dailyRes.data as DailyViewsRow[] | null) ?? [],
+    buckets: (bucketsRes.data as RateLimitBucketRow[] | null) ?? [],
+    reports: (reportsRes.data as ReportVolumeRow[] | null) ?? [],
+    error,
   };
 }
