@@ -52,6 +52,7 @@ import {
 } from '@/lib/media/magic-bytes';
 import { buildObjectPath } from '@/lib/media/storage-path';
 import {
+  MAX_UPLOAD_CEILING,
   QUOTA_BYTES,
   UPLOAD_KINDS,
   wouldExceedQuota,
@@ -102,6 +103,23 @@ export async function POST(req: Request): Promise<NextResponse> {
   // first segment (the usage trigger casts it to ::uuid). Never coerce sub to ''.
   if (!sub || !UUID_RE.test(sub)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  // D-12 / HARD-04: cheap pre-buffer reject; Content-Length is UNTRUSTED so the
+  // post-read per-kind check below stays authoritative (Pitfall 4). The actual kind
+  // (and its per-kind ceiling) isn't known until after the multipart parse, so this
+  // coarse bound is MAX_UPLOAD_CEILING (= the largest per-kind ceiling, 10 MiB). A
+  // declared length over the bound is rejected BEFORE req.formData() buffers the whole
+  // body into memory — bounding the worst-case buffered body to ≤10 MiB for the common
+  // (Content-Length-present) case. A finite value STRICTLY greater than the ceiling
+  // rejects; an absent/garbage/non-finite header degrades to the post-read check (never
+  // a false 413 on a valid small upload).
+  const lenHeader = req.headers.get('content-length');
+  if (lenHeader) {
+    const declared = Number(lenHeader);
+    if (Number.isFinite(declared) && declared > MAX_UPLOAD_CEILING) {
+      return NextResponse.json({ error: 'too_large' }, { status: 413 });
+    }
   }
 
   // Parse multipart body: `kind` (one of UPLOAD_KINDS) + `file` (a Blob).
