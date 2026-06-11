@@ -72,11 +72,12 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { nanoid } from 'nanoid';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 
+import { SaveStatus } from './save-status';
 import { SegmentedControl } from './segmented-control';
 import { useDebouncedSectionSave } from './use-debounced-section-save';
 
@@ -108,6 +109,26 @@ const TIER_OPTIONS: { value: SkillTier; label: string }[] = [
 const SAVE_ERROR = 'We couldn’t save your changes. Please try again.';
 const REORDER_ERROR =
   'We couldn’t save the new order — it’s been put back. Please try again.';
+/** ~2.2s saved-&-live beat hold (UI-SPEC Surface 4 / Motion "saved & live"). */
+const SAVED_BEAT_MS = 2200;
+
+// D-02 (UI-SPEC Surface 2 — D-02 applies to "every section form field" incl. the
+// skills form): per-field helper + `e.g.` placeholder for the skills form's primary
+// first-run fields. The UI-SPEC Copywriting table is a "representative set" that
+// directs the planner to extend to the live field set; these follow the house voice
+// (calm, plain, profession-neutral, no exclamation, curly apostrophes). Helper =
+// informational (aria-describedby/muted; the Input `error` prop supersedes it);
+// placeholder = the native `e.g.` example value.
+const SKILLS_FIELD_GUIDANCE = {
+  heading: {
+    helper: 'Name this section — what these skills have in common.',
+    placeholder: 'e.g. Skills & tools',
+  },
+  skillName: {
+    helper: 'Name one skill or tool you work with.',
+    placeholder: 'e.g. Figma',
+  },
+} as const;
 
 // ---------------------------------------------------------------------------
 // Editor-state model (client `__id` for keys; STRIPPED before the write)
@@ -345,6 +366,9 @@ function SkillRow({ gid, item, disabled, onPatch, onRemove }: SkillRowProps) {
               label="Skill (required)"
               value={str(item.name)}
               maxLength={NAME_MAX}
+              // D-02: helper + `e.g.` placeholder (error supersedes helper).
+              helper={SKILLS_FIELD_GUIDANCE.skillName.helper}
+              placeholder={SKILLS_FIELD_GUIDANCE.skillName.placeholder}
               disabled={disabled}
               onChange={(e) => onPatch(item.__id, { name: e.target.value })}
             />
@@ -659,13 +683,26 @@ export function SkillsNestedManager({
   );
   const [reorderError, setReorderError] = useState<string | null>(null);
 
+  // D-04/D-05: the saved-&-live BEAT window (opened by `onSavedAndLive`, settled after
+  // ~2.2s) — brings the dopamine beat to this auto-save model (parity with the explicit
+  // model). The hook fires ONLY on the latest resolved-ok save (never-claim-live-early).
+  const [live, setLive] = useState(false);
+
   // D-20 shared save hook: field edits debounce (`scheduleSave`); group/skill add /
   // remove / reorder stay IMMEDIATE (`immediateSave`).
   const { state, scheduleSave, immediateSave } = useDebouncedSectionSave({
     sectionId,
     type: 'skills',
     username,
+    onSavedAndLive: () => setLive(true), // D-04
   });
+
+  // D-04: settle the beat window back after ~2.2s (the explicit model's SAVED_BEAT_MS).
+  useEffect(() => {
+    if (!live) return;
+    const t = setTimeout(() => setLive(false), SAVED_BEAT_MS);
+    return () => clearTimeout(t);
+  }, [live]);
 
   const saving = state === 'saving';
   const error = reorderError ?? (state === 'error' ? SAVE_ERROR : null);
@@ -813,12 +850,20 @@ export function SkillsNestedManager({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* D-04/D-05: the unified save-status line (status + saved-&-live beat), at the
+          top of the manager — so this auto-save model reads identically to the explicit
+          Save model (the beat included). */}
+      <SaveStatus state={state} live={live} />
+
       {error ? <Alert variant="error">{error}</Alert> : null}
 
       <Input
         label="Heading"
         value={heading}
         maxLength={100}
+        // D-02: helper + `e.g.` placeholder (error supersedes helper).
+        helper={SKILLS_FIELD_GUIDANCE.heading.helper}
+        placeholder={SKILLS_FIELD_GUIDANCE.heading.placeholder}
         disabled={saving}
         onChange={(e) => onHeadingChange(e.target.value)}
       />

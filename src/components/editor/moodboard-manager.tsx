@@ -68,15 +68,15 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Image as ImageIcon, Palette as PaletteIcon, Plus, Trash2 } from 'lucide-react';
 import { nanoid } from 'nanoid';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
 import { CharCounter } from '@/components/ui/char-counter';
-import { FieldError } from '@/components/ui/field-error';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
 import { ImageUploader } from './image-uploader';
+import { SaveStatus } from './save-status';
 import { useDebouncedSectionSave } from './use-debounced-section-save';
 
 // ---------------------------------------------------------------------------
@@ -106,6 +106,26 @@ const REORDER_ERROR =
 const STORAGE_NUDGE =
   'This image won’t show on your current template — it still counts toward your 25 MiB storage.';
 const HEX_HINT = 'Enter a hex like #7C3AED';
+/** ~2.2s saved-&-live beat hold (UI-SPEC Surface 4 / Motion "saved & live"). */
+const SAVED_BEAT_MS = 2200;
+
+// D-02 (UI-SPEC Surface 2 — D-02 applies to "every section form field" incl. the
+// moodboard form): per-field helper + `e.g.` placeholder for the moodboard's primary
+// first-run fields. The UI-SPEC Copywriting table is a "representative set" that
+// directs the planner to extend to the live field set from the Zod schemas; these
+// follow the house voice (calm, plain, profession-neutral, no exclamation, curly
+// apostrophes). Helper = informational (aria-describedby/muted; the Input/Textarea
+// `error` prop supersedes it); placeholder = the native `e.g.` example value.
+const MOODBOARD_FIELD_GUIDANCE = {
+  heading: {
+    helper: 'Name this gallery — what ties these images together.',
+    placeholder: 'e.g. Selected work',
+  },
+  caption: {
+    helper: 'A short label for this image.',
+    placeholder: 'e.g. Brand refresh — hero shot',
+  },
+} as const;
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 
@@ -242,9 +262,22 @@ interface ImageCardProps {
   disabled: boolean;
   onPatch: (id: string, patch: Partial<MoodboardEditorImage>) => void;
   onRemove: (id: string) => void;
+  /**
+   * D-11: the LAST-SAVED baseline URL for this gallery image (the TanStack-cache
+   * persisted value at mount), passed into the ImageUploader so a replace/remove
+   * before save frees only unsaved churn ('' when this slot was never saved).
+   */
+  persistedImageValue?: string;
 }
 
-function ImageCard({ image, isUnsupported, disabled, onPatch, onRemove }: ImageCardProps) {
+function ImageCard({
+  image,
+  isUnsupported,
+  disabled,
+  onPatch,
+  onRemove,
+  persistedImageValue,
+}: ImageCardProps) {
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   const {
@@ -361,6 +394,9 @@ function ImageCard({ image, isUnsupported, disabled, onPatch, onRemove }: ImageC
               onValueChange={(url) => onPatch(image.id, { image: url })}
               alt={str(image.image_alt)}
               onAltChange={(a) => onPatch(image.id, { image_alt: a })}
+              // D-11: the saved baseline for this gallery image (free-on-replace
+              // targets only unsaved churn; '' when this slot was never saved).
+              persistedValue={persistedImageValue}
             />
 
             {/* D-16 storage nudge — co-located near the uploader, muted + non-blocking. */}
@@ -374,6 +410,9 @@ function ImageCard({ image, isUnsupported, disabled, onPatch, onRemove }: ImageC
               label="Caption (optional)"
               value={str(image.caption)}
               maxLength={CAPTION_MAX}
+              // D-02: helper + `e.g.` placeholder (error supersedes helper).
+              helper={MOODBOARD_FIELD_GUIDANCE.caption.helper}
+              placeholder={MOODBOARD_FIELD_GUIDANCE.caption.placeholder}
               disabled={disabled}
               onChange={(e) => onPatch(image.id, { caption: e.target.value })}
             />
@@ -502,9 +541,9 @@ function SwatchRow({ swatch, disabled, onPatch, onRemove }: SwatchRowProps) {
             <Trash2 aria-hidden="true" className="size-5" />
           </button>
         </div>
-        {/* The hex FieldError already renders inside the Input; the standalone path is
-            unused, but a non-hex blur shows the inline hint via the Input's error. */}
-        {hexError ? <span className="sr-only"><FieldError>{hexError}</FieldError></span> : null}
+        {/* D-16: the dead hidden duplicate-hint branch is REMOVED — the hex hint
+            already renders inline via the Input's `error` prop above (the standalone
+            duplicate path was unused). Its now-unused import is dropped with it. */}
       </div>
     </li>
   );
@@ -543,11 +582,37 @@ export function MoodboardManager({
   );
   const [reorderError, setReorderError] = useState<string | null>(null);
 
+  // D-11: the per-image LAST-SAVED baseline, captured ONCE from the mounted
+  // (TanStack-cache) content. Each gallery ImageUploader gets its image's saved URL as
+  // `persistedValue`, so a replace/remove before save frees only unsaved churn (the
+  // persisted object's churn is the server on-save diff's job — WR-03). Never mutated
+  // (the baseline is "what was saved", not the live value).
+  const persistedImageBaseline = useRef<Map<string, string>>(
+    new Map(
+      toEditorImages(initialContent)
+        .map((img) => [img.id, typeof img.image === 'string' ? img.image : ''] as const)
+        .filter(([, url]) => url !== ''),
+    ),
+  );
+
+  // D-04/D-05: the saved-&-live BEAT window (opened by `onSavedAndLive`, settled after
+  // ~2.2s) — brings the dopamine beat to this auto-save model (parity with the explicit
+  // model). The hook fires ONLY on the latest resolved-ok save (never-claim-live-early).
+  const [live, setLive] = useState(false);
+
   const { state, scheduleSave, immediateSave } = useDebouncedSectionSave({
     sectionId,
     type: 'moodboard',
     username,
+    onSavedAndLive: () => setLive(true), // D-04
   });
+
+  // D-04: settle the beat window back after ~2.2s (the explicit model's SAVED_BEAT_MS).
+  useEffect(() => {
+    if (!live) return;
+    const t = setTimeout(() => setLive(false), SAVED_BEAT_MS);
+    return () => clearTimeout(t);
+  }, [live]);
 
   const saving = state === 'saving';
   const error = reorderError ?? (state === 'error' ? SAVE_ERROR : null);
@@ -686,6 +751,11 @@ export function MoodboardManager({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* D-04/D-05: the unified save-status line (status + saved-&-live beat), at the
+          top of the manager under the section <h2> the editor-shell wrapper renders —
+          so this auto-save model reads identically to the explicit Save model. */}
+      <SaveStatus state={state} live={live} />
+
       {error ? <Alert variant="error">{error}</Alert> : null}
 
       {/* Section header fields. */}
@@ -693,6 +763,9 @@ export function MoodboardManager({
         label="Heading"
         value={heading}
         maxLength={HEADING_MAX}
+        // D-02: helper + `e.g.` placeholder (error supersedes helper).
+        helper={MOODBOARD_FIELD_GUIDANCE.heading.helper}
+        placeholder={MOODBOARD_FIELD_GUIDANCE.heading.placeholder}
         disabled={saving}
         onChange={(e) => onHeadingChange(e.target.value)}
       />
@@ -734,6 +807,8 @@ export function MoodboardManager({
                     disabled={saving}
                     onPatch={patchImage}
                     onRemove={removeImage}
+                    // D-11: this image's saved baseline (free-on-replace = unsaved churn only).
+                    persistedImageValue={persistedImageBaseline.current.get(image.id)}
                   />
                 ))}
               </ul>
