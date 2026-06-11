@@ -32,6 +32,12 @@ export interface TextareaProps
    * CharCounter lives here so it sits bottom-right of the textarea.
    */
   trailing?: ReactNode;
+  /**
+   * Optional ref to the underlying `<textarea>` (React 19 ref-as-prop). Lets a
+   * caller move focus to the field — e.g. the D-01 ExampleChip clear focusing the
+   * first field after a one-tap clear.
+   */
+  ref?: React.Ref<HTMLTextAreaElement>;
 }
 
 export function Textarea({
@@ -42,6 +48,7 @@ export function Textarea({
   className,
   trailing,
   rows = 3,
+  ref,
   ...props
 }: TextareaProps) {
   const reactId = useId();
@@ -64,6 +71,7 @@ export function Textarea({
       </label>
 
       <textarea
+        ref={ref}
         id={id}
         rows={rows}
         aria-invalid={error ? true : undefined}

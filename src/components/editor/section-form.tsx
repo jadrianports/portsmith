@@ -23,7 +23,7 @@
  * state (it arms the CMS-07 guard); section CONTENT lives in TanStack Query, never
  * mirrored here (CLAUDE.md non-overlap).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
 import { CharCounter } from '@/components/ui/char-counter';
@@ -32,6 +32,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { saveSectionAction } from '@/lib/cms/save-section-action';
 import { useUIStore } from '@/lib/stores/uiStore';
 
+import { ExampleChip } from './example-chip';
 import { FormPanelHeader } from './form-panel-header';
 import type { SaveState } from './save-button';
 import { useRegisterActiveSave } from './unsaved-guard';
@@ -52,6 +53,52 @@ const TITLES: Record<SimpleSectionType, string> = {
 const GENERIC_ERROR = 'Something went wrong saving your changes. Please try again.';
 /** ~2.2s success-beat hold (UI-SPEC Motion "saved & live"). */
 const SAVED_BEAT_MS = 2200;
+
+// D-01 (UI-SPEC Surface 1): the SEED sentinels — the exact placeholder values
+// `initialize_portfolio()` writes for a brand-new account (migration
+// 006_enrich_bootstrap_placeholder.sql). The ExampleChip's contract is "present
+// IFF the block still holds UNTOUCHED seed values"; this is the content-sentinel
+// that decides "untouched seed" — the block's current field values still match the
+// seed AND the user has not edited anything. The instant any field diverges (an
+// edit or a clear), the chip vanishes and never returns. If the seed copy in the
+// migration changes, update these in lockstep (a drifted sentinel just means the
+// chip stops showing — a safe, non-destructive degrade, never a wrong clear).
+const SEED_SENTINELS: Record<
+  SimpleSectionType,
+  { heading?: string; subheading?: string; bio?: string }
+> = {
+  hero: {
+    heading: "Hi, I'm [Your Name]",
+    subheading: 'I build things for the web',
+  },
+  about: {
+    bio: "I'm a professional who turns ideas into real, working results. Over the years I've learned that the details matter — clear communication, thoughtful execution, and following through on what I promise. This is the space to introduce yourself: share who you are, the kind of work you do, the problems you love to solve, and what makes working with you worthwhile. Keep it warm and specific — a couple of honest sentences beat a page of buzzwords.",
+  },
+  contact: {
+    heading: 'Get in Touch',
+    subheading: 'Have a question or want to work together? Send me a message.',
+  },
+};
+
+/**
+ * D-01 — does this block's current content STILL hold the untouched bootstrap seed?
+ * Compares the section's field values against the seed sentinel for its type. Only
+ * the fields this form edits are compared (hero/contact: heading+subheading; about:
+ * bio); a missing/empty value or any divergence means "not the untouched seed" → no
+ * chip. (Equality, not substring — an edited field that merely starts with the seed
+ * is still the user's.)
+ */
+function holdsUntouchedSeed(
+  type: SimpleSectionType,
+  content: Record<string, unknown>,
+): boolean {
+  const seed = SEED_SENTINELS[type];
+  if (type === 'about') {
+    return content.bio === seed.bio;
+  }
+  // hero + contact compare heading + subheading.
+  return content.heading === seed.heading && content.subheading === seed.subheading;
+}
 
 export interface SectionFormProps {
   sectionId: string;
@@ -75,6 +122,21 @@ export function SectionForm({ sectionId, type, initialContent, username }: Secti
   const [banner, setBanner] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
 
+  // D-01 — the seeded-vs-touched flag (the UI-SPEC contract is: chip present IFF the
+  // block still holds UNTOUCHED seed). Seeded-ness is a per-block CLIENT/display
+  // concept: it starts true only if the section MOUNTED holding the bootstrap seed
+  // sentinel, and flips PERMANENTLY false the instant the user edits any field or
+  // taps clear — the chip + the rail "Example" tag then vanish and never return.
+  const [showExample, setShowExample] = useState(() =>
+    holdsUntouchedSeed(type, initialContent),
+  );
+  // The first editable field — focused after a one-tap clear so the user can start
+  // typing immediately (UI-SPEC Surface 1 clear interaction).
+  const firstFieldRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  // A polite live region announcing "Example content cleared" (UI-SPEC Surface 1 /
+  // Copywriting). Mounted only after a clear so it announces the change, not on load.
+  const [clearAnnounce, setClearAnnounce] = useState(false);
+
   const dirty = saveState === 'dirty' || saveState === 'saving';
 
   // Mirror the dirty flag into the Zustand UI store (arms the CMS-07 guard).
@@ -92,6 +154,27 @@ export function SectionForm({ sectionId, type, initialContent, username }: Secti
   /** Mark the panel dirty on any field change (unless mid-save). */
   function markDirty() {
     setSaveState((s) => (s === 'saving' ? s : 'dirty'));
+    // D-01: editing ANY field makes the block "theirs" — the example chip + rail tag
+    // disappear immediately and do not return (the "chip vanishes on edit" rule).
+    setShowExample(false);
+  }
+
+  /**
+   * D-01 — the one-tap clear. Resets the block's seeded fields to the SAME empty
+   * state a freshly-added section shows, removes the chip, marks the panel dirty
+   * (the now-empty block is an unsaved change), moves focus to the first field, and
+   * politely announces "Example content cleared". No confirm (clearing example data
+   * is safe + re-addable).
+   */
+  function clearExample() {
+    setHeading('');
+    setSubheading('');
+    setBio('');
+    setShowExample(false);
+    setSaveState((s) => (s === 'saving' ? s : 'dirty'));
+    setClearAnnounce(true);
+    // Move focus to the first field on the next frame (after the value reset paints).
+    requestAnimationFrame(() => firstFieldRef.current?.focus());
   }
 
   /** Assemble the section content payload for this type (the WHOLE content). */
@@ -169,11 +252,30 @@ export function SectionForm({ sectionId, type, initialContent, username }: Secti
         saveState={saveState}
       />
 
+      {/* D-01: the "Example · tap to clear" chip sits UNDER the form-panel header for
+          a SIMPLE seeded section while the block still holds untouched seed. One tap
+          clears the block to empty fields (showing the D-02 helpers/placeholders),
+          moves focus to the first field, and announces the change. It is distinct
+          from the D-02 helper ("here's what to type into this EMPTY field") and never
+          co-present with seed values once cleared/edited. */}
+      {showExample ? (
+        <div>
+          <ExampleChip onClear={clearExample} />
+        </div>
+      ) : null}
+
+      {/* Polite announcement of the clear ("Example content cleared" — UI-SPEC
+          Copywriting). Mounted only after a clear so it announces the change. */}
+      <span aria-live="polite" className="sr-only">
+        {clearAnnounce ? 'Example content cleared' : ''}
+      </span>
+
       {banner ? <Alert variant="error">{banner}</Alert> : null}
 
       {(type === 'hero' || type === 'contact') && (
         <>
           <Textarea
+            ref={firstFieldRef as React.Ref<HTMLTextAreaElement>}
             label="Heading"
             name="heading"
             value={heading}
@@ -200,6 +302,7 @@ export function SectionForm({ sectionId, type, initialContent, username }: Secti
 
       {type === 'about' && (
         <Textarea
+          ref={firstFieldRef as React.Ref<HTMLTextAreaElement>}
           label="Bio"
           name="bio"
           value={bio}
