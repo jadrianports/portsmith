@@ -64,7 +64,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { nanoid } from 'nanoid';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -73,7 +73,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
 import { ChipInput } from './chip-input';
+import { ExampleChip } from './example-chip';
 import { ImageUploader } from './image-uploader';
+import { SaveStatus } from './save-status';
 import { UrlInput } from './url-input';
 // D-20 (folds 08-REVIEW WR-04): the SHARED trailing-debounce + sequence-token +
 // skip-invalid save hook (13.1-03). `isSaveableSnapshot` is its Zod-FREE structural
@@ -228,12 +230,17 @@ const ITEM_CONFIG: Record<
 // bound; the server re-parse stays the authority).
 // ---------------------------------------------------------------------------
 
-/** A single flat field's render descriptor. */
+/**
+ * A single flat field's render descriptor. D-02: the input/textarea variants carry
+ * an optional `helper` (Caption via aria-describedby) + an `e.g.` `placeholder`
+ * (copied VERBATIM from the UI-SPEC Copywriting table where the field is listed);
+ * the Input/Textarea `error` prop supersedes the helper (never both).
+ */
 type FieldDescriptor =
   /** A single-line text Input. */
-  | { key: string; label: string; primitive: 'input'; max: number; required: boolean; placeholder?: string }
+  | { key: string; label: string; primitive: 'input'; max: number; required: boolean; placeholder?: string; helper?: string }
   /** A multi-line Textarea + CharCounter. */
-  | { key: string; label: string; primitive: 'textarea'; max: number; required: boolean }
+  | { key: string; label: string; primitive: 'textarea'; max: number; required: boolean; placeholder?: string; helper?: string }
   /** An http(s)-gated UrlInput (e.g. certifications.url). */
   | { key: string; label: string; primitive: 'url'; required: boolean }
   /** The inner string-list sub-field (achievements[]/deliverables[]). */
@@ -249,9 +256,10 @@ type FieldDescriptor =
  */
 const FIELD_DESCRIPTORS: Record<FlatItemSectionType, FieldDescriptor[]> = {
   education: [
-    { key: 'degree', label: 'Degree or program', primitive: 'input', max: 150, required: true },
-    { key: 'school', label: 'School or institution', primitive: 'input', max: 150, required: true },
-    { key: 'year', label: 'Year or range', primitive: 'input', max: 60, required: false, placeholder: '2016 – 2020' },
+    // D-02: helper + `e.g.` placeholder VERBATIM from the UI-SPEC Copywriting table.
+    { key: 'degree', label: 'Degree or program', primitive: 'input', max: 150, required: true, helper: 'Your qualification or program.', placeholder: 'e.g. BA, Communications' },
+    { key: 'school', label: 'School or institution', primitive: 'input', max: 150, required: true, helper: 'Where you earned it.', placeholder: 'e.g. University of Leeds' },
+    { key: 'year', label: 'Year or range', primitive: 'input', max: 60, required: false, placeholder: 'e.g. 2016 – 2020' },
     {
       key: 'achievements',
       label: 'Highlights',
@@ -261,13 +269,15 @@ const FIELD_DESCRIPTORS: Record<FlatItemSectionType, FieldDescriptor[]> = {
     },
   ],
   metrics: [
-    { key: 'value', label: 'Value', primitive: 'input', max: 40, required: true, placeholder: '10M+' },
-    { key: 'label', label: 'What it measures', primitive: 'input', max: 120, required: true },
+    // D-02: helper + `e.g.` placeholder VERBATIM from the UI-SPEC Copywriting table.
+    { key: 'value', label: 'Value', primitive: 'input', max: 40, required: true, helper: 'A short headline number.', placeholder: 'e.g. 10M+' },
+    { key: 'label', label: 'What it measures', primitive: 'input', max: 120, required: true, helper: 'What the number measures.', placeholder: 'e.g. people reached' },
     { key: 'icon', label: 'Icon name (optional)', primitive: 'input', max: 60, required: false },
   ],
   services: [
-    { key: 'title', label: 'Service name', primitive: 'input', max: 120, required: true },
-    { key: 'description', label: 'Description', primitive: 'textarea', max: 500, required: false },
+    // D-02: helper + `e.g.` placeholder VERBATIM from the UI-SPEC Copywriting table.
+    { key: 'title', label: 'Service name', primitive: 'input', max: 120, required: true, helper: 'What you offer, in plain words.', placeholder: 'e.g. Brand strategy' },
+    { key: 'description', label: 'Description', primitive: 'textarea', max: 500, required: false, helper: 'A sentence on what it includes.', placeholder: 'e.g. Positioning, messaging, and a launch plan tailored to your stage.' },
     { key: 'icon', label: 'Icon name (optional)', primitive: 'input', max: 60, required: false },
     {
       key: 'deliverables',
@@ -285,6 +295,85 @@ const FIELD_DESCRIPTORS: Record<FlatItemSectionType, FieldDescriptor[]> = {
     { key: 'url', label: 'Verification link', primitive: 'url', required: false },
   ],
 };
+
+// ---------------------------------------------------------------------------
+// D-02 (UI-SPEC Surface 2 + Copywriting): per-field helper + `e.g.` placeholder for
+// the BESPOKE types' fields (projects/experience), copied VERBATIM from the UI-SPEC
+// Copywriting table. The flat types carry their guidance inline in FIELD_DESCRIPTORS
+// above; the bespoke types' in-place fields read from this map. Helper = informational
+// (aria-describedby/muted, the Input/Textarea `error` prop supersedes it); placeholder
+// = the native `e.g.` example value. (Testimonials' fields are not in the UI-SPEC
+// table, so they carry no helper — mirroring Plan 06's no-helper-when-absent rule.)
+// ---------------------------------------------------------------------------
+const ITEM_FIELD_GUIDANCE = {
+  projectTitle: {
+    helper: 'Name the piece of work or project.',
+    placeholder: 'e.g. Mobile banking app redesign',
+  },
+  projectDescription: {
+    helper: 'What it was, your role, and the result.',
+    placeholder: 'e.g. Led the redesign that lifted activation 24%…',
+  },
+  experienceRole: {
+    helper: 'Your title in the role.',
+    placeholder: 'e.g. Senior Marketing Manager',
+  },
+  experienceCompany: {
+    helper: 'Where you held it.',
+    placeholder: 'e.g. Northwind Co.',
+  },
+} as const;
+
+// ---------------------------------------------------------------------------
+// D-01 (UI-SPEC Surface 1): the SEED sentinels for the item-ARRAY sections — the
+// exact placeholder items `initialize_portfolio()` writes for a brand-new account
+// (migration 006_enrich_bootstrap_placeholder.sql). The ExampleChip's contract is
+// "present IFF the item card still holds UNTOUCHED seed values"; a seeded item is
+// matched by BOTH its stable seed `id` (the migration writes `placeholder-1` /
+// `placeholder-2` / `placeholder`; a user-added item gets a nanoid) AND its seed
+// text still matching (equality, not substring — the instant any field diverges or
+// the card is cleared, the chip vanishes and never returns). Only projects (2 items)
+// + experience (1 item) are seeded as item cards; testimonials seeds an EMPTY array
+// and education/metrics/services/certifications are not bootstrapped — so those never
+// show the chip. If the seed copy in the migration changes, update these in lockstep
+// (a drifted sentinel just means the chip stops showing — a safe, non-destructive
+// degrade, never a wrong clear).
+// ---------------------------------------------------------------------------
+const ITEM_SEED_SENTINELS: Partial<Record<ItemSectionType, Record<string, Record<string, string>>>> = {
+  projects: {
+    'placeholder-1': {
+      title: 'Your First Project',
+      description:
+        "Describe a project you're proud of — what it does, the problem it solves, and the role you played. A short, concrete story (what changed because of your work) lands better than a feature list.",
+    },
+    'placeholder-2': {
+      title: 'A Second Project',
+      description:
+        "Add another piece of work that shows a different side of what you do — a different skill, a different kind of client, or a result you're especially proud of. Two strong examples already make a portfolio feel real.",
+    },
+  },
+  experience: {
+    placeholder: {
+      company: 'Company Name',
+      role: 'Your Role',
+      description: 'Describe what you did here.',
+    },
+  },
+};
+
+/**
+ * D-01 — does this item card STILL hold its untouched bootstrap seed? Matches on the
+ * stable seed id first (a user-added item's nanoid can never collide), then requires
+ * EVERY seed field to still equal the seed value (equality, not substring — an edited
+ * field that merely starts with the seed is the user's). Any divergence → no chip.
+ */
+function itemHoldsUntouchedSeed(type: ItemSectionType, item: EditorItem): boolean {
+  const seedsForType = ITEM_SEED_SENTINELS[type];
+  if (!seedsForType) return false;
+  const seed = seedsForType[String(item.id)];
+  if (!seed) return false;
+  return Object.entries(seed).every(([k, v]) => item[k] === v);
+}
 
 /** The four flat types render via the descriptor map (vs the bespoke 3). */
 const FLAT_TYPES = new Set<ItemSectionType>(['education', 'metrics', 'services', 'certifications']);
@@ -348,6 +437,8 @@ const SAVE_ERROR =
   'We couldn’t save your changes. Please try again.';
 const REORDER_ERROR =
   'We couldn’t save the new order — it’s been put back. Please try again.';
+/** ~2.2s saved-&-live beat hold (UI-SPEC Surface 4 / Motion "saved & live"). */
+const SAVED_BEAT_MS = 2200;
 
 // ---------------------------------------------------------------------------
 // StringListField — the inner achievements[]/deliverables[] sub-field (D-10, NEW)
@@ -488,6 +579,9 @@ function FlatItemFields({ type, item, disabled, onPatch }: FlatItemFieldsProps) 
                 value={str(item[field.key])}
                 maxLength={field.max}
                 placeholder={field.placeholder}
+                // D-02: helper (aria-describedby) + the `e.g.` placeholder above;
+                // the Input's `error` prop supersedes the helper (never both).
+                helper={field.helper}
                 disabled={disabled}
                 onChange={(e) => onPatch(item.id, { [field.key]: e.target.value })}
               />
@@ -499,6 +593,9 @@ function FlatItemFields({ type, item, disabled, onPatch }: FlatItemFieldsProps) 
                 label={field.label}
                 value={str(item[field.key])}
                 maxLength={field.max}
+                placeholder={field.placeholder}
+                // D-02: helper + `e.g.` placeholder (error supersedes helper).
+                helper={field.helper}
                 disabled={disabled}
                 onChange={(e) => onPatch(item.id, { [field.key]: e.target.value })}
                 trailing={<CharCounter value={str(item[field.key])} max={field.max} />}
@@ -542,10 +639,23 @@ interface ItemCardProps {
   startExpanded?: boolean;
   /** Whether the section save is currently in-flight (disables controls). */
   saving: boolean;
+  /** D-01: this card still holds UNTOUCHED bootstrap seed values (shows the chip). */
+  seeded?: boolean;
   /** Apply a partial field change to this item, then persist the section. */
   onPatch: (id: string, patch: Partial<EditorItem>) => void;
   /** Remove this item, then persist the section (uses the confirm dialog). */
   onRemove: (id: string) => void;
+  /** D-01: one-tap clear of this seeded card's fields → empty (the chip vanishes). */
+  onClearSeed: (id: string) => void;
+  /**
+   * D-11: the LAST-SAVED baseline URLs for this item's image slots (the TanStack-cache
+   * persisted values at mount), passed into the item-image ImageUploaders so the
+   * free-on-replace targets only unsaved churn ('' when this item had no saved image).
+   * `persistedImageValue` → the projects `image`; `persistedAvatarValue` → the
+   * testimonials `avatar`. Each uploader gets ONLY its own field's baseline.
+   */
+  persistedImageValue?: string;
+  persistedAvatarValue?: string;
 }
 
 /**
@@ -558,8 +668,12 @@ export function ItemCard({
   item,
   startExpanded = false,
   saving,
+  seeded = false,
   onPatch,
   onRemove,
+  onClearSeed,
+  persistedImageValue,
+  persistedAvatarValue,
 }: ItemCardProps) {
   const [expanded, setExpanded] = useState(startExpanded);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -636,6 +750,15 @@ export function ItemCard({
             </span>
           </button>
 
+          {/* D-01: the "Example · tap to clear" chip on a SEEDED item card header,
+              shown while the card still holds untouched bootstrap seed. One tap clears
+              this card's fields to empty (then the D-02 helpers/placeholders show) and
+              the chip vanishes; editing any field also vanishes it (the host stops
+              passing `seeded`). Reuses the Plan-06 ExampleChip — never accent. */}
+          {seeded ? (
+            <ExampleChip onClear={() => onClearSeed(item.id)} />
+          ) : null}
+
           {/* 44px remove button → opens the inline destructive confirm. */}
           <button
             type="button"
@@ -706,6 +829,9 @@ export function ItemCard({
                 <Input
                   label="Title"
                   value={str(item.title)}
+                  // D-02: helper + `e.g.` placeholder (UI-SPEC Copywriting table).
+                  helper={ITEM_FIELD_GUIDANCE.projectTitle.helper}
+                  placeholder={ITEM_FIELD_GUIDANCE.projectTitle.placeholder}
                   onChange={(e) =>
                     onPatch(item.id, {
                       title: e.target.value,
@@ -717,16 +843,21 @@ export function ItemCard({
                   label="Description"
                   value={str(item.description)}
                   maxLength={DESCRIPTION_MAX}
+                  // D-02: helper + `e.g.` placeholder (error supersedes helper).
+                  helper={ITEM_FIELD_GUIDANCE.projectDescription.helper}
+                  placeholder={ITEM_FIELD_GUIDANCE.projectDescription.placeholder}
                   onChange={(e) => onPatch(item.id, { description: e.target.value })}
                   trailing={
                     <CharCounter value={str(item.description)} max={DESCRIPTION_MAX} />
                   }
                 />
-                {/* Project image (16:9) via the generic ImageUploader (D-01). It
-                    co-locates the REQUIRED alt Input; both the URL and alt route
-                    through onPatch so they land in the SAME whole-section
-                    saveSectionAction write (Pitfall 7). The server alt refine
-                    (projectItemSchema.image_alt, sections.ts:86-89) is the real gate. */}
+                {/* Project image (16:9) via the generic ImageUploader. It co-locates
+                    the REQUIRED alt Input; both the URL and alt route through onPatch
+                    so they land in the SAME whole-section saveSectionAction write
+                    (Pitfall 7). The server alt refine (projectItemSchema.image_alt,
+                    sections.ts:86-89) is the real gate. D-11: persistedValue is the
+                    saved baseline for this item's image (the free-on-replace targets
+                    only unsaved churn). */}
                 <ImageUploader
                   kind="project"
                   label="Project image"
@@ -734,6 +865,7 @@ export function ItemCard({
                   onValueChange={(url) => onPatch(item.id, { image: url })}
                   alt={str(item.image_alt)}
                   onAltChange={(a) => onPatch(item.id, { image_alt: a })}
+                  persistedValue={persistedImageValue}
                 />
                 {/* Dev field — OPTIONAL (the schema allows an empty tech_stack). */}
                 <ChipInput
@@ -760,11 +892,17 @@ export function ItemCard({
                 <Input
                   label="Role"
                   value={str(item.role)}
+                  // D-02: helper + `e.g.` placeholder (UI-SPEC Copywriting table).
+                  helper={ITEM_FIELD_GUIDANCE.experienceRole.helper}
+                  placeholder={ITEM_FIELD_GUIDANCE.experienceRole.placeholder}
                   onChange={(e) => onPatch(item.id, { role: e.target.value })}
                 />
                 <Input
                   label="Company"
                   value={str(item.company)}
+                  // D-02: helper + `e.g.` placeholder (UI-SPEC Copywriting table).
+                  helper={ITEM_FIELD_GUIDANCE.experienceCompany.helper}
+                  placeholder={ITEM_FIELD_GUIDANCE.experienceCompany.placeholder}
                   onChange={(e) => onPatch(item.id, { company: e.target.value })}
                 />
                 <div className="flex gap-4">
@@ -825,6 +963,8 @@ export function ItemCard({
                   onValueChange={(url) => onPatch(item.id, { avatar: url })}
                   alt={str(item.avatar_alt)}
                   onAltChange={(a) => onPatch(item.id, { avatar_alt: a })}
+                  // D-11: the saved avatar baseline (free-on-replace = unsaved churn only).
+                  persistedValue={persistedAvatarValue}
                 />
               </>
             ) : null}
@@ -919,6 +1059,53 @@ export function ItemManager({
   // hook's `state === 'error'` below — these two are distinct copy (REORDER vs SAVE).
   const [reorderError, setReorderError] = useState<string | null>(null);
 
+  // D-01: the per-item seeded-vs-touched flag set. Computed ONCE from the mounted
+  // content (the cards that held the untouched bootstrap seed at load); a card's id is
+  // removed from the set the instant any of its fields is edited or it is cleared — so
+  // the chip vanishes on edit and never returns (the UI-SPEC "chip vanishes on edit"
+  // rule). Stored as a Set of item ids (seeded-ness is a display concept, not content).
+  const [seededIds, setSeededIds] = useState<Set<string>>(
+    () => new Set(initialItems.filter((it) => itemHoldsUntouchedSeed(type, it)).map((it) => String(it.id))),
+  );
+
+  // D-11: the per-item LAST-SAVED image baseline, captured ONCE from the mounted
+  // (TanStack-cache) content. Each item-image ImageUploader gets its item's saved URL
+  // as `persistedValue`, so a replace/remove before save frees only unsaved churn (the
+  // persisted object's churn is the server on-save diff's job — WR-03). Computed at
+  // mount and never mutated (the baseline is "what was saved", not the live value). The
+  // image field differs by type (projects → `image`, testimonials → `avatar`); both are
+  // captured so each uploader gets its OWN correct baseline (a wrong baseline could
+  // strand a still-referenced own object — T-17-11E; the own-folder guard is the final
+  // backstop, but the precise baseline is the first gate).
+  const persistedImageBaseline = useRef<Map<string, { image: string; avatar: string }>>(
+    new Map(
+      initialItems.map(
+        (it) =>
+          [
+            String(it.id),
+            {
+              image: typeof it.image === 'string' ? it.image : '',
+              avatar: typeof it.avatar === 'string' ? it.avatar : '',
+            },
+          ] as const,
+      ),
+    ),
+  );
+  /** Read a captured-at-mount image baseline for one item field ('' when never saved). */
+  const baselineFor = useCallback(
+    (id: string, field: 'image' | 'avatar'): string =>
+      persistedImageBaseline.current.get(String(id))?.[field] ?? '',
+    [],
+  );
+
+  // D-04/D-05: the saved-&-live BEAT window. `onSavedAndLive` fires ONLY on the latest
+  // resolved `{ ok: true }` (never-claim-live-early); we open a ~2.2s window during
+  // which SaveStatus reads "Saved — your page is live" (the dopamine beat the explicit
+  // model already fires), then settle it back so the line rests at "Saved". The hook
+  // owns the timing of the FIRE; this window owns the visible HOLD (the explicit model
+  // uses the same SAVED_BEAT_MS settle).
+  const [live, setLive] = useState(false);
+
   // D-20 (folds 08-REVIEW WR-04 at its PRIMARY site): the SHARED save hook owns the
   // monotonic sequence-token stale-drop (Pitfall 7), the Zod-FREE skip-invalid
   // pre-check (Pitfall 8), and the saving/saved/error lifecycle — the per-keystroke
@@ -928,7 +1115,18 @@ export function ItemManager({
     sectionId,
     type,
     username,
+    // D-04: bring the saved-&-live beat to the auto-save model (parity with the
+    // explicit model) — open the beat window on the latest resolved-ok save.
+    onSavedAndLive: () => setLive(true),
   });
+
+  // D-04: settle the beat window back after ~2.2s (the explicit model's SAVED_BEAT_MS),
+  // so "Saved — your page is live" relaxes to the resting "Saved".
+  useEffect(() => {
+    if (!live) return;
+    const t = setTimeout(() => setLive(false), SAVED_BEAT_MS);
+    return () => clearTimeout(t);
+  }, [live]);
 
   const saving = state === 'saving';
   // The hook's error state drives the generic save Alert; the reorder path raises
@@ -976,6 +1174,37 @@ export function ItemManager({
     const next = items.map((it) => (it.id === id ? { ...it, ...p } : it));
     setItems(next);
     setReorderError(null);
+    // D-01: editing ANY field of a seeded card makes it "theirs" — the ExampleChip
+    // vanishes immediately and never returns (the "chip vanishes on edit" rule).
+    if (seededIds.has(String(id))) {
+      setSeededIds((prev) => {
+        const nextSet = new Set(prev);
+        nextSet.delete(String(id));
+        return nextSet;
+      });
+    }
+    scheduleSave(buildContent(next));
+  }
+
+  /**
+   * D-01 — the one-tap clear of a SEEDED card. Resets the card's fields to the SAME
+   * empty state a freshly-added item shows (a fresh `blank()`, but KEEPING this card's
+   * id so its position/key are stable), removes the chip, and SCHEDULES a debounced
+   * save of the now-empty card (the cleared block is an unsaved change). The card then
+   * shows the D-02 helpers/placeholders. No confirm (clearing example data is safe +
+   * re-addable). Mirrors `section-form.tsx`'s `clearExample` for the item case.
+   */
+  function clearSeed(id: string) {
+    const next = items.map((it) =>
+      it.id === id ? ({ ...cfg.blank(), id: it.id } as EditorItem) : it,
+    );
+    setItems(next);
+    setReorderError(null);
+    setSeededIds((prev) => {
+      const nextSet = new Set(prev);
+      nextSet.delete(String(id));
+      return nextSet;
+    });
     scheduleSave(buildContent(next));
   }
 
@@ -1040,6 +1269,12 @@ export function ItemManager({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* D-04/D-05: the unified save-status line, fed the hook's `state` + the beat
+          window, sits at the top of the manager (directly under the section <h2> the
+          editor-shell wrapper renders) — so this auto-save model reads identically to
+          the explicit Save model, the saved-&-live beat included. */}
+      <SaveStatus state={state} live={live} />
+
       {error ? <Alert variant="error">{error}</Alert> : null}
 
       {items.length === 0 ? (
@@ -1067,8 +1302,15 @@ export function ItemManager({
                   item={item}
                   startExpanded={item.id === newItemId}
                   saving={saving}
+                  // D-01: the chip shows iff this card still holds untouched seed.
+                  seeded={seededIds.has(String(item.id))}
                   onPatch={patch}
                   onRemove={remove}
+                  onClearSeed={clearSeed}
+                  // D-11: each uploader's own saved baseline (free-on-replace targets
+                  // only unsaved churn; '' when this item's slot was never saved).
+                  persistedImageValue={baselineFor(item.id, 'image')}
+                  persistedAvatarValue={baselineFor(item.id, 'avatar')}
                 />
               ))}
             </ul>
