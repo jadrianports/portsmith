@@ -56,6 +56,33 @@ export function BlogPanel({ portfolioId, username }: BlogPanelProps) {
   const queryClient = useQueryClient();
   const [selection, setSelection] = useState<Selection>({ mode: 'list' });
 
+  // D-15(b): a STABLE per-editor-session key for the PostEditor, DECOUPLED from
+  // `selection`. The bug (Pitfall 5): keying PostEditor on the new-vs-edit
+  // distinction (a placeholder token for a new draft, the id for an edit) flips the
+  // key on the CREATE→UPDATE promotion (a new post's first auto-save fires
+  // `onSaved(id)` → selection goes `{mode:'new'}` → `{mode:'edit', id}`), REMOUNTING
+  // PostEditor and discarding its in-progress field/body state. The fix is
+  // key-stability HERE (NOT
+  // inside PostEditor — its local `postId` promotion at post-editor.tsx:169-174 is
+  // already correct): this token is set when an editor OPENS (a fresh uuid for a new
+  // draft, the post id for an existing post) and is intentionally LEFT UNCHANGED by
+  // the new→edit promotion, so the same editor instance carries through with its
+  // typed values intact. A genuinely different post / new draft sets a fresh token,
+  // preserving the original "remount per post so its field state is fresh" intent.
+  const [editorKey, setEditorKey] = useState<string>('');
+
+  /** Open a brand-new draft on a fresh editor session token. */
+  function openNewPost() {
+    setEditorKey(crypto.randomUUID());
+    setSelection({ mode: 'new' });
+  }
+
+  /** Open an existing post; key on its id so switching posts remounts fresh. */
+  function openExistingPost(id: string) {
+    setEditorKey(id);
+    setSelection({ mode: 'edit', id });
+  }
+
   const { data: posts = [], isLoading, isError } = useQuery<OwnerPostListItem[]>({
     queryKey: postsKey(portfolioId),
     queryFn: () => listPostsAction(),
@@ -83,8 +110,11 @@ export function BlogPanel({ portfolioId, username }: BlogPanelProps) {
         : {}; // a brand-new post
     return (
       <PostEditor
-        // Remount per post so its field state is fresh.
-        key={selection.mode === 'edit' ? selection.id : '__new__'}
+        // D-15(b): a STABLE session key — does NOT change on the CREATE→UPDATE
+        // promotion below (set once when the editor opens), so a new post's first
+        // auto-save does not remount the editor and blank its typed fields. Switching
+        // to a different post / new draft sets a fresh token (remount per post).
+        key={editorKey}
         portfolioId={portfolioId}
         username={username}
         initial={initial}
@@ -94,6 +124,8 @@ export function BlogPanel({ portfolioId, username }: BlogPanelProps) {
         }}
         onSaved={(id) => {
           // Promote a new draft into an edit on the persisted id + refresh the list.
+          // D-15(b): the editorKey is intentionally NOT touched here — promoting the
+          // selection must not remount the editor (that was the field-blanking bug).
           refreshPosts();
           setSelection((prev) => (prev.mode === 'new' ? { mode: 'edit', id } : prev));
         }}
@@ -108,7 +140,7 @@ export function BlogPanel({ portfolioId, username }: BlogPanelProps) {
         <h2 className="text-base font-semibold text-foreground">Blog</h2>
         <button
           type="button"
-          onClick={() => setSelection({ mode: 'new' })}
+          onClick={openNewPost}
           className={
             'ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-md bg-brand px-4 ' +
             'text-sm font-semibold text-brand-foreground outline-none transition-colors ' +
@@ -138,7 +170,7 @@ export function BlogPanel({ portfolioId, username }: BlogPanelProps) {
             <li key={post.id}>
               <button
                 type="button"
-                onClick={() => setSelection({ mode: 'edit', id: post.id })}
+                onClick={() => openExistingPost(post.id)}
                 className={
                   'flex min-h-11 w-full items-center gap-2 rounded-md border border-border ' +
                   'bg-surface px-3 py-2 text-left outline-none transition-colors ' +
