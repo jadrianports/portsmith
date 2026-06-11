@@ -59,6 +59,8 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { FieldError } from '@/components/ui/field-error';
 import { Input } from '@/components/ui/input';
+// D-11: the unsaved-session Storage-orphan free path (replace/remove before save).
+import { freeUnsavedUpload } from '@/lib/cms/free-unsaved-upload-action';
 import { cmsKeys } from '@/lib/query/cms-keys';
 import {
   exceedsPixelCap,
@@ -139,6 +141,16 @@ export interface ImageUploaderProps {
   error?: string;
   /** Field label (e.g. "Avatar", "Project image"). Defaults to "Photo". */
   label?: string;
+  /**
+   * D-11: the surrounding form's LAST-SAVED baseline URL for this slot (the
+   * TanStack-cache persisted value). When a replace/remove supersedes the bound
+   * `value`, the superseded object is freed ONLY when it differs from this
+   * baseline — the persisted value and any restore target are never freed here
+   * (the WR-03 on-save diff already handles persisted-object churn). Omit it (or
+   * leave it '') when there is no persisted baseline yet (a brand-new, never-saved
+   * field) — then every superseded in-session URL is safely freed.
+   */
+  persistedValue?: string;
 }
 
 export function ImageUploader({
@@ -150,6 +162,7 @@ export function ImageUploader({
   onAltChange,
   error,
   label = 'Photo',
+  persistedValue,
 }: ImageUploaderProps) {
   const cfg = UPLOAD_KINDS[kind] as ImageSlotConfig;
   const ceiling = ceilingMb(cfg);
@@ -171,6 +184,40 @@ export function ImageUploader({
         q.queryKey[1] === 'storage-used',
     });
   }, [queryClient]);
+
+  /**
+   * D-11: free a SUPERSEDED unsaved Storage object (best-effort). The object is
+   * freed ONLY when it is non-empty AND differs from the persisted baseline — so
+   * the last-saved URL and any restore target are never deleted (the WR-03 on-save
+   * diff owns persisted-object churn; this path owns unsaved-session churn — the
+   * two stay disjoint). The server action is idempotent + own-folder-guarded, so a
+   * stale/foreign URL is a safe no-op; we fire-and-forget and never block the UI on
+   * it, then refresh the meter once the now-decremented usage settles.
+   */
+  const freeIfUnsaved = useCallback(
+    (superseded: string) => {
+      if (superseded === '' || superseded === persistedValue) return;
+      void freeUnsavedUpload(superseded)
+        .then(() => refreshStorageMeter())
+        .catch(() => {
+          // The action never rejects in practice (no-throw primitive); a transport
+          // failure leaves the orphan for the WR-01 log + eventual sweep. Swallow —
+          // a failed best-effort free must never surface to the user.
+        });
+    },
+    [persistedValue, refreshStorageMeter],
+  );
+
+  // D-11: always-current bound value, so the unmount belt can free a still-held
+  // unsaved URL without re-subscribing the cleanup on every keystroke.
+  const currentValueRef = useRef(value);
+  useEffect(() => {
+    currentValueRef.current = value;
+  }, [value]);
+  const persistedValueRef = useRef(persistedValue);
+  useEffect(() => {
+    persistedValueRef.current = persistedValue;
+  }, [persistedValue]);
 
   const [status, setStatus] = useState<Status>('idle');
   const [rejectMsg, setRejectMsg] = useState<RejectMessage | null>(null);
@@ -201,6 +248,25 @@ export function ImageUploader({
       if (cropSrc) URL.revokeObjectURL(cropSrc);
     };
   }, [cropSrc]);
+
+  // D-11 belt (reconcile-on-unmount): if the field is torn down while still holding
+  // an UNSAVED URL that differs from the persisted baseline, free it. This catches
+  // the case where the user uploads then navigates away / collapses the section
+  // without ever replacing, removing, or saving. Reads refs so it fires once on
+  // unmount with the LATEST held value (not the mount-time value); after a save the
+  // baseline equals the held value, so the saved object is correctly left intact.
+  // The server action is idempotent + own-folder-guarded — safe as fire-and-forget.
+  useEffect(() => {
+    return () => {
+      const held = currentValueRef.current;
+      const persisted = persistedValueRef.current;
+      if (held !== '' && held !== persisted) {
+        void freeUnsavedUpload(held).catch(() => {});
+      }
+    };
+    // Mount-once: the refs always carry the current values at unmount time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openPicker = useCallback(() => {
     setRejectMsg(null);
@@ -278,6 +344,10 @@ export function ImageUploader({
 
     setStatus('uploading');
     const myReq = ++reqId.current;
+    // D-11: the URL currently bound is the one this new upload supersedes. Capture
+    // it BEFORE the async swap so we can free it (iff it was an unsaved in-session
+    // object) once the new URL lands.
+    const superseded = value;
 
     try {
       const canvas = cropper.getCroppedCanvas({
@@ -323,6 +393,11 @@ export function ImageUploader({
         URL.revokeObjectURL(cropSrc);
         setCropSrc(null);
       }
+      // D-11: free the object this upload just superseded (best-effort, gated on
+      // `superseded !== '' && superseded !== persistedValue`). Fired BEFORE the
+      // value swap so the replaced in-session orphan is reclaimed and
+      // storage_used_bytes stays accurate; the persisted baseline is never freed.
+      freeIfUnsaved(superseded);
       onValueChange(url);
       onUploaded?.(url);
       setRejectMsg(null); // WR-05: clear any prior error so it can't coexist with the success beat
@@ -343,6 +418,8 @@ export function ImageUploader({
     onUploaded,
     onValueChange,
     refreshStorageMeter,
+    freeIfUnsaved, // D-11
+    value, // D-11: the superseded URL captured at call start
   ]);
 
   const cancelCrop = useCallback(() => {
@@ -357,10 +434,17 @@ export function ImageUploader({
 
   const doRemove = useCallback(() => {
     setConfirmRemove(false);
-    if (value) onValueChange('');
+    if (value) {
+      // D-11: removing an UNSAVED object frees it (gated on `!== persistedValue`),
+      // so a remove-before-save leaves no orphan. The persisted value is never
+      // freed here — clearing the field unsets the form reference, and the WR-03
+      // on-save diff reclaims the persisted object when that empty state is saved.
+      freeIfUnsaved(value);
+      onValueChange('');
+    }
     if (fileInputRef.current) fileInputRef.current.value = '';
     setStatus('idle');
-  }, [onValueChange, value]);
+  }, [onValueChange, value, freeIfUnsaved]);
 
   const busy = status === 'validating' || status === 'uploading';
 
