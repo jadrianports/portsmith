@@ -35,7 +35,10 @@
  */
 import { redirect } from 'next/navigation';
 
+import { AnalyticsCard } from '@/components/dashboard/analytics-card';
+import { RegisterOwnUsername } from '@/components/dashboard/register-own-username';
 import { EditorShell } from '@/components/editor/editor-shell';
+import { getOwnerAnalytics } from '@/lib/analytics/owner-analytics';
 import { ensurePortfolio } from '@/lib/cms/bootstrap-portfolio';
 import { getPortfolioOwnerByUsername } from '@/lib/portfolio/get-portfolio-owner';
 import { getAvailableTemplates } from '@/lib/templates/available-templates';
@@ -128,21 +131,47 @@ export default async function DashboardPage() {
     .select('id', { count: 'exact', head: true })
     .eq('is_read', false);
 
+  // 6) Owner analytics for the glanceable dashboard card (15-05 / ANLY-01 / D-01 /
+  //    D-12). The read runs under the SAME authenticated RLS client this page already
+  //    uses — the `page_views own select` policy scopes it to the owner's own
+  //    portfolio (D-13: no service-role, no DEFINER RPCs, no explicit filter). Calm
+  //    defaults on error, so a transient read failure renders the card's error state
+  //    rather than breaking the dashboard.
+  const ownerAnalytics = await getOwnerAnalytics();
+
   return (
-    <EditorShell
-      data={data}
-      portfolioId={bootstrap.portfolioId}
-      ownerId={sub}
-      storageUsedBytes={storageUsedBytes}
-      unreadMessageCount={unreadCount ?? 0}
-      // 07-05: the owner's CURRENT template slug → the TemplatePicker "● Current" mark.
-      currentTemplateSlug={templateSlug}
-      // 12-04 / GATE-02: the data-layer allowed-list (public ∪ granted-to-me) — the
-      // picker renders one card per allowed slug; `restricted` drives the "Exclusive"
-      // marker. Plain serializable data (no zod) → stays off the public/client bundle.
-      allowedTemplates={allowedTemplates}
-      // 12-04 / D-P12-10: surface the one-time post-fallback "pick another" notice.
-      showFallbackNotice={showFallbackNotice}
-    />
+    <>
+      {/* D-06 self-view writer: registers THIS owner's username in
+          localStorage['portsmith-own-usernames'] so the public-page beacon skips
+          their self-views + draft previews. Renders null — a write-only effect,
+          mounted as a SIBLING of EditorShell (not threaded through it). */}
+      <RegisterOwnUsername username={username} />
+
+      {/* The glanceable owner analytics card (15-UI-SPEC Surface B) — a one-card
+          block on the main dashboard surface, above the editor. Chrome tokens
+          (Evergreen/Copper, Inter); a SIBLING of EditorShell so the editor stays
+          template-decoupled and its signature is unchanged. */}
+      <div className="border-b border-border bg-background px-4 py-4 sm:px-6">
+        <div className="mx-auto w-full max-w-2xl">
+          <AnalyticsCard {...ownerAnalytics} />
+        </div>
+      </div>
+
+      <EditorShell
+        data={data}
+        portfolioId={bootstrap.portfolioId}
+        ownerId={sub}
+        storageUsedBytes={storageUsedBytes}
+        unreadMessageCount={unreadCount ?? 0}
+        // 07-05: the owner's CURRENT template slug → the TemplatePicker "● Current" mark.
+        currentTemplateSlug={templateSlug}
+        // 12-04 / GATE-02: the data-layer allowed-list (public ∪ granted-to-me) — the
+        // picker renders one card per allowed slug; `restricted` drives the "Exclusive"
+        // marker. Plain serializable data (no zod) → stays off the public/client bundle.
+        allowedTemplates={allowedTemplates}
+        // 12-04 / D-P12-10: surface the one-time post-fallback "pick another" notice.
+        showFallbackNotice={showFallbackNotice}
+      />
+    </>
   );
 }
