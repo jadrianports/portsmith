@@ -46,6 +46,7 @@
  * client AND `node:crypto` for the IP hash both require Node, never edge) + typed
  * JSON bodies only.
  */
+import { checkBotId } from 'botid/server';
 import { NextResponse } from 'next/server';
 
 import { isKnownBot } from '@/lib/analytics/bot-denylist';
@@ -85,6 +86,15 @@ export async function POST(req: Request): Promise<NextResponse> {
   // 2) Server-side bot-UA denylist (D-07). A match → SILENT no-op (a crawler that
   //    ran JS, or a spoofed UA). Drop, do NOT error.
   if (isKnownBot(req.headers.get('user-agent'))) {
+    return NextResponse.json({ ok: true }, { status: 200 });
+  }
+
+  // 2b) D-06 / HARD-02 — BotID silent-drop, keep the beacon posture (no friction);
+  //     no-op off-Vercel. Joins the UA denylist as a SILENT drop returning the route's
+  //     EXISTING dropped-beacon shape (200 {ok:true}) — NOT a 403/429/204, so the
+  //     high-volume beacon never surfaces friction. No BotIdClient protect entry here.
+  const { isBot } = await checkBotId();
+  if (isBot) {
     return NextResponse.json({ ok: true }, { status: 200 });
   }
 
