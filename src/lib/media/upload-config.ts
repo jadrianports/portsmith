@@ -99,6 +99,21 @@ export const UPLOAD_KINDS: Record<UploadKind, UploadSlotConfig> = {
   },
 };
 
+/**
+ * The COARSE pre-buffer upload ceiling (D-12 / HARD-04). The max of every per-kind
+ * `ceiling` (image 5 MiB, resume 10 MiB ⇒ 10 MiB = 10485760). The upload route reads
+ * the request `Content-Length` and rejects with 413 BEFORE buffering the body when a
+ * declared length exceeds THIS coarse bound — the actual kind isn't known until after
+ * the multipart parse, so the bound must be the largest per-kind ceiling. Derived from
+ * the table so a future larger kind raises it automatically (no re-export churn). The
+ * authoritative gate stays the per-kind post-read `byteLength > cfg.ceiling` check
+ * (Content-Length is UNTRUSTED — Pitfall 4); this is only a cheap memory-pressure
+ * speed-bump that bounds the common-case buffered body to ≤10 MiB.
+ */
+export const MAX_UPLOAD_CEILING = Math.max(
+  ...Object.values(UPLOAD_KINDS).map((k) => k.ceiling),
+);
+
 /** Per-user storage cap (D-09). 25 MiB = 26214400 bytes. */
 export const QUOTA_BYTES = 25 * 1024 * 1024;
 
