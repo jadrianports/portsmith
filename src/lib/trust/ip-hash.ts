@@ -21,6 +21,7 @@ import 'server-only';
  * `REPORT_IP_HASH_SECRET` is a NEW server-only secret — un-prefixed, NEVER
  * `NEXT_PUBLIC_` (the checkpoint:human-verify in 06-06 sets it in Vercel + .env.local).
  */
+import { headers } from 'next/headers';
 import { createHmac } from 'node:crypto';
 
 /**
@@ -37,6 +38,45 @@ export async function hashClientIp(req: Request): Promise<string | null> {
   if (!ip) return null;
 
   // Un-prefixed, server-only secret. Absent → degrade (skip the per-sender cap, R-5).
+  const secret = process.env.REPORT_IP_HASH_SECRET;
+  if (!secret) return null;
+
+  // Store/return ONLY the digest — the raw IP never leaves this function (D-07).
+  return createHmac('sha256', secret).update(ip).digest('hex');
+}
+
+/**
+ * D-11 / HARD-04 — the Server-Action variant of `hashClientIp(req)`.
+ *
+ * Pitfall 1: Server Actions (`signupAction` / `loginAction` / `requestReset`)
+ * receive `input: unknown`, NOT a `Request` — so `hashClientIp(req)` can't be
+ * reused as-is. This sibling reads the client IP via `await headers()` from
+ * `next/headers` (the same `clientIp()` idiom signup-action.ts:61-70 already uses
+ * for Turnstile `remoteip`), then applies the EXACT same HMAC + same secret +
+ * same degrade-to-null contract as `hashClientIp`.
+ *
+ * Same privacy invariant (D-07): the raw IP is PII and is NEVER returned or
+ * stored — only the hex digest, which becomes the `rate_limit_events.subject` for
+ * the new `auth_signup`/`auth_login`/`auth_reset` buckets. Same degrade (R-5):
+ * returns `null` when there is no client IP OR `REPORT_IP_HASH_SECRET` is unset,
+ * which the auth actions treat as "skip the per-IP cap" — a missing secret never
+ * locks out a real user.
+ *
+ * (`next/headers` is server-only; the `import 'server-only'` on line 1 already
+ * enforces that. The existing `hashClientIp(req)` is unaffected.)
+ */
+export async function hashClientIpFromHeaders(): Promise<string | null> {
+  let ip: string | null = null;
+  try {
+    const h = await headers();
+    const fwd = h.get('x-forwarded-for');
+    ip = fwd?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? null;
+  } catch {
+    ip = null;
+  }
+  if (!ip) return null;
+
+  // Un-prefixed, server-only secret. Absent → degrade (skip the per-IP cap, R-5).
   const secret = process.env.REPORT_IP_HASH_SECRET;
   if (!secret) return null;
 
