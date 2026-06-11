@@ -188,4 +188,52 @@ describe('D-12 — upload Content-Length pre-buffer reject', () => {
     const emptyRes = await POST(emptyReq);
     expect(emptyRes.status).toBe(200);
   });
+
+  // WR-04 (Phase-16 code-review fix, 39c3fbc) — the pre-check parses ONLY a clean
+  // decimal (`/^\d+$/` on the trimmed header). The shipped fix replaced a bare
+  // `Number(header)` that would coerce a hex (`0x989680` -> 10000000) or a padded
+  // header to a small finite value, letting a genuinely oversized body sail past the
+  // coarse pre-buffer guard. These lock that parse so a regression can't silently
+  // reopen the OOM lever.
+
+  it('WR-04: a whitespace-padded oversized content-length still rejects pre-buffer (trim + strict decimal)', async () => {
+    // The trimmed value is a clean decimal over the bound — the guard must still fire
+    // BEFORE the body is buffered (padding must not defeat the pre-check).
+    const { req, formDataSpy } = uploadReq({
+      contentLength: `   ${MAX_UPLOAD_CEILING + 1}   `,
+      formDataThrows: true, // trips if the pre-check fails to short-circuit
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: 'too_large' });
+    expect(formDataSpy).not.toHaveBeenCalled();
+  });
+
+  it('WR-04: a hex content-length (0x989680) is NOT honored as a pre-check length — an oversized body still hits the authoritative post-read 413', async () => {
+    // `Number('0x989680') === 10000000` (< the 10 MiB ceiling): a bare-Number pre-check
+    // would treat the hex header as a valid small length and let the oversized body
+    // buffer unbounded. The strict `/^\d+$/` parse rejects the hex form, degrading to
+    // the authoritative post-read byteLength check (Content-Length is untrusted).
+    const { req, formDataSpy } = uploadReq({
+      contentLength: '0x989680',
+      body: oversizedBody(),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: 'too_large' });
+    // The hex header fell through to the real gate (the body WAS read, then rejected).
+    expect(formDataSpy).toHaveBeenCalledTimes(1);
+    expect(storageUpload).not.toHaveBeenCalled();
+  });
+
+  it('WR-04: a hex content-length does NOT false-reject a small valid upload', async () => {
+    // The hex form is "not a trustworthy decimal length" → skip the pre-check (no false
+    // 413); a small valid body then flows through to a normal 200.
+    const smallBody = new FormData();
+    smallBody.set('kind', 'avatar');
+    smallBody.set('file', new Blob([new Uint8Array(1024)]));
+    const { req } = uploadReq({ contentLength: '0x989680', body: smallBody });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+  });
 });

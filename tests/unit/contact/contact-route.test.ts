@@ -73,6 +73,14 @@ vi.mock('@/lib/rate-limit/ledger', () => ({
   countAndRecord: (...a: unknown[]) => countAndRecord(...a),
 }));
 
+// BotID server gate (D-06 / WR-01 / WR-03) — controllable per-case. Default: human.
+// The route gate order is Zod -> checkBotId (after Zod, WR-03) -> Turnstile -> guard ->
+// ledger -> insert, and a thrown checkBotId degrades OPEN (isBot=false, WR-01).
+const checkBotId = vi.fn(async (): Promise<{ isBot: boolean }> => ({ isBot: false }));
+vi.mock('botid/server', () => ({
+  checkBotId: () => checkBotId(),
+}));
+
 // The not-yet-existing route module — RUNTIME import through a variable specifier
 // so `tsc` does not resolve it (no TS2307) but the suite is genuinely RED.
 const ROUTE = '@/app/api/contact/route';
@@ -107,8 +115,10 @@ describe('CONT-01 — POST /api/contact (service-role sole writer)', () => {
     insert.mockClear();
     verifyTurnstile.mockClear();
     countAndRecord.mockClear();
+    checkBotId.mockReset();
     verifyTurnstile.mockResolvedValue(true);
     countAndRecord.mockResolvedValue(true);
+    checkBotId.mockResolvedValue({ isBot: false });
   });
 
   it('rejects a bad Zod payload with 400 (server re-parse gate, D-02)', async () => {
@@ -145,5 +155,39 @@ describe('CONT-01 — POST /api/contact (service-role sole writer)', () => {
     expect(insert).not.toHaveBeenCalled();
     const text = await res.text();
     expect(text).not.toMatch(/\b20\b|per hour|limit|wait/i);
+  });
+
+  // WR-01 / WR-03 (Phase-16 code-review fixes) — the layered BotID gate. These guard
+  // the post-review behavior that shipped in ae0a3ef with no regression test:
+  //   - isBot -> a GENERIC 403 { error: 'unavailable' } (same body as the public-target
+  //     guard — never a "bot detected" oracle, T-16-13).
+  //   - a thrown checkBotId (BotID/OIDC outage) degrades OPEN, never a 500 (WR-01).
+  //   - the gate runs AFTER the cheap Zod parse, so a malformed body is a 400 for bot
+  //     and human alike and never spends a (billed) BotID call (WR-03).
+  describe('WR-01/WR-03 — layered BotID gate (D-06)', () => {
+    it('isBot returns a GENERIC 403 { error: "unavailable" } and never inserts', async () => {
+      const POST = await loadPost();
+      checkBotId.mockResolvedValue({ isBot: true });
+      const res = await POST(postReq(validBody));
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: 'unavailable' });
+      expect(insert).not.toHaveBeenCalled();
+    });
+
+    it('WR-01: a thrown checkBotId degrades OPEN (isBot=false) — the write proceeds, never a 500', async () => {
+      const POST = await loadPost();
+      checkBotId.mockRejectedValue(new Error('VERCEL_OIDC_TOKEN is not set'));
+      const res = await POST(postReq(validBody));
+      expect(res.status).toBe(200); // the outage did not throw/500 the route
+      expect(insert).toHaveBeenCalled();
+    });
+
+    it('WR-03: a malformed body is a 400 BEFORE checkBotId is ever called (Zod-first)', async () => {
+      const POST = await loadPost();
+      const res = await POST(postReq({ sender_name: 'x' })); // fails contactFormSchema
+      expect(res.status).toBe(400);
+      expect(checkBotId).not.toHaveBeenCalled(); // no billed bot call on garbage
+      expect(insert).not.toHaveBeenCalled();
+    });
   });
 });

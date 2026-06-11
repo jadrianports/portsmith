@@ -71,6 +71,14 @@ vi.mock('@/lib/trust/ip-hash', () => ({
   hashClientIp: (...a: unknown[]) => hashClientIp(...a),
 }));
 
+// BotID server gate (D-06 / WR-01 / WR-03) — controllable per-case. Default: human.
+// Gate order: Zod -> checkBotId (after Zod) -> Turnstile -> two-bucket ledger -> insert;
+// a thrown checkBotId degrades OPEN (isBot=false, WR-01).
+const checkBotId = vi.fn(async (): Promise<{ isBot: boolean }> => ({ isBot: false }));
+vi.mock('botid/server', () => ({
+  checkBotId: () => checkBotId(),
+}));
+
 const ROUTE = '@/app/api/report/route';
 async function loadPost(): Promise<(req: Request) => Promise<Response>> {
   const mod = (await import(/* @vite-ignore */ ROUTE)) as {
@@ -99,8 +107,10 @@ describe('SAFE-03 — POST /api/report (service-role mirror of /api/contact)', (
     insert.mockClear();
     verifyTurnstile.mockClear();
     countAndRecord.mockClear();
+    checkBotId.mockReset();
     verifyTurnstile.mockResolvedValue(true);
     countAndRecord.mockResolvedValue(true);
+    checkBotId.mockResolvedValue({ isBot: false });
   });
 
   it('rejects a bad reportSchema payload with 400', async () => {
@@ -137,5 +147,37 @@ describe('SAFE-03 — POST /api/report (service-role mirror of /api/contact)', (
     const res = await POST(postReq(validBody));
     expect(res.status).toBe(200);
     expect(insert).toHaveBeenCalled();
+  });
+
+  // WR-01 / WR-03 (Phase-16 code-review fixes, ae0a3ef) — the layered BotID gate,
+  // mirroring /api/contact. Guards the post-review behavior that shipped with no test:
+  //   - isBot -> a GENERIC 403 { error: 'unavailable' } (no detail leak, T-16-13).
+  //   - a thrown checkBotId degrades OPEN, never a 500 (WR-01).
+  //   - the gate runs AFTER Zod, so a malformed body is a 400 and never spends a BotID call.
+  describe('WR-01/WR-03 — layered BotID gate (D-06)', () => {
+    it('isBot returns a GENERIC 403 { error: "unavailable" } and never inserts', async () => {
+      const POST = await loadPost();
+      checkBotId.mockResolvedValue({ isBot: true });
+      const res = await POST(postReq(validBody));
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: 'unavailable' });
+      expect(insert).not.toHaveBeenCalled();
+    });
+
+    it('WR-01: a thrown checkBotId degrades OPEN (isBot=false) — the write proceeds, never a 500', async () => {
+      const POST = await loadPost();
+      checkBotId.mockRejectedValue(new Error('VERCEL_OIDC_TOKEN is not set'));
+      const res = await POST(postReq(validBody));
+      expect(res.status).toBe(200);
+      expect(insert).toHaveBeenCalled();
+    });
+
+    it('WR-03: a malformed body is a 400 BEFORE checkBotId is ever called (Zod-first)', async () => {
+      const POST = await loadPost();
+      const res = await POST(postReq({ reason: 'spam' })); // fails reportSchema
+      expect(res.status).toBe(400);
+      expect(checkBotId).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+    });
   });
 });
