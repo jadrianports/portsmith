@@ -161,7 +161,16 @@ export async function loginAction(input: unknown): Promise<LoginResult> {
   //     isBot return GENERIC_ERROR — NOT GENERIC_INVALID. A bot is NOT a
   //     credential signal, and a distinct "bot" response would become an
   //     enumeration oracle. No-ops to isBot:false off-Vercel/locally.
-  const { isBot } = await checkBotId();
+  let isBot = false;
+  try {
+    ({ isBot } = await checkBotId());
+  } catch {
+    // A transient BotID/OIDC outage must NOT throw the action — degrade to "allow"
+    // (isBot=false), matching the ledger's fail-open posture (WR-01 / ledger.ts). The
+    // credential check + the per-IP ledger remain the real gates. Still GENERIC_ERROR
+    // on a real isBot below — never GENERIC_INVALID (enumeration-safe, D-07).
+    isBot = false;
+  }
   if (isBot) {
     return { ok: false, error: GENERIC_ERROR };
   }

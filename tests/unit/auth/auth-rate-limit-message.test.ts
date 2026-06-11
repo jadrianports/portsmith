@@ -182,6 +182,38 @@ describe('over-cap returns the EXISTING generic outcome (enumeration-safe, Pitfa
   });
 });
 
+describe('WR-01 — a BotID/OIDC outage degrades OPEN, never throws the action', () => {
+  beforeEach(() => {
+    // Present hashed-IP subject so the throttle is consulted (and allowed by default)...
+    HEADERS.set('x-forwarded-for', '203.0.113.7');
+    // ...and checkBotId THROWS — a transient BotID/OIDC outage ("VERCEL_OIDC_TOKEN is
+    // not set" / a network blip). The action must treat this as not-a-bot and continue
+    // (degrade-open, matching the ledger's fail-open posture) — never 500 / throw.
+    checkBotId.mockRejectedValue(new Error('VERCEL_OIDC_TOKEN is not set'));
+  });
+
+  it('login: a thrown checkBotId is swallowed → proceeds past the bot gate to the credential check', async () => {
+    const result = await loginAction(LOGIN_INPUT);
+    expect(countAndRecord).toHaveBeenCalledWith('auth_login', expect.any(String), 60 * 60 * 1000, 20);
+    expect(signInWithPassword).toHaveBeenCalled(); // reached gotrue — not short-circuited at the bot gate
+    expect(result).toBeDefined(); // resolved — the outage did not throw the action
+  });
+
+  it('signup: a thrown checkBotId is swallowed → proceeds past the bot gate to account creation', async () => {
+    const result = await signupAction(SIGNUP_INPUT);
+    expect(countAndRecord).toHaveBeenCalledWith('auth_signup', expect.any(String), 60 * 60 * 1000, 10);
+    expect(signUp).toHaveBeenCalled();
+    expect(result).toBeDefined();
+  });
+
+  it('reset: a thrown checkBotId is swallowed → proceeds past the bot gate to send the reset email', async () => {
+    const result = await requestReset(RESET_INPUT);
+    expect(countAndRecord).toHaveBeenCalledWith('auth_reset', expect.any(String), 60 * 60 * 1000, 5);
+    expect(resetPasswordForEmail).toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+  });
+});
+
 describe('degrade-when-no-secret: a null subject SKIPS the cap (D-11 — never a lockout)', () => {
   // No x-forwarded-for header set AND/OR no secret => hashClientIpFromHeaders()
   // returns null => the action must NOT call countAndRecord and must proceed.

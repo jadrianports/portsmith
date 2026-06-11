@@ -109,7 +109,15 @@ export async function requestReset(input: unknown): Promise<RequestResetResult> 
   //     never a distinct bot signal (the request side is already always-generic,
   //     so this changes nothing observable; enumeration-safe, Pitfall 2 / D-07).
   //     No-ops to isBot:false off-Vercel/locally.
-  const { isBot } = await checkBotId();
+  let isBot = false;
+  try {
+    ({ isBot } = await checkBotId());
+  } catch {
+    // A transient BotID/OIDC outage must NOT throw the action — degrade to "allow"
+    // (isBot=false), matching the ledger's fail-open posture (WR-01 / ledger.ts). The
+    // per-IP ledger remains the real cap; the response is always-generic regardless.
+    isBot = false;
+  }
   if (isBot) {
     return { ok: true, message: GENERIC_RESET_MESSAGE };
   }

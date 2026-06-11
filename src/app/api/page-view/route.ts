@@ -93,7 +93,15 @@ export async function POST(req: Request): Promise<NextResponse> {
   //     no-op off-Vercel. Joins the UA denylist as a SILENT drop returning the route's
   //     EXISTING dropped-beacon shape (200 {ok:true}) — NOT a 403/429/204, so the
   //     high-volume beacon never surfaces friction. No BotIdClient protect entry here.
-  const { isBot } = await checkBotId();
+  let isBot = false;
+  try {
+    ({ isBot } = await checkBotId());
+  } catch {
+    // A transient BotID/OIDC outage must NOT fail the surface — degrade to "allow"
+    // (isBot=false), matching the ledger's fail-open posture (WR-01 / ledger.ts). BotID
+    // is a defense-in-depth speed-bump here, not the gate (UA denylist + ledger remain).
+    isBot = false;
+  }
   if (isBot) {
     return NextResponse.json({ ok: true }, { status: 200 });
   }

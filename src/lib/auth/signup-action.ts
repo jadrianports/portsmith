@@ -94,7 +94,15 @@ export async function signupAction(input: unknown): Promise<SignupResult> {
   //     shared-IP human's per-IP budget). No-ops to isBot:false off-Vercel/locally.
   //     On isBot return the SAME generic outcome a hard signUp error returns —
   //     never a distinct "bot" signal (enumeration-safe, Pitfall 2 / D-07).
-  const { isBot } = await checkBotId();
+  let isBot = false;
+  try {
+    ({ isBot } = await checkBotId());
+  } catch {
+    // A transient BotID/OIDC outage must NOT throw the action — degrade to "allow"
+    // (isBot=false), matching the ledger's fail-open posture (WR-01 / ledger.ts).
+    // Turnstile + the per-IP ledger remain the real gates.
+    isBot = false;
+  }
   if (isBot) {
     return { ok: false, error: GENERIC_ERROR };
   }
