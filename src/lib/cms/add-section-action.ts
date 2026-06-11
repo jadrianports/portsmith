@@ -18,16 +18,18 @@
  *   2. Resolve the caller's OWN portfolio id SERVER-SIDE under RLS
  *      (`.eq('user_id', sub).maybeSingle()` — never a client-supplied id), so the
  *      INSERT can only target the caller's own portfolio (cross-tenant → impossible).
- *   3. D-18 append: next sort_order = MAX(sort_order)+1 for that portfolio, read
- *      under RLS.
  *   4. D-21 seed + the Zod gate: build the seeded D-19 heading content per type and
  *      re-validate it via `validateSectionContent` (the server write gate holds even
- *      for the seed). D-04: the row starts hidden (`visible:false`).
- *   5. INSERT under the AUTHENTICATED client (`sections own all` WITH CHECK scopes it
- *      to the owner — 004_rls_policies.sql:144-155). NEVER the service-role client.
- *      A duplicate-type insert collides with UNIQUE(portfolio_id,type) → Postgres
- *      23505, mapped to { ok:false } (the insert-race backstop — T-13.1-02-RACE),
- *      never a throw/500.
+ *      for the seed) BEFORE the RPC. D-04: the row starts hidden (`visible:false`).
+ *   5. D-12 / WR-02: append ATOMICALLY via the `add_section` SECURITY INVOKER RPC
+ *      (migration 020) — one statement computes `MAX(sort_order)+1` and INSERTs, so
+ *      two near-simultaneous adds get distinct contiguous sort_order (the read+insert
+ *      can no longer race into a non-deterministic order). It runs under the
+ *      AUTHENTICATED client: the `sections own all` WITH CHECK scopes the INSERT to
+ *      the owner (004_rls_policies.sql:144-155) exactly as a direct insert would.
+ *      NEVER the service-role client. A duplicate-type insert collides with
+ *      UNIQUE(portfolio_id,type) → Postgres 23505, mapped to { ok:false } (the
+ *      insert-race backstop — T-13.1-02-RACE), never a throw/500.
  *   6. revalidatePath('/' + username) — LITERAL path, NO second arg (CLAUDE.md
  *      Pitfall 1; the 'max' profile belongs to revalidateTag, a different function).
  *   7. Return { ok:true, sectionId } so the client can select + first-fill (D-21).
@@ -46,6 +48,7 @@ import { revalidatePath } from 'next/cache';
 import { isAddableSectionType } from '@/lib/cms/addable-section-types';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 import { validateSectionContent } from '@/lib/validations';
+import type { Json } from '@/types/database';
 
 /** The add outcome — { ok:true, sectionId } on success; the union otherwise. */
 export type AddSectionResult =
@@ -156,19 +159,6 @@ export async function addSectionAction(
   const portfolioId = (portfolioRow as { id?: string } | null)?.id;
   if (!portfolioId) return { ok: false, error: ADD_FAILED };
 
-  // 3) D-18 append: next sort_order = MAX(sort_order)+1 for the owner's portfolio,
-  //    read under RLS. A portfolio with no rows (or a null top) appends at 0.
-  const { data: topRow, error: topError } = await supabase
-    .from('sections')
-    .select('sort_order')
-    .eq('portfolio_id', portfolioId)
-    .order('sort_order', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (topError) return { ok: false, error: ADD_FAILED };
-  const topSort = (topRow as { sort_order?: number } | null)?.sort_order;
-  const sortOrder = (typeof topSort === 'number' ? topSort : -1) + 1;
-
   // 4) D-21 seed + the Zod gate. Build the seeded content and re-validate it via the
   //    server write gate (validateSectionContent throws on bad content). A thrown
   //    gate means a programming error in the seed (not user input) → generic failure.
@@ -179,28 +169,26 @@ export async function addSectionAction(
     return { ok: false, error: ADD_FAILED };
   }
 
-  // 5) INSERT under the AUTHENTICATED client (D-04 hidden). The `sections own all`
-  //    WITH CHECK scopes the INSERT to the owner; a duplicate type collides with
-  //    UNIQUE(portfolio_id, type) → Postgres 23505 → { ok:false } (no throw/500).
-  //    NEVER the service-role client for a user edit.
-  const { data: inserted, error: insertError } = await supabase
-    .from('sections')
-    .insert({
-      portfolio_id: portfolioId,
-      type,
-      content,
-      sort_order: sortOrder,
-      visible: false, // D-04: a freshly-added section starts hidden.
-    })
-    .select('id')
-    .single();
-  if (insertError) {
-    if ((insertError as { code?: string }).code === UNIQUE_VIOLATION) {
+  // 5) D-12 / WR-02: append ATOMICALLY via the `add_section` SECURITY INVOKER RPC
+  //    (migration 020). One statement computes MAX(sort_order)+1 and INSERTs the
+  //    hidden row (D-04), so two concurrent adds get distinct contiguous sort_order
+  //    instead of racing into a non-deterministic order. The RPC runs under the
+  //    AUTHENTICATED client — the `sections own all` WITH CHECK scopes the INSERT to
+  //    the owner exactly as a direct insert would; NEVER the service-role client. A
+  //    duplicate type still collides with UNIQUE(portfolio_id, type) → Postgres 23505
+  //    → { ok:false } (no throw/500).
+  const { data: newId, error: rpcError } = await supabase.rpc('add_section', {
+    p_portfolio_id: portfolioId,
+    p_type: type,
+    p_content: content as Json,
+  });
+  if (rpcError) {
+    if ((rpcError as { code?: string }).code === UNIQUE_VIOLATION) {
       return { ok: false, error: ALREADY_PRESENT };
     }
     return { ok: false, error: ADD_FAILED };
   }
-  const sectionId = (inserted as { id?: string } | null)?.id;
+  const sectionId = (newId as string | null) ?? undefined;
   if (!sectionId) return { ok: false, error: ADD_FAILED };
 
   // 6) Resolve the owner username (prefer the dashboard-passed value; else read the

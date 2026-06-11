@@ -957,6 +957,10 @@ export type Database = {
       }
     }
     Functions: {
+      add_section: {
+        Args: { p_content: Json; p_portfolio_id: string; p_type: string }
+        Returns: string
+      }
       blog_post_is_public: {
         Args: { p_blog_post_id: string }
         Returns: boolean
