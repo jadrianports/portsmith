@@ -31,6 +31,7 @@
  * client AND `node:crypto` for the IP hash both require Node, never edge) + typed
  * JSON errors only.
  */
+import { checkBotId } from 'botid/server';
 import { NextResponse } from 'next/server';
 
 import { verifyTurnstile } from '@/lib/auth/turnstile';
@@ -55,6 +56,14 @@ export async function POST(req: Request): Promise<NextResponse> {
     bodyJson = await req.json();
   } catch {
     return NextResponse.json({ error: 'bad_request' }, { status: 400 });
+  }
+
+  // D-06 / HARD-02 — layered BotID gate (no-op off-Vercel); generic 403, no detail
+  // leak. An ADDED layer ABOVE the existing Turnstile + two-bucket ledger ladder,
+  // NOT a replacement; reuses the route's generic error shape (never a "bot" message).
+  const { isBot } = await checkBotId();
+  if (isBot) {
+    return NextResponse.json({ error: 'unavailable' }, { status: 403 });
   }
 
   // 1) Zod re-parse at the boundary — the server gate (D-02). A reason outside the
