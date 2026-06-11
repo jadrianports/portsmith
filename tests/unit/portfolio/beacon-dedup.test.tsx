@@ -21,35 +21,23 @@
  * ── HOW THE FLIP WORKS (15-03) ────────────────────────────────────────────────
  * (a) the `@vitest-environment jsdom` pragma at the TOP gives this file `document`,
  *     `navigator`, `localStorage`, `sessionStorage` (jsdom was added in 15-03);
- * (b) `next/navigation` is mocked so `usePathname()` returns the `path` the current
- *     `renderBeacon(path)` call set — letting one test render the same path twice
- *     (dedup) or two different paths (re-fire);
- * (c) `renderBeacon` renders the REAL `<Beacon/>` via @testing-library/react inside
- *     `act(...)` so the beacon's `useEffect` flushes synchronously before assertions.
+ * (b) the beacon logic ships as a framework-free `recordView(pathname)` function
+ *     (`@/components/portfolio/beacon`), lazily `import()`ed by `<BeaconMount/>` keyed
+ *     on `usePathname()` so the layout's shared First Load JS stays minimal (Pitfall 1).
+ *     `recordView` is exactly what fires per (path) per session, so `renderBeacon(path)`
+ *     drives it directly — no React render needed (the mount's only job is to call it
+ *     once per path; the dedup/self-view/marker logic under test all lives in the fn).
  */
-import { cleanup, render } from '@testing-library/react';
-import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Beacon } from '@/components/portfolio/beacon';
+import { recordView } from '@/components/portfolio/beacon';
 
-// `usePathname()` is the only `next/navigation` hook the beacon uses. A mutable
-// holder lets each `renderBeacon(path)` call drive what the hook returns.
-let currentPath = '/';
-vi.mock('next/navigation', () => ({
-  usePathname: () => currentPath,
-}));
-
-// Render the real <Beacon/> at `path` under jsdom. Each call mounts a fresh root
-// (after cleaning up the prior one) so the path-keyed `useEffect` runs once per call;
-// `act(...)` flushes the effect synchronously before the test asserts.
+// Drive the beacon for `path` exactly as `<BeaconMount/>` does on route-enter: it
+// lazily imports `recordView` and calls it with the current `usePathname()`. Calling
+// it directly here exercises the real per-(path)/per-session/self-view/marker logic.
 type RenderBeacon = (path: string) => void;
 const renderBeacon: RenderBeacon = (path) => {
-  currentPath = path;
-  cleanup(); // unmount any prior render so this mount's effect fires fresh
-  act(() => {
-    render(<Beacon />);
-  });
+  recordView(path);
 };
 
 describe('D-05/D-06 — Beacon dedup + self-view + marker-absent (GREENED BY 15-03)', () => {
@@ -63,9 +51,11 @@ describe('D-05/D-06 — Beacon dedup + self-view + marker-absent (GREENED BY 15-
     Object.defineProperty(navigator, 'sendBeacon', { value: sendBeacon, configurable: true });
   });
 
-  // Unmount any React root the test mounted so it cannot bleed into the next test.
+  // Reset jsdom DOM + storage after each test so state cannot bleed across cases.
   afterEach(() => {
-    cleanup();
+    document.body.innerHTML = '';
+    sessionStorage.clear();
+    localStorage.clear();
   });
 
   // A non-visual marker the public pages emit (Pattern 1A); the beacon reads it.

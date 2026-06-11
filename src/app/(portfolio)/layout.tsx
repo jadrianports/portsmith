@@ -1,5 +1,7 @@
 import './portfolio.css';
 
+import { BeaconMount } from '@/components/portfolio/beacon-mount';
+
 /**
  * (portfolio) root layout — the LEAN PUBLIC ROOT (D-03).
  *
@@ -23,6 +25,16 @@ import './portfolio.css';
  * gone. Tailwind preflight supplies `body { margin: 0 }`, and the template's
  * `.tmpl-*` root paints `background: var(--bg)` + `min-height: 100vh` (theme.css),
  * so the full-bleed template canvas is the only thing visible.
+ *
+ * PAGE-VIEW BEACON (ANLY-01 / D-02 / D-03 / D-20): this is the SOLE layout wrapping
+ * all four public routes (`[username]`, `[username]/blog`, `[username]/blog/[slug]`,
+ * `[username]/services`), so the single `<BeaconMount/>` mounted here covers every
+ * public route (D-03) for every template — current and future — with zero per-page
+ * wiring (D-02). The beacon is PLATFORM CHROME — it is NEVER mounted in a
+ * `templates/*` folder (two-layer identity). `BeaconMount` is a `{ ssr:false }`-split
+ * client island, so the server render branch of this layout stays cookie/header-less
+ * and the beacon's bytes leave the public First Load JS — `/[username]` + the sub-
+ * routes stay ● SSG/ISR (D-20), asserted by `route-table-ssg.test.ts` + `check:bundle`.
  */
 export default function PortfolioRootLayout({
   children,
@@ -31,7 +43,10 @@ export default function PortfolioRootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        <BeaconMount />
+      </body>
     </html>
   );
 }
