@@ -193,3 +193,127 @@ describe('D-20 — isSaveableSnapshot (skip-invalid structural pre-check, no Zod
     expect(isSaveableSnapshot('metrics', both)).toBe(true);
   });
 });
+
+// D-06 — out-of-order FLUSH-ordering stale-drop via a MOCK-SAVER seam.
+//
+// UX-02's correctness guarantee (Pitfall 7): when a slow EARLIER flush resolves AFTER a
+// faster LATER one, the stale earlier result must NOT drive the visible saved/error
+// state — only the latest (highest-seq) flush wins (the `seqRef`/`isLatestSeq` guard in
+// `use-debounced-section-save.ts:270,288-295`).
+//
+// This is the FAST node sampling layer. The `unit` project is the `node` env (no jsdom,
+// no @testing-library), so rather than render the hook we reproduce its flush dispatch/
+// resolve discipline around a MOCK SAVER (two staggered promises) using the SAME pure
+// exports the hook composes (`isLatestSeq`, the monotonic seq bump). The real-action
+// proof — the same guard through the real `saveSectionAction` + real auth cookies — is
+// Plan 08's Playwright e2e (Pitfall 6: a `node` test can't supply cookies).
+describe('D-06 — out-of-order flush stale-drop (mock-saver seam, fast layer)', () => {
+  /**
+   * A controllable mock saver: each call returns a promise the test resolves by hand,
+   * so an EARLIER-issued save can be made to resolve AFTER a LATER-issued one. Mirrors
+   * the `saveSectionAction` seam the hook awaits at `use-debounced-section-save.ts:282`.
+   */
+  function makeMockSaver() {
+    const resolvers: Array<(r: { ok: boolean }) => void> = [];
+    const calls: unknown[] = [];
+    const save = (content: unknown): Promise<{ ok: boolean }> => {
+      calls.push(content);
+      return new Promise((resolve) => {
+        resolvers.push(resolve);
+      });
+    };
+    return { save, resolvers, calls };
+  }
+
+  /**
+   * A minimal re-creation of the hook's flush body (the seq-stamp → await saver →
+   * drop-if-stale → set-visible-state sequence at `use-debounced-section-save.ts:268-296`),
+   * sharing a single monotonic `seqRef` across flushes exactly like the hook. The
+   * `setVisible` spy stands in for the hook's `setState` — it is called ONLY when the
+   * resolving flush is still the latest (`isLatestSeq(mySeq, seqRef.current)`).
+   */
+  function makeFlushHarness(
+    saver: (content: unknown) => Promise<{ ok: boolean }>,
+    setVisible: (s: 'saved' | 'error') => void,
+  ) {
+    const seqRef = { current: 0 };
+    async function flush(content: unknown): Promise<void> {
+      const mySeq = ++seqRef.current; // hook :270 — capture this flush's seq
+      const result = await saver(content); // hook :282 — the awaited save (mock seam)
+      // hook :288 — out-of-order stale-drop: a non-latest flush returns without
+      // touching the visible state.
+      if (!isLatestSeq(mySeq, seqRef.current)) return;
+      // hook :290-295 — only the latest flush drives the visible saved/error state.
+      setVisible(result.ok ? 'saved' : 'error');
+    }
+    return { flush, seqRef };
+  }
+
+  it('a slow EARLIER flush resolving AFTER a faster LATER one does NOT set the visible state', async () => {
+    const mock = makeMockSaver();
+    const setVisible = vi.fn();
+    const { flush } = makeFlushHarness(mock.save, setVisible);
+
+    // Dispatch the EARLIER (slow) flush, then the LATER (fast) flush. Both are in
+    // flight; the seq is now 2 and the earlier flush captured seq 1.
+    const slowEarlier = flush({ heading: 'v1' });
+    const fastLater = flush({ heading: 'v2' });
+    expect(mock.calls).toEqual([{ heading: 'v1' }, { heading: 'v2' }]);
+
+    // The LATER flush resolves FIRST → it is latest (seq 2 === 2) → it drives state.
+    mock.resolvers[1]({ ok: true });
+    await fastLater;
+    expect(setVisible).toHaveBeenCalledTimes(1);
+    expect(setVisible).toHaveBeenLastCalledWith('saved');
+
+    // Now the slow EARLIER flush resolves LAST → it is stale (its seq 1 !== latest 2) →
+    // it must be DROPPED: no further visible-state write, the saved state stands.
+    mock.resolvers[0]({ ok: true });
+    await slowEarlier;
+    expect(setVisible).toHaveBeenCalledTimes(1); // still 1 — the stale result was dropped
+    expect(setVisible).toHaveBeenLastCalledWith('saved');
+  });
+
+  it("a stale earlier ERROR cannot overwrite the latest flush's saved state", async () => {
+    // The dangerous case the guard exists for: an earlier save that ultimately FAILS
+    // resolving after a later save that SUCCEEDED must not flip the UI to 'error'.
+    const mock = makeMockSaver();
+    const setVisible = vi.fn();
+    const { flush } = makeFlushHarness(mock.save, setVisible);
+
+    const slowEarlier = flush({ heading: 'v1' });
+    const fastLater = flush({ heading: 'v2' });
+
+    // Later flush succeeds first and drives 'saved'.
+    mock.resolvers[1]({ ok: true });
+    await fastLater;
+    expect(setVisible).toHaveBeenLastCalledWith('saved');
+
+    // Earlier flush fails LAST — stale (seq 1 !== latest 2), so 'error' is dropped.
+    mock.resolvers[0]({ ok: false });
+    await slowEarlier;
+    expect(setVisible).toHaveBeenCalledTimes(1); // the stale error never reached the UI
+    expect(setVisible).toHaveBeenLastCalledWith('saved');
+  });
+
+  it('the latest flush DOES drive state even when an earlier one is still in flight', async () => {
+    // Positive control: the highest-seq flush is always honored on resolve.
+    const mock = makeMockSaver();
+    const setVisible = vi.fn();
+    const { flush, seqRef } = makeFlushHarness(mock.save, setVisible);
+
+    const slowEarlier = flush({ heading: 'v1' });
+    const fastLater = flush({ heading: 'v2' });
+    expect(seqRef.current).toBe(2); // monotonic bump per flush (hook :270)
+
+    // The latest (seq 2) resolves and wins, even though seq 1 has not resolved yet.
+    mock.resolvers[1]({ ok: true });
+    await fastLater;
+    expect(setVisible).toHaveBeenCalledTimes(1);
+    expect(setVisible).toHaveBeenLastCalledWith('saved');
+
+    // Drain the still-pending earlier promise so no unhandled rejection lingers.
+    mock.resolvers[0]({ ok: true });
+    await slowEarlier;
+  });
+});
