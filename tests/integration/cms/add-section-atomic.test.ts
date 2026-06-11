@@ -25,6 +25,7 @@ import {
   teardownTwoUsers,
   type TwoUsers,
 } from './_cms-fixtures';
+import { ADDABLE_SECTION_TYPES } from '@/lib/cms/addable-section-types';
 
 const admin = adminClient();
 const RUN = crypto.randomUUID().slice(0, 8);
@@ -47,6 +48,15 @@ async function maxOrder(portfolioId: string): Promise<number> {
   return orders.length === 0 ? -1 : Math.max(...orders);
 }
 
+/** Every section `type` currently present in a portfolio. */
+async function readTypes(portfolioId: string): Promise<string[]> {
+  const { data } = await admin
+    .from('sections')
+    .select('type')
+    .eq('portfolio_id', portfolioId);
+  return (data ?? []).map((s) => s.type as string);
+}
+
 beforeAll(async () => {
   ctx = await setupTwoUsers('addatomic', RUN);
 }, 30_000);
@@ -56,44 +66,52 @@ afterAll(async () => {
 });
 
 describe('D-12 — add_section appends atomically with distinct contiguous sort_order', () => {
-  it('two CONCURRENT add_section RPCs yield distinct, contiguous sort_order (no duplicate)', async () => {
+  it('many CONCURRENT add_section RPCs yield distinct, contiguous sort_order (no duplicate)', async () => {
     // A freshly-bootstrapped portfolio seeds a known set of types; capture the
     // starting MAX so the assertion is independent of the exact bootstrap count.
     const startMax = await maxOrder(ctx.portfolioA);
     const seedContent = { heading: 'X', items: [] };
 
-    // Two distinct, currently-absent addable types fired CONCURRENTLY as the owner.
-    // If the read+insert were non-atomic, both could read `startMax` and land on the
-    // SAME sort_order (startMax+1) — the corruption this RPC prevents.
-    const [r1, r2] = await Promise.all([
-      ctx.clientA.rpc('add_section', {
-        p_portfolio_id: ctx.portfolioA,
-        p_type: 'education',
-        p_content: seedContent,
-      }),
-      ctx.clientA.rpc('add_section', {
-        p_portfolio_id: ctx.portfolioA,
-        p_type: 'certifications',
-        p_content: seedContent,
-      }),
-    ]);
+    // EVERY addable type the portfolio does not already have, fired ALL AT ONCE as
+    // the owner. We only fire currently-absent types so each insert is a clean append
+    // (a duplicate type would trip the orthogonal UNIQUE(portfolio_id, type) → 23505).
+    // Firing the full free set (typically 5–8 RPCs) makes the concurrency real: under
+    // the unsound single-statement MAX+1 (migration 020, READ COMMITTED) several would
+    // read the same MAX and COLLIDE on sort_order — flaky, ~1-in-3 with just two RPCs,
+    // near-certain with the full batch. The per-portfolio advisory lock (021)
+    // serializes them, so the appended block is always exactly {startMax+1 .. +N}.
+    const present = new Set(await readTypes(ctx.portfolioA));
+    const freeTypes = ADDABLE_SECTION_TYPES.filter((t) => !present.has(t));
+    // Guard the guard — we need genuine concurrency to exercise the race.
+    expect(freeTypes.length).toBeGreaterThanOrEqual(3);
 
-    // Both inserts SUCCEEDED (each returns the new row id under SECURITY INVOKER RLS).
-    expect(r1.error).toBeNull();
-    expect(r2.error).toBeNull();
-    expect(typeof r1.data).toBe('string');
-    expect(typeof r2.data).toBe('string');
+    const results = await Promise.all(
+      freeTypes.map((t) =>
+        ctx.clientA.rpc('add_section', {
+          p_portfolio_id: ctx.portfolioA,
+          p_type: t,
+          p_content: seedContent,
+        }),
+      ),
+    );
 
-    // The two new sections occupy DISTINCT sort_order values — the appended pair is
-    // exactly {startMax+1, startMax+2}, contiguous with no collision.
+    // Every concurrent insert SUCCEEDED (each returns the new row id under INVOKER RLS).
+    for (const r of results) {
+      expect(r.error).toBeNull();
+      expect(typeof r.data).toBe('string');
+    }
+
+    // The N new sections occupy EXACTLY the contiguous block startMax+1 .. startMax+N
+    // (order within the block is nondeterministic under concurrency; the SET is not).
     const { data: newRows } = await admin
       .from('sections')
-      .select('type, sort_order')
+      .select('sort_order')
       .eq('portfolio_id', ctx.portfolioA)
-      .in('type', ['education', 'certifications'])
+      .in('type', freeTypes)
       .order('sort_order', { ascending: true });
     const newOrders = (newRows ?? []).map((s) => s.sort_order as number);
-    expect(newOrders).toEqual([startMax + 1, startMax + 2]);
+    const expectedBlock = freeTypes.map((_, i) => startMax + 1 + i);
+    expect(newOrders).toEqual(expectedBlock);
 
     // No two sections in the whole portfolio share a sort_order, and the full set is
     // contiguous 0..n-1 — the rail/public order is deterministic after concurrent adds.
