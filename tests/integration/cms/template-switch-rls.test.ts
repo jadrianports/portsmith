@@ -61,6 +61,33 @@ type SectionRow = {
   visible: boolean;
 };
 
+/** The embedded-template shape the grant read returns before flatten (mirrors
+ *  `available-templates.ts`'s `GrantRow`). */
+type GrantRow = { templates: { slug: string; visibility: string; is_active: boolean } | null };
+
+/**
+ * Build the `public ∪ granted-to-me` slug→restricted map EXACTLY as
+ * `src/lib/templates/available-templates.ts` does (ONB-03 reuse): public first
+ * (restricted=false); a granted ACTIVE-restricted template adds restricted=true; a
+ * slug already public stays false (public wins). This is the allowed-list the
+ * onboarding picker renders — asserting it here proves the picker's set without
+ * importing the `server-only` module into the integration env.
+ */
+function buildAllowedList(
+  pub: { slug: string; visibility: string }[] | null,
+  grants: unknown,
+): Map<string, boolean> {
+  const out = new Map<string, boolean>();
+  for (const t of pub ?? []) out.set(t.slug, false);
+  for (const g of (grants ?? []) as GrantRow[]) {
+    const t = g.templates;
+    if (t?.is_active && t.visibility === 'restricted' && !out.has(t.slug)) {
+      out.set(t.slug, true);
+    }
+  }
+  return out;
+}
+
 let ctx: TwoUsers;
 
 beforeAll(async () => {
@@ -225,5 +252,80 @@ describe('GATE-03 — restricted-template switch is grant-gated (GREENED BY 12-0
       .single();
     // B unchanged — the gate rejected the ungranted-restricted switch.
     expect(bAfter!.template_id).toBe(beforeTemplate);
+  });
+});
+
+// ── ONB-03 reuse (Plan 18-02, Task 3) ─────────────────────────────────────────
+// The onboarding wizard's template-picker step introduces NO NEW switch path: the
+// pick calls the SAME grant-gated `switchTemplateAction` proven by the GATE-03 cases
+// above (the sole write-time grant authority, GATE-02 / D-P12-13), so a forged switch
+// to an ungranted restricted template is ALREADY rejected server-side (the "UNGRANTED
+// user CANNOT" case). This block adds the READ half the picker renders: it proves the
+// allowed-list the onboarding picker shows is exactly `public ∪ granted-to-me`,
+// mirroring `getAvailableTemplates`'s two-read logic (public templates + the caller's
+// own RLS-scoped grants) directly against the live stack — so an ungranted restricted
+// template is ABSENT from the picker, and a granted one is PRESENT (marked exclusive).
+//
+// The two CMS-produced template visibilities on the live stack (verified): `editorial`
+// is the only `public` template; `minimal` (+ aurora, edgerunner-v2) are `restricted`.
+describe('ONB-03 — onboarding picker allowed-list is `public ∪ granted` (GATE-02 read half)', () => {
+  it('an UNGRANTED user sees only public templates; the restricted minimal is ABSENT', async () => {
+    // Ensure A holds NO grant for the restricted minimal template.
+    await admin
+      .from('template_grants')
+      .delete()
+      .eq('template_id', MINIMAL_UUID)
+      .eq('user_id', ctx.userA.id);
+
+    // Reproduce getAvailableTemplates' two RLS-scoped reads as the AUTHENTICATED owner
+    // (clientA) — this IS the read boundary the onboarding picker renders. NEVER the
+    // service-role admin client (which bypasses the `template_grants own select` RLS
+    // that is the GATE-02 enforcement — using it would prove nothing).
+    const { data: pub } = await ctx.clientA
+      .from('templates')
+      .select('slug, visibility')
+      .eq('is_active', true)
+      .eq('visibility', 'public');
+    const { data: grants } = await ctx.clientA
+      .from('template_grants')
+      .select('templates(slug, visibility, is_active)');
+
+    const allowed = buildAllowedList(pub, grants);
+
+    // editorial (public) is present; the restricted minimal is NOT (ungranted).
+    expect(allowed.has('editorial')).toBe(true);
+    expect(allowed.has('minimal')).toBe(false);
+  });
+
+  it('a GRANTED user sees the restricted minimal as an exclusive entry (public ∪ granted)', async () => {
+    // Admin grants A the restricted minimal (service-role precondition setup — NOT the
+    // boundary read under test). Now `public ∪ granted-to-me` must INCLUDE minimal.
+    const grant = await admin
+      .from('template_grants')
+      .insert({ template_id: MINIMAL_UUID, user_id: ctx.userA.id });
+    expect(grant.error).toBeNull();
+
+    const { data: pub } = await ctx.clientA
+      .from('templates')
+      .select('slug, visibility')
+      .eq('is_active', true)
+      .eq('visibility', 'public');
+    const { data: grants } = await ctx.clientA
+      .from('template_grants')
+      .select('templates(slug, visibility, is_active)');
+
+    const allowed = buildAllowedList(pub, grants);
+
+    // The granted restricted minimal is now PRESENT and marked restricted=true; the
+    // public editorial remains present (restricted=false).
+    expect(allowed.get('editorial')).toBe(false);
+    expect(allowed.get('minimal')).toBe(true);
+
+    // Cleanup: drop the grant so the file leaves no residual cross-case state.
+    await admin
+      .from('template_grants')
+      .delete()
+      .eq('template_id', MINIMAL_UUID)
+      .eq('user_id', ctx.userA.id);
   });
 });
