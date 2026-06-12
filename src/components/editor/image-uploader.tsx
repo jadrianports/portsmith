@@ -398,6 +398,13 @@ export function ImageUploader({
       // value swap so the replaced in-session orphan is reclaimed and
       // storage_used_bytes stays accurate; the persisted baseline is never freed.
       freeIfUnsaved(superseded);
+      // WR-02: advance the belt's tracked value to the NEW url synchronously, so an
+      // unmount before the `value` effect commits cannot re-free the superseded URL
+      // (same race as doRemove). The belt frees `currentValueRef.current` only when
+      // it differs from the persisted baseline, so setting it to `url` is correct:
+      // an unsaved `url` still gets freed on a later unmount, the superseded one
+      // never double-fires.
+      currentValueRef.current = url;
       onValueChange(url);
       onUploaded?.(url);
       setRejectMsg(null); // WR-05: clear any prior error so it can't coexist with the success beat
@@ -440,6 +447,14 @@ export function ImageUploader({
       // freed here — clearing the field unsets the form reference, and the WR-03
       // on-save diff reclaims the persisted object when that empty state is saved.
       freeIfUnsaved(value);
+      // WR-02: clear the belt's tracked value SYNCHRONOUSLY. `onValueChange('')`
+      // only updates `currentValueRef` after the parent re-renders and the
+      // `value` effect runs — but the parent (ItemManager.remove) may unmount
+      // this uploader on the SAME tick, before that effect commits. Without this
+      // line the unmount belt would read the just-freed URL from the stale ref
+      // and fire a SECOND freeUnsavedUpload for the same object (idempotent, but
+      // it races the AFTER-DELETE storage_used_bytes trigger).
+      currentValueRef.current = '';
       onValueChange('');
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
