@@ -74,6 +74,67 @@ describe('ONB-06/ONB-05 — markOnboardedAndPublish publish+stamp under RLS', ()
     expect(data!.onboarded_at).not.toBeNull();
   });
 
+  it('STAMP-ONCE (WR-05): a second publish leaves the ORIGINAL onboarded_at UNCHANGED and keeps published true', async () => {
+    // The stamp-once write pattern markOnboardedAndPublish performs (WR-05): a republish
+    // must NOT overwrite the FIRST-completion marker the activation funnel keys on.
+    //   (a) `published = true` is ALWAYS set; and
+    //   (b) `onboarded_at = now()` is set ONLY when currently NULL (the
+    //       `.is('onboarded_at', null)` predicate makes a re-stamp a 0-row no-op).
+    //
+    // Start from a clean NULL baseline on A's OWN row (the owner may write onboarded_at
+    // directly under RLS — it is NOT a protected column; this mirrors a brand-new,
+    // never-onboarded row). Reset published=false too so the first stamp is the genuine
+    // first completion.
+    const { error: resetErr } = await ctx.clientA
+      .from('profiles')
+      .update({ published: false, onboarded_at: null })
+      .eq('id', ctx.userA.id);
+    expect(resetErr).toBeNull();
+
+    // FIRST publish: always set published, and stamp onboarded_at because it is null.
+    const firstStamp = new Date().toISOString();
+    await ctx.clientA.from('profiles').update({ published: true }).eq('id', ctx.userA.id);
+    await ctx.clientA
+      .from('profiles')
+      .update({ onboarded_at: firstStamp })
+      .eq('id', ctx.userA.id)
+      .is('onboarded_at', null);
+
+    const { data: afterFirst } = await admin
+      .from('profiles')
+      .select('published, onboarded_at')
+      .eq('id', ctx.userA.id)
+      .single();
+    expect(afterFirst!.published).toBe(true);
+    expect(afterFirst!.onboarded_at).not.toBeNull();
+    const originalStamp = afterFirst!.onboarded_at;
+
+    // Simulate an unpublish-then-republish (the corruption window WR-05 closes): flip
+    // published=false, then run the SAME stamp-once write a SECOND time with a LATER
+    // timestamp. The null-guarded stamp must be a 0-row no-op (onboarded_at already set),
+    // so the ORIGINAL first-completion marker survives — while published is set true again.
+    await ctx.clientA.from('profiles').update({ published: false }).eq('id', ctx.userA.id);
+
+    const laterStamp = new Date(Date.parse(originalStamp as string) + 60_000).toISOString();
+    await ctx.clientA.from('profiles').update({ published: true }).eq('id', ctx.userA.id);
+    await ctx.clientA
+      .from('profiles')
+      .update({ onboarded_at: laterStamp })
+      .eq('id', ctx.userA.id)
+      .is('onboarded_at', null); // already set → matches 0 rows → no overwrite.
+
+    const { data: afterSecond } = await admin
+      .from('profiles')
+      .select('published, onboarded_at')
+      .eq('id', ctx.userA.id)
+      .single();
+    // published is true again (republish works); onboarded_at is the ORIGINAL stamp,
+    // NOT the later one (stamp-once — the first-completion marker is never overwritten).
+    expect(afterSecond!.published).toBe(true);
+    expect(afterSecond!.onboarded_at).toBe(originalStamp);
+    expect(afterSecond!.onboarded_at).not.toBe(laterStamp);
+  });
+
   it("B's publish+stamp of A's row leaves A's onboarded_at UNCHANGED (cross-tenant REJECTED)", async () => {
     // Establish A's current onboarded_at, then attempt the cross-tenant stamp as B.
     const aStamp = new Date().toISOString();

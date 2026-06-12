@@ -129,6 +129,20 @@ export async function setPublished(published: boolean): Promise<SetPublishedResu
  * input — the "when" is authoritative and unforgeable (T-18-publish-stamp). Phase 21's
  * activation funnel later consumes this timestamp.
  *
+ * STAMP-ONCE (WR-05 — load-bearing): `onboarded_at` is the canonical FIRST-completion
+ * marker (migration 022:08-10 / D-01) the activation funnel keys on — it must be stamped
+ * ONCE and NEVER overwritten by a later publish (a republish after an unpublish, or a
+ * second wizard run, must not move the timestamp forward). The earlier version wrote
+ * `onboarded_at = now()` UNCONDITIONALLY on every call, corrupting that first-completion
+ * metric. The fix splits the single write into TWO scoped own-row RLS writes:
+ *   (a) `published = true` — ALWAYS set, so a previously-onboarded-but-unpublished user
+ *       can still republish; and
+ *   (b) `onboarded_at = now()` ONLY when it is currently NULL — an extra
+ *       `.is('onboarded_at', null)` predicate makes the stamp affect 0 rows (a harmless
+ *       no-op) once it is already set, so the first timestamp is preserved.
+ * Both stay on the AUTHENTICATED RLS path (NEVER service-role), with explicit single-
+ * column allowlists (never `...spread`), scoped to the caller's OWN row.
+ *
  * Why a SEPARATE action and not a `setPublished` param: `setPublished` is reused by the
  * editor toggle AND the preview banner (a plain Live/Draft flip that must NOT re-stamp
  * onboarding on every toggle); the wizard's terminal publish is the ONE moment that
@@ -147,22 +161,41 @@ export async function markOnboardedAndPublish(): Promise<SetPublishedResult> {
   const sub = (claims as { sub?: string }).sub;
   if (!sub) return { ok: false, error: NOT_SIGNED_IN };
 
-  // 2) TWO-COLUMN write under RLS via the AUTHENTICATED client (never service-role).
-  //    Both `published` and `onboarded_at` are NOT protected columns (verified absent
-  //    from the 002:108-118 guard list), so the owner writes them directly. EXPLICIT
-  //    2-col allowlist — never spread an unfiltered object. Scope to the caller's OWN
-  //    row — a cross-tenant target silently stamps 0 rows (T-18-publish-stamp). Select
-  //    the username back on the same write to drive the revalidate (the verified
-  //    identity, never the request host — PUB-03). `onboarded_at` is the server's clock
-  //    (`new Date().toISOString()`), never client input — the "when" is unforgeable.
   const supabase = await createClient();
+
+  // 2a) ALWAYS flip Live under RLS via the AUTHENTICATED client (never service-role).
+  //     `published` is NOT a protected column (verified absent from the 002:108-118
+  //     guard list), so the owner flips it directly. EXPLICIT single-column allowlist —
+  //     never spread an unfiltered object. Scope to the caller's OWN row — a cross-
+  //     tenant target silently changes 0 rows (T-18-publish-stamp). Select the username
+  //     back on the same write to drive the revalidate (the verified identity, never the
+  //     request host — PUB-03). This write is unconditional so a previously-onboarded
+  //     but UNPUBLISHED user can still republish (WR-05).
   const { data: prof, error } = await supabase
     .from('profiles')
-    .update({ published: true, onboarded_at: new Date().toISOString() })
+    .update({ published: true })
     .eq('id', sub) // WR-05: `sub` guaranteed present (no `?? ''`).
     .select('username')
     .single();
   if (error) return { ok: false, error: UPDATE_FAILED };
+
+  // 2b) STAMP-ONCE (WR-05): set `onboarded_at` ONLY when it is currently NULL. The
+  //     extra `.is('onboarded_at', null)` predicate makes this a no-op (0 rows) on a
+  //     re-publish where the marker is already set, so the FIRST-completion timestamp is
+  //     never overwritten (the activation-funnel consumer trusts that first value).
+  //     `onboarded_at` is NOT a protected column (verified absent from 002:108-118), so
+  //     the owner writes it directly under RLS. EXPLICIT single-column allowlist; scoped
+  //     to the caller's OWN row AND the null predicate. The server's clock
+  //     (`new Date().toISOString()`), never client input — the "when" is unforgeable.
+  //     A non-error 0-row result (already stamped) is the intended idempotent path, so
+  //     we do not treat "no row matched the null predicate" as a failure — only a real
+  //     DB error fails the action.
+  const { error: stampError } = await supabase
+    .from('profiles')
+    .update({ onboarded_at: new Date().toISOString() })
+    .eq('id', sub)
+    .is('onboarded_at', null);
+  if (stampError) return { ok: false, error: UPDATE_FAILED };
 
   // 3) Revalidate the public page so the live/404 flip is within seconds (PUB-01 /
   //    D-P4-02). LITERAL path, NO second arg (RESEARCH Pitfall 1 / CLAUDE.md).
