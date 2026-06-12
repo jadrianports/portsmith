@@ -38,9 +38,21 @@ import type { ChecklistItem } from '@/lib/cms/completeness';
 export interface CompletenessChecklistProps {
   /** The derived advisory items from `deriveCompleteness(...)`. */
   items: ChecklistItem[];
+  /**
+   * WR-01: resolve a section TYPE (e.g. `'about'`) to its loaded section ID
+   * (UUID). The Zustand `activeSectionId` is matched against the section *id*
+   * (editor-shell resolves the panel via `rawSections.find(s => s.id === id)`),
+   * NEVER the type string — so a todo row must select by id, not type. Returns
+   * `null` when no section of that type is loaded (the row then no-ops safely
+   * rather than selecting a non-existent id).
+   */
+  resolveSectionId: (sectionType: string) => string | null;
 }
 
-export function CompletenessChecklist({ items }: CompletenessChecklistProps) {
+export function CompletenessChecklist({
+  items,
+  resolveSectionId,
+}: CompletenessChecklistProps) {
   const open = useUIStore((s) => s.checklistOpen);
   const setOpen = useUIStore((s) => s.setChecklistOpen);
   const setActiveSectionId = useUIStore((s) => s.setActiveSectionId);
@@ -122,7 +134,14 @@ export function CompletenessChecklist({ items }: CompletenessChecklistProps) {
                     // section into the form panel (UI selection only).
                     <button
                       type="button"
-                      onClick={() => setActiveSectionId(item.sectionType ?? null)}
+                      // WR-01: select by section ID (UUID), resolved from the type.
+                      // `activeSectionId` matches against `section.id`, never the
+                      // type string, so passing the type here selected nothing.
+                      onClick={() =>
+                        setActiveSectionId(
+                          item.sectionType ? resolveSectionId(item.sectionType) : null,
+                        )
+                      }
                       className={
                         'flex min-h-9 w-full items-center gap-2 rounded-sm px-1 text-left ' +
                         'text-[13px] leading-tight text-muted-foreground outline-none ' +

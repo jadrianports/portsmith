@@ -41,7 +41,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ExternalLink, Eye, Mail, X } from 'lucide-react';
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { cmsKeys } from '@/lib/query/cms-keys';
@@ -396,6 +396,25 @@ export function EditorShell({
     [data.profile.display_name, data.profile.avatar_url, rawSections, supportedTypes],
   );
 
+  // WR-01: resolve a section TYPE → its loaded section ID (UUID) for the checklist's
+  // todo-row links. `activeSectionId` is matched against `section.id` (see `activeRaw`
+  // above), so a checklist row must select by id, not the type string. Returns null
+  // when no section of that type is loaded (the row then no-ops instead of selecting a
+  // non-existent id). Memoized on `rawSections` so the map stays stable across renders.
+  const sectionIdByType = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of rawSections) {
+      // First section of a given type wins (`UNIQUE(portfolio_id, type)` makes this
+      // a 1:1 mapping in practice, but guard against a stale optimistic duplicate).
+      if (!map.has(s.type)) map.set(s.type, s.id);
+    }
+    return map;
+  }, [rawSections]);
+  const resolveSectionId = useCallback(
+    (sectionType: string): string | null => sectionIdByType.get(sectionType) ?? null,
+    [sectionIdByType],
+  );
+
   /**
    * D-18/D-21: after the picker provisions a section, select it + open it
    * first-filled. The optimistic overlay (above) makes the seeded row visible in the
@@ -610,7 +629,10 @@ export function EditorShell({
             />
 
             {/* Advisory completeness — docked at the rail bottom (never a gate). */}
-            <CompletenessChecklist items={checklistItems} />
+            <CompletenessChecklist
+              items={checklistItems}
+              resolveSectionId={resolveSectionId}
+            />
 
             {/* Read-only storage usage meter (D-09) — rail bottom, with the
                 checklist. Reads the protected `storage_used_bytes` (seeded from the
