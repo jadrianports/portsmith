@@ -397,6 +397,7 @@ export type Database = {
           id: string
           locked: boolean
           locked_reason: string | null
+          onboarded_at: string | null
           published: boolean
           resume_url: string | null
           role: string
@@ -414,6 +415,7 @@ export type Database = {
           id: string
           locked?: boolean
           locked_reason?: string | null
+          onboarded_at?: string | null
           published?: boolean
           resume_url?: string | null
           role?: string
@@ -431,6 +433,7 @@ export type Database = {
           id?: string
           locked?: boolean
           locked_reason?: string | null
+          onboarded_at?: string | null
           published?: boolean
           resume_url?: string | null
           role?: string
