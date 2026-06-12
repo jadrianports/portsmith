@@ -55,8 +55,16 @@ export async function updateSession(request: NextRequest) {
   // P2/P4; here we only redirect unauthenticated requests away from protected
   // route groups so the matcher + verified-identity wiring is exercised.
   const path = request.nextUrl.pathname;
+  // `/onboarding` is the first-run wizard (18-03 / T-18-onboarding-anon) — an
+  // unauthenticated request must be bounced to /login before it can reach the
+  // wizard. This is a single string in the EXISTING predicate: NO DB read is added
+  // here (the `onboarded_at` first-run gate lives in the /dashboard RSC, not in
+  // middleware), and NO code is inserted between `createServerClient` and
+  // `getClaims()` above (the load-bearing @supabase/ssr refresh-timing rule).
   const isProtected =
-    path.startsWith('/dashboard') || path.startsWith('/admin');
+    path.startsWith('/dashboard') ||
+    path.startsWith('/admin') ||
+    path.startsWith('/onboarding');
   if (isProtected && !claims) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = '/login';
