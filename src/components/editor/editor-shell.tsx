@@ -726,12 +726,14 @@ export function EditorShell({
  *   - PUBLISHED → a plain `<a>` to `siteUrl('/' + username)` (the host-independent
  *     live URL — reuses the PublishToggle "View live ↗" idiom), `target="_blank"
  *     rel="noopener noreferrer"`.
- *   - UNPUBLISHED → a `<Link prefetch={false}>` to the draft-enable route
+ *   - UNPUBLISHED → a plain `<a>` (WR-03 — NOT `<Link>`) to the draft-enable route
  *     (`/api/preview/enable`), which sets the draft cookie then redirects to the
- *     owner's own slug (the banner-wrapped private draft). `prefetch={false}` is
- *     MANDATORY — a next/link prefetch can race/delete the draft cookie (RESEARCH
- *     Pattern 2 / the Preview link's carry-forward caveat) — and it opens in a new
- *     tab too (`target="_blank"`), per UI-SPEC Surface 6.
+ *     owner's own slug (the banner-wrapped private draft). A native anchor is used
+ *     (matching the published branch) because this control ALWAYS opens a new tab
+ *     and never client-navigates — so it gains nothing from next/link and avoids the
+ *     prefetch hazard entirely (a next/link prefetch can race/delete the draft cookie
+ *     — RESEARCH Pattern 2 / the Preview link's carry-forward caveat). Opens in a new
+ *     tab (`target="_blank"`), per UI-SPEC Surface 6.
  *
  * THE URL ORIGIN ALWAYS COMES FROM `siteUrl()` (NEXT_PUBLIC_SITE_URL), NEVER the
  * request Host (D-08). This control adds NO `cookies()`/`headers()`/host-read to the
@@ -777,18 +779,23 @@ function ViewMyPageLink({
     );
   }
 
-  // UNPUBLISHED → the draft-enable path (full nav, prefetch={false}); a new tab.
+  // UNPUBLISHED → the draft-enable path, always a NEW tab. WR-03: a plain `<a>`
+  // (matching the published branch), NOT `<Link>`. This control always opens a new
+  // tab and never benefits from client navigation, so next/link adds only risk: a
+  // prefetch of `/api/preview/enable` can race/delete the draft cookie (RESEARCH
+  // Pattern 2). A native anchor removes that hazard entirely and makes both branches
+  // consistent, closing the "simplify to all-Link" refactor trap the old comments
+  // warned about.
   return (
-    <Link
+    <a
       href="/api/preview/enable"
-      prefetch={false}
       target="_blank"
       rel="noopener noreferrer"
       className={className}
       aria-label="View a private preview of my page (opens in a new tab)"
     >
       {glyphAndLabel}
-    </Link>
+    </a>
   );
 }
 
