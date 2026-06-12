@@ -73,6 +73,15 @@ vi.mock('@/lib/rate-limit/ledger', () => ({
   countAndRecord: (...a: unknown[]) => countAndRecord(...a),
 }));
 
+// Server-only IP-hash helper — WR-02 added a per-hashed-IP pre-Turnstile throttle on this
+// route (`contact_ip`). Default NULL so the pre-gate is SKIPPED (degrade) and the existing
+// cases keep their original semantics (the per-portfolio `contact` cap is the one under
+// test); the WR-02 case below sets a concrete subject to exercise the pre-gate.
+const hashClientIp = vi.fn(async (..._a: unknown[]): Promise<string | null> => null);
+vi.mock('@/lib/trust/ip-hash', () => ({
+  hashClientIp: (...a: unknown[]) => hashClientIp(...a),
+}));
+
 // BotID server gate (D-06 / WR-01 / WR-03) — controllable per-case. Default: human.
 // The route gate order is Zod -> checkBotId (after Zod, WR-03) -> Turnstile -> guard ->
 // ledger -> insert, and a thrown checkBotId degrades OPEN (isBot=false, WR-01).
@@ -115,9 +124,11 @@ describe('CONT-01 — POST /api/contact (service-role sole writer)', () => {
     insert.mockClear();
     verifyTurnstile.mockClear();
     countAndRecord.mockClear();
+    hashClientIp.mockReset();
     checkBotId.mockReset();
     verifyTurnstile.mockResolvedValue(true);
     countAndRecord.mockResolvedValue(true);
+    hashClientIp.mockResolvedValue(null);
     checkBotId.mockResolvedValue({ isBot: false });
   });
 
@@ -188,6 +199,39 @@ describe('CONT-01 — POST /api/contact (service-role sole writer)', () => {
       expect(res.status).toBe(400);
       expect(checkBotId).not.toHaveBeenCalled(); // no billed bot call on garbage
       expect(insert).not.toHaveBeenCalled();
+    });
+  });
+
+  // WR-02 (Phase-16 review) — a per-hashed-IP throttle (`contact_ip`) spent BEFORE the
+  // billed Turnstile siteverify, so a single-IP replay/garbage flood is bounded in-app
+  // before the outbound siteverify cost. Skipped on a null IP subject (degrade); over
+  // cap → a GENERIC 429 (no leak), and the siteverify is never spent.
+  describe('WR-02 — per-IP throttle before Turnstile (contact_ip)', () => {
+    it('over the per-IP cap → GENERIC 429 BEFORE Turnstile is verified (no insert, no leak)', async () => {
+      const POST = await loadPost();
+      hashClientIp.mockResolvedValue('ip-hash-abc'); // a concrete IP subject → pre-gate runs
+      // Only the pre-Turnstile `contact_ip` bucket is over cap.
+      countAndRecord.mockImplementation(async (bucket: unknown) => bucket !== 'contact_ip');
+      const res = await POST(postReq(validBody));
+      expect(res.status).toBe(429);
+      expect(verifyTurnstile).not.toHaveBeenCalled(); // billed siteverify never spent
+      expect(insert).not.toHaveBeenCalled();
+      const text = await res.text();
+      expect(text).not.toMatch(/\b20\b|per (minute|hour)|limit|wait/i);
+    });
+
+    it('null IP subject → pre-gate SKIPPED (degrade); the write still proceeds', async () => {
+      const POST = await loadPost();
+      hashClientIp.mockResolvedValue(null); // no IP / secret unset → degrade
+      const res = await POST(postReq(validBody));
+      expect(res.status).toBe(200);
+      expect(countAndRecord).not.toHaveBeenCalledWith(
+        'contact_ip',
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(insert).toHaveBeenCalled();
     });
   });
 });

@@ -107,9 +107,11 @@ describe('SAFE-03 — POST /api/report (service-role mirror of /api/contact)', (
     insert.mockClear();
     verifyTurnstile.mockClear();
     countAndRecord.mockClear();
+    hashClientIp.mockReset();
     checkBotId.mockReset();
     verifyTurnstile.mockResolvedValue(true);
     countAndRecord.mockResolvedValue(true);
+    hashClientIp.mockResolvedValue('deadbeef-hash');
     checkBotId.mockResolvedValue({ isBot: false });
   });
 
@@ -178,6 +180,36 @@ describe('SAFE-03 — POST /api/report (service-role mirror of /api/contact)', (
       expect(res.status).toBe(400);
       expect(checkBotId).not.toHaveBeenCalled();
       expect(insert).not.toHaveBeenCalled();
+    });
+  });
+
+  // WR-02 (Phase-16 review) — a per-hashed-IP throttle (`report_ip`) spent BEFORE the
+  // billed Turnstile siteverify, distinct from the post-Turnstile `report_sender` write
+  // cap. Bounds a single-IP replay flood before the outbound siteverify cost; skipped on
+  // a null IP subject (degrade).
+  describe('WR-02 — per-IP throttle before Turnstile (report_ip)', () => {
+    it('over the per-IP cap → GENERIC 429 BEFORE Turnstile is verified (no insert)', async () => {
+      const POST = await loadPost();
+      // Only the pre-Turnstile `report_ip` bucket is over cap; subject is the default hash.
+      countAndRecord.mockImplementation(async (bucket: unknown) => bucket !== 'report_ip');
+      const res = await POST(postReq(validBody));
+      expect(res.status).toBe(429);
+      expect(verifyTurnstile).not.toHaveBeenCalled(); // billed siteverify never spent
+      expect(insert).not.toHaveBeenCalled();
+    });
+
+    it('null IP subject → pre-gate SKIPPED (degrade); the write still proceeds', async () => {
+      const POST = await loadPost();
+      hashClientIp.mockResolvedValue(null);
+      const res = await POST(postReq(validBody));
+      expect(res.status).toBe(200);
+      expect(countAndRecord).not.toHaveBeenCalledWith(
+        'report_ip',
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(insert).toHaveBeenCalled();
     });
   });
 });

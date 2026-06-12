@@ -11,7 +11,9 @@
  *      the server parse is the real gate, D-02). A bad body, a reason OUTSIDE the
  *      reports CHECK enum, or the reserved `auto_flagged` value (D-17) → 400.
  *   2. Turnstile siteverify — fail-CLOSED (`verifyTurnstile` returns true ONLY on
- *      `{success:true}`). A failed/spent token → 400; no insert.
+ *      `{success:true}`). A failed/spent token → 400; no insert. PRECEDED by a WR-02
+ *      per-hashed-IP throttle (`report_ip`) that bounds a single-IP replay flood in-app
+ *      BEFORE the billed siteverify (skipped on a null IP subject — degrade).
  *   3. Two-bucket rate-limit via the SHARED `rate_limit_events` LEDGER (the 06-02
  *      slice-refinement — report REUSES the contact ledger, count THEN insert, D-06):
  *        • `report_page`   — subject = `portfolio_id` (a per-page modest cap).
@@ -49,6 +51,16 @@ const REPORT_PAGE_CAP = 10;
 const REPORT_SENDER_CAP = 5;
 const REPORT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
+/**
+ * WR-02 (Phase-16 review) — a GENEROUS per-hashed-IP pre-gate spent BEFORE the billed
+ * Turnstile siteverify, bounding a single-IP replay/garbage flood in-app before the
+ * outbound siteverify cost. Generous (a human never trips 20/min) with a short 1-minute
+ * window to cap collateral lockout for a shared IP; the edge WAF (runbook §2) is the
+ * coarse volumetric backstop. Distinct from the post-Turnstile `report_sender` write cap.
+ */
+const REPORT_IP_CAP = 20;
+const REPORT_IP_WINDOW_MS = 60 * 1000; // 1 minute
+
 export async function POST(req: Request): Promise<NextResponse> {
   // Parse the JSON body. A non-JSON body is a bad request.
   let bodyJson: unknown;
@@ -82,6 +94,24 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'unavailable' }, { status: 403 });
   }
 
+  // 1b) WR-02 — per-hashed-IP throttle BEFORE the billed Turnstile siteverify. Computed
+  //     ONCE here and reused for the post-Turnstile `report_sender` write cap below. A
+  //     null subject (no IP / no REPORT_IP_HASH_SECRET) SKIPS both caps — degrade (R-5).
+  //     Bucket `report_ip` is soft-enum (TEXT, no CHECK → no migration, D-06). Over cap →
+  //     the SAME generic 429 (never leaks the cap or which bucket tripped).
+  const ipSubject = await hashClientIp(req);
+  if (ipSubject) {
+    const ipAllowed = await countAndRecord(
+      'report_ip',
+      ipSubject,
+      REPORT_IP_WINDOW_MS,
+      REPORT_IP_CAP,
+    );
+    if (!ipAllowed) {
+      return NextResponse.json({ error: 'try_later' }, { status: 429 });
+    }
+  }
+
   // 2) Turnstile siteverify — fail-CLOSED. A failed verify blocks the write entirely.
   const verified = await verifyTurnstile(data.turnstile_token);
   if (!verified) {
@@ -100,13 +130,13 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'try_later' }, { status: 429 });
   }
 
-  // Per-sender cap — SKIPPED when there is no hashed-IP subject (no IP or no
-  //    REPORT_IP_HASH_SECRET): the helper returns null and we degrade (R-5).
-  const senderSubject = await hashClientIp(req);
-  if (senderSubject) {
+  // Per-sender cap — REUSES the IP subject computed above (WR-02; one hash per request).
+  //    SKIPPED when there is no hashed-IP subject (no IP or no REPORT_IP_HASH_SECRET):
+  //    the helper returned null and we degrade (R-5).
+  if (ipSubject) {
     const senderAllowed = await countAndRecord(
       'report_sender',
-      senderSubject,
+      ipSubject,
       REPORT_WINDOW_MS,
       REPORT_SENDER_CAP,
     );

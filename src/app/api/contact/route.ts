@@ -8,6 +8,9 @@
  * the rate-limit policy):
  *   1. Zod re-parse of `contactFormSchema` at the boundary (the client parse is UX
  *      only — the server parse is the real gate, D-02). Bad body → 400 bad_request.
+ *   1b. WR-02 — a GENEROUS per-hashed-IP throttle (`contact_ip`) spent BEFORE the billed
+ *      Turnstile siteverify, so a single-IP replay/garbage flood is bounded in-app
+ *      before the outbound siteverify cost. Skipped on a null IP subject (degrade).
  *   2. Turnstile siteverify — fail-CLOSED (`verifyTurnstile` returns true ONLY on
  *      `{success:true}`). A failed/spent token → 400 verification_failed; no insert.
  *   3. Rate-limit via the `rate_limit_events` LEDGER (count THEN insert — D-06, NOT
@@ -31,6 +34,7 @@ import { NextResponse } from 'next/server';
 import { verifyTurnstile } from '@/lib/auth/turnstile';
 import { countAndRecord } from '@/lib/rate-limit/ledger';
 import { supabaseAdmin } from '@/lib/supabase/service-role';
+import { hashClientIp } from '@/lib/trust/ip-hash';
 import { notifyOwnerOfMessage } from '@/lib/trust/notify';
 import { contactFormSchema } from '@/lib/validations/contact';
 
@@ -40,6 +44,17 @@ export const runtime = 'nodejs';
 /** Contact cap: 20 submissions per hour per portfolio (D-06). */
 const CONTACT_CAP = 20;
 const CONTACT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * WR-02 (Phase-16 review) — a GENEROUS per-hashed-IP pre-gate spent BEFORE the billed
+ * Turnstile siteverify, bounding a single-IP replay/garbage flood in-app before the
+ * outbound siteverify cost. Deliberately generous (a human — even behind CGNAT — never
+ * trips 20/min); the short 1-minute window caps any collateral lockout for a shared IP.
+ * The edge WAF (runbook §2) remains the coarse volumetric backstop — this is the in-app
+ * speed-bump. Distinct from the post-guard per-portfolio `contact` write cap above.
+ */
+const CONTACT_IP_CAP = 20;
+const CONTACT_IP_WINDOW_MS = 60 * 1000; // 1 minute
 
 export async function POST(req: Request): Promise<NextResponse> {
   // Parse the JSON body. A non-JSON body is a bad request.
@@ -71,6 +86,25 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
   if (isBot) {
     return NextResponse.json({ error: 'unavailable' }, { status: 403 });
+  }
+
+  // 1b) WR-02 — per-hashed-IP throttle BEFORE the billed Turnstile siteverify. Bounds a
+  //     single-IP replay/garbage flood in-app before the outbound siteverify cost is
+  //     spent (the per-portfolio `contact` cap below still applies post-guard). A null
+  //     subject (no IP / no REPORT_IP_HASH_SECRET) SKIPS the cap — degrade (R-5), never
+  //     blocks a real user. Bucket `contact_ip` is soft-enum (rate_limit_events.bucket is
+  //     TEXT, no CHECK → no migration, D-06). Over cap → the SAME generic 429 (no leak).
+  const ipSubject = await hashClientIp(req);
+  if (ipSubject) {
+    const ipAllowed = await countAndRecord(
+      'contact_ip',
+      ipSubject,
+      CONTACT_IP_WINDOW_MS,
+      CONTACT_IP_CAP,
+    );
+    if (!ipAllowed) {
+      return NextResponse.json({ error: 'try_later' }, { status: 429 });
+    }
   }
 
   // 2) Turnstile siteverify — fail-CLOSED. A failed verify blocks the write entirely.
