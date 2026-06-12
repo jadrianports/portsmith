@@ -52,7 +52,10 @@ import { getPortfolioOwnerByUsername } from '@/lib/portfolio/get-portfolio-owner
 import { getAvailableTemplates } from '@/lib/templates/available-templates';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 import { resolveSpec } from '@/components/templates/registry';
-import { OnboardingWizard } from '@/components/onboarding/onboarding-wizard';
+import {
+  OnboardingWizard,
+  type OnboardingStepData,
+} from '@/components/onboarding/onboarding-wizard';
 import {
   ONBOARDING_STEP_ORDER,
   STEP_SECTION_TYPE,
@@ -127,15 +130,51 @@ export default async function OnboardingPage() {
 
   // 5) DERIVE the resume step (D-03/D-17) — the placeholder-aware predicate over the
   //    owner read (seeded-but-untouched reads as NOT done). A returning user lands on
-  //    their last-incomplete step; a fresh user lands on Template.
-  const resumeStep = deriveOnboardingStep({
+  //    their last-incomplete step; a fresh user lands on Template. The same derivation
+  //    drives the D-16 placeholder nudge (any not-done content step ⇒ placeholders).
+  // The public view columns are all `| null` — coalesce `type` to '' so a malformed
+  // row simply matches no step predicate (it is never one of the named section types).
+  const seedInput = {
     displayName: data.profile.display_name,
     avatarUrl: data.profile.avatar_url,
     published: data.published,
-    // The public view columns are all `| null` — coalesce `type` to '' so a malformed
-    // row simply matches no step predicate (it is never one of the named section types).
     sections: data.sections.map((s) => ({ type: s.type ?? '', content: s.content })),
-  });
+  };
+  const resumeStep = deriveOnboardingStep(seedInput);
+
+  // 6) 18-05: thread the per-content-step section rows (`sectionId` + `content`) the
+  //    embedded Phase-17 forms edit, keyed by content step. The wizard's content steps
+  //    write through the SAME editor actions on this UNPUBLISHED portfolio (D-06). Each
+  //    step maps to its section type via STEP_SECTION_TYPE; the first row of that type
+  //    wins (UNIQUE(portfolio_id, type) makes it 1:1). All view columns are `| null`
+  //    (the all-nullable view-Row rule) — coalesce id → '' / content → {} so the props
+  //    are plain serializable records; a missing id simply makes that step not fillable.
+  const stepData: OnboardingStepData = {};
+  for (const step of ['hero', 'about', 'projects', 'contact'] as const) {
+    const sectionType = STEP_SECTION_TYPE[step];
+    if (sectionType == null) continue;
+    const row = data.sections.find((s) => s.type === sectionType);
+    if (!row || !row.id) continue;
+    stepData[step] = {
+      sectionId: row.id,
+      content: (row.content ?? {}) as Record<string, unknown>,
+    };
+  }
+
+  // 6a) 18-05 (D-10): the Hero step's prefilled identity (avatar + name + headline +
+  //     the carried résumé URL so an identity save never drops it). From the profile row.
+  const identity = {
+    displayName: data.profile.display_name,
+    headline: data.profile.headline,
+    avatarUrl: data.profile.avatar_url,
+    resumeUrl: data.profile.resume_url,
+  };
+
+  // 6b) 18-05 (D-16): the seed-aware placeholder signal — true when ANY content step is
+  //     still not-done (the same `deriveOnboardingStep` predicate; an unpublished page
+  //     whose resume step is a CONTENT step, not 'publish', still holds untouched seed).
+  //     ADVISORY ONLY — drives the Publish step's NON-BLOCKING nudge, never a gate (D-16).
+  const hasPlaceholders = resumeStep !== 'publish';
 
   return (
     <OnboardingWizard
@@ -145,6 +184,9 @@ export default async function OnboardingPage() {
       allowedTemplates={allowedTemplates}
       visibleSteps={visibleSteps}
       resumeStep={resumeStep}
+      stepData={stepData}
+      identity={identity}
+      hasPlaceholders={hasPlaceholders}
     />
   );
 }

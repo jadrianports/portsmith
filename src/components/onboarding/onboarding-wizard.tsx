@@ -41,6 +41,12 @@ import type { AllowedTemplate } from '@/lib/templates/available-templates';
 
 import { TemplateStep } from './steps/template-step';
 import {
+  ContentStep,
+  type ContentStepIdentity,
+  type ContentStepSection,
+  type ContentStepType,
+} from './steps/content-step';
+import {
   STEP_LABEL,
   type OnboardingStep,
 } from './steps';
@@ -86,6 +92,15 @@ const COPY = {
   welcomeBackSub: 'Your progress is saved.',
 } as const;
 
+/**
+ * The serializable per-content-step section data (18-05): each content step's section
+ * row id + its current content, so the embedded Phase-17 forms write through the SAME
+ * editor actions on the unpublished portfolio (D-06). Threaded from the RSC owner read;
+ * a step whose section row is missing (it never should, post-bootstrap) is simply not
+ * fillable and the wrapper falls back to a calm note.
+ */
+export type OnboardingStepData = Partial<Record<ContentStepType, ContentStepSection>>;
+
 export interface OnboardingWizardProps {
   /** The owner's username (drives the preview iframe target + the live URL). */
   username: string;
@@ -99,6 +114,20 @@ export interface OnboardingWizardProps {
   visibleSteps: readonly OnboardingStep[];
   /** The RSC-derived resume step (D-03) — the shell opens here. */
   resumeStep: OnboardingStep;
+  /**
+   * 18-05: the per-content-step section rows (`sectionId` + `content`) the embedded
+   * Phase-17 forms edit, keyed by content step. From the RSC owner read.
+   */
+  stepData: OnboardingStepData;
+  /** 18-05 (D-10): the Hero step's prefilled identity (avatar + name + headline). */
+  identity: ContentStepIdentity;
+  /**
+   * 18-05 (D-16): true when any core section still holds untouched seed content (the
+   * RSC-derived seed-aware signal — `deriveOnboardingStep` over the live state returns
+   * a not-done content step). Drives the Publish step's NON-BLOCKING placeholder nudge;
+   * it NEVER gates Publish.
+   */
+  hasPlaceholders: boolean;
 }
 
 export function OnboardingWizard({
@@ -108,6 +137,9 @@ export function OnboardingWizard({
   allowedTemplates,
   visibleSteps,
   resumeStep,
+  stepData,
+  identity,
+  hasPlaceholders,
 }: OnboardingWizardProps) {
   // Land on the resume step if it is visible; otherwise the first visible step.
   const initialStep = visibleSteps.includes(resumeStep)
@@ -116,6 +148,10 @@ export function OnboardingWizard({
   const [current, setCurrent] = useState<OnboardingStep>(initialStep);
   // Guard against a double-fire of the soft-skip navigation.
   const [leaving, setLeaving] = useState(false);
+  // 18-05 (D-15): the full-screen "You're live" payoff is a TERMINAL state reached
+  // when the Publish step's `markOnboardedAndPublish` resolves ok (NOT a stepper step).
+  // It takes over the whole viewport, replacing the shell.
+  const [showPayoff, setShowPayoff] = useState(false);
 
   const currentIndex = visibleSteps.indexOf(current);
   const isFirst = currentIndex <= 0;
@@ -174,6 +210,21 @@ export function OnboardingWizard({
   }, [leaving]);
 
   const coaching = STEP_COACHING[current];
+  // Narrow `current` to a content step (hero/about/projects/contact) when it is one —
+  // so the ContentStep wrapper + the `stepData` lookup are correctly typed.
+  const contentStep: ContentStepType | null =
+    current === 'hero' ||
+    current === 'about' ||
+    current === 'projects' ||
+    current === 'contact'
+      ? current
+      : null;
+  const contentSection = contentStep ? stepData[contentStep] : undefined;
+
+  // 18-05 (D-15): once Publish resolves ok, the wizard hands the whole viewport to the
+  // full-screen "You're live" payoff. The PublishStep + PayoffStep are wired in Task 3
+  // (this is the content-step wiring); until then the publish step shows the placeholder.
+  void showPayoff;
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:py-16">
@@ -206,14 +257,25 @@ export function OnboardingWizard({
           </p>
         </header>
 
-        {/* Step slot. Step 1 is the real Template step; steps 2–6 land in 18-05. */}
+        {/* Step slot: the full 6-step sequence wired end-to-end (18-04 Step 1 + 18-05
+            content/publish). Template(1) → Hero(2)/About(3)/Projects(4)/Contact(5) via
+            the coached ContentStep wrapper → Publish(6) → the payoff (terminal). */}
         {current === 'template' ? (
           <TemplateStep
             username={username}
             currentSlug={currentTemplateSlug}
             allowed={allowedTemplates}
           />
+        ) : contentStep && contentSection ? (
+          <ContentStep
+            step={contentStep}
+            section={contentSection}
+            username={username}
+            identity={contentStep === 'hero' ? identity : undefined}
+          />
         ) : (
+          // The Publish step (6) + the payoff are wired in Task 3; until then the
+          // placeholder holds the slot (and any content step missing its section row).
           <StepPlaceholder step={current} published={published} />
         )}
       </section>
