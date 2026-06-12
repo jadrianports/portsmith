@@ -37,6 +37,11 @@ import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useUIStore } from '@/lib/stores/uiStore';
+import {
+  UnsavedChangesGuard,
+  flushAllActiveSaves,
+} from '@/components/editor/unsaved-guard';
 import type { AllowedTemplate } from '@/lib/templates/available-templates';
 
 import { TemplateStep } from './steps/template-step';
@@ -150,6 +155,14 @@ export function OnboardingWizard({
   const [current, setCurrent] = useState<OnboardingStep>(initialStep);
   // Guard against a double-fire of the soft-skip navigation.
   const [leaving, setLeaving] = useState(false);
+  // WR-01: a flush-then-move is in flight (Continue/Back/stepper-jump await the
+  // mounted panel's save before navigating). Disables the nav controls so a second
+  // click can't race the save or double-advance.
+  const [navigating, setNavigating] = useState(false);
+  // WR-01: clear the ephemeral Zustand `dirty` flag on an intentional discard (Skip
+  // for now) so no stale beforeunload prompt survives — the seed is retained by
+  // design (D-08), and the discard must not leave a misleading "unsaved" posture.
+  const setDirty = useUIStore((s) => s.setDirty);
   // 18-05 (D-15): the full-screen "You're live" payoff is a TERMINAL state reached
   // when the Publish step's `markOnboardedAndPublish` resolves ok (NOT a stepper step).
   // It takes over the whole viewport, replacing the shell.
@@ -172,23 +185,68 @@ export function OnboardingWizard({
     return new Set<OnboardingStep>(visibleSteps.slice(0, resumeIdx));
   }, [visibleSteps, resumeStep]);
 
-  const goTo = useCallback((step: OnboardingStep) => {
+  /** The raw step swap (scroll-to-top, instant under reduced motion). */
+  const moveTo = useCallback((step: OnboardingStep) => {
     setCurrent(step);
-    // Scroll the new step card into view on jump (instant under reduced motion).
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'auto' });
     }
   }, []);
 
+  /**
+   * WR-01: the guarded mover for Continue / Back / stepper-jump. FLUSH-THEN-MOVE —
+   * await the mounted panel(s)' registered save(s) (flush-all, WR-02) and navigate
+   * ONLY on a resolved-ok save. On a FAILED save we STAY on the step so the form's
+   * inline field/banner error shows (never navigate away from unsaved edits). The
+   * Template + Publish steps register no save, so `flushAllActiveSaves` is a no-op
+   * `{ ok: true }` there and the move is immediate.
+   */
+  const flushThenGo = useCallback(
+    async (step: OnboardingStep) => {
+      if (navigating) return;
+      setNavigating(true);
+      try {
+        const result = await flushAllActiveSaves();
+        if (result.ok) moveTo(step);
+        // else: stay on the step; the embedded form shows its own error.
+      } finally {
+        setNavigating(false);
+      }
+    },
+    [navigating, moveTo],
+  );
+
   const goNext = useCallback(() => {
     const next = visibleSteps[currentIndex + 1];
-    if (next) goTo(next);
-  }, [visibleSteps, currentIndex, goTo]);
+    if (next) void flushThenGo(next);
+  }, [visibleSteps, currentIndex, flushThenGo]);
 
   const goBack = useCallback(() => {
     const prev = visibleSteps[currentIndex - 1];
-    if (prev) goTo(prev);
-  }, [visibleSteps, currentIndex, goTo]);
+    if (prev) void flushThenGo(prev);
+  }, [visibleSteps, currentIndex, flushThenGo]);
+
+  /** The stepper-jump handler (WR-01): same flush-then-move as Continue/Back. */
+  const onJump = useCallback(
+    (step: OnboardingStep) => {
+      void flushThenGo(step);
+    },
+    [flushThenGo],
+  );
+
+  /**
+   * WR-01 / D-08: "Skip for now" intentionally DISCARDS the current step's unsaved
+   * edits (the seed is retained and still looks fine). It must NOT force a save — but
+   * it MUST clear the ephemeral dirty flag first so no stale beforeunload prompt
+   * survives the discard, then advance immediately.
+   */
+  const skipStep = useCallback(() => {
+    if (navigating) return;
+    const next = visibleSteps[currentIndex + 1];
+    if (!next) return;
+    setDirty(false);
+    moveTo(next);
+  }, [navigating, visibleSteps, currentIndex, setDirty, moveTo]);
 
   /**
    * Soft-skip "I'll finish later" (D-04): clear the draft-preview cookies FIRST
@@ -231,12 +289,22 @@ export function OnboardingWizard({
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:py-16">
+      {/* WR-01: the dirty guard's beforeunload fallback (Path 2). Mounted once so a
+          tab-close / refresh / hard-nav while the embedded form is dirty triggers the
+          browser's leave-site prompt — the cases the wizard's in-app flush-then-move
+          can't intercept. The wizard's Continue/Back/jump use the flush-THEN-move path
+          directly (not the in-app dialog), so no `<UnsavedChangesGuard>` dialog pops on
+          a guarded nav here — but the beforeunload arm-while-dirty still protects hard
+          exits. (The in-app dialog only renders when a `useGuardedNavigate` request is
+          pending, which the wizard never issues — so this mount is beforeunload-only.) */}
+      <UnsavedChangesGuard />
+
       {/* Top stepper (Surface 1). */}
       <OnboardingStepper
         visibleSteps={visibleSteps}
         current={current}
         completed={completed}
-        onJump={goTo}
+        onJump={onJump}
       />
 
       {/* Welcome-back banner (Surface 6) — only on a resumed visit (resume past Template). */}
@@ -294,7 +362,12 @@ export function OnboardingWizard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             {!isFirst ? (
-              <Button variant="ghost" onClick={goBack} className="w-auto">
+              <Button
+                variant="ghost"
+                onClick={goBack}
+                disabled={navigating}
+                className="w-auto"
+              >
                 <ArrowLeft aria-hidden="true" className="size-4" />
                 <span>{COPY.back}</span>
               </Button>
@@ -302,12 +375,28 @@ export function OnboardingWizard({
           </div>
           <div className="flex items-center gap-3">
             {isContentStep ? (
-              <Button variant="ghost" onClick={goNext} className="w-auto">
+              // WR-01 / D-08: "Skip for now" DISCARDS unsaved edits by design (the
+              // seed is retained) — it clears the dirty flag then advances, never
+              // forcing a save.
+              <Button
+                variant="ghost"
+                onClick={skipStep}
+                disabled={navigating}
+                className="w-auto"
+              >
                 {COPY.skip}
               </Button>
             ) : null}
             {!isLast ? (
-              <Button variant="primary" onClick={goNext} className="w-auto">
+              // WR-01: "Continue" = flush-THEN-advance (save the mounted panel, move
+              // only on ok; on a failed save it stays put and the form shows its error).
+              <Button
+                variant="primary"
+                onClick={goNext}
+                disabled={navigating}
+                aria-busy={navigating || undefined}
+                className="w-auto"
+              >
                 <span>{nextIsPublish ? COPY.continueToPublish : COPY.continue}</span>
                 <ArrowRight aria-hidden="true" className="size-4" />
               </Button>
