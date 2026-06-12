@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
+import { ONBOARDING_SKIP_COOKIE } from '@/lib/onboarding/skip-cookie';
+
 /**
  * Refreshes the Supabase auth session on every request (the only supported
  * `@supabase/ssr` refresh model) and writes the refreshed cookies to BOTH the
@@ -70,6 +72,22 @@ export async function updateSession(request: NextRequest) {
     redirectUrl.pathname = '/login';
     redirectUrl.searchParams.set('redirectedFrom', path);
     return NextResponse.redirect(redirectUrl);
+  }
+
+  // ONE-SHOT onboarding-skip clear (18-03 / D-04 / ONB-05). The soft-skip cookie set
+  // by `/api/onboarding/skip` lets a not-yet-onboarded owner reach the editor for
+  // exactly ONE `/dashboard` visit. The dashboard RSC gate READS the cookie (an RSC
+  // may not mutate cookies), so middleware — which runs before the RSC and owns the
+  // response cookies — clears it HERE on the same `/dashboard` request: the cookie is
+  // still readable by the RSC this pass (it lives on the request), but is deleted from
+  // the OUTGOING response, so the NEXT request no longer carries it and the gate
+  // re-fires (escapable for one visit, never a loop). This is NOT a DB read and runs
+  // AFTER `getClaims()`, so the @supabase/ssr refresh-timing rule is preserved.
+  if (path.startsWith('/dashboard') && request.cookies.has(ONBOARDING_SKIP_COOKIE)) {
+    // Delete with the SAME `path: '/'` the skip route set it at, so the browser
+    // reliably drops the httpOnly cookie (a bare name-only delete uses the default
+    // path and can leave a path-'/' cookie behind).
+    supabaseResponse.cookies.delete({ name: ONBOARDING_SKIP_COOKIE, path: '/' });
   }
 
   // Always return `supabaseResponse` unchanged so the refreshed cookies are

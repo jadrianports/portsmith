@@ -33,6 +33,7 @@
  * async and awaited inside `createClient`. The page never reads the request host —
  * the username is resolved from the verified profile row (PUB-03).
  */
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { AnalyticsCard } from '@/components/dashboard/analytics-card';
@@ -42,6 +43,10 @@ import { getOwnerAnalytics } from '@/lib/analytics/owner-analytics';
 import { ensurePortfolio } from '@/lib/cms/bootstrap-portfolio';
 import { getPortfolioOwnerByUsername } from '@/lib/portfolio/get-portfolio-owner';
 import { getAvailableTemplates } from '@/lib/templates/available-templates';
+import {
+  ONBOARDING_SKIP_COOKIE,
+  shouldRedirectToOnboarding,
+} from '@/lib/onboarding/skip-cookie';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 
 /** The dashboard is owner-private + always reflects last-saved (unpublished) state. */
@@ -69,9 +74,12 @@ export default async function DashboardPage() {
   //    The select also reads `storage_used_bytes` (D-09) — a PROTECTED column the
   //    owner may READ for their own row under RLS; it is threaded into the
   //    read-only StorageMeter and NEVER written from the client (T-05-22).
+  //    Also reads `onboarded_at` (D-02 first-run gate, 18-03) — the owner's own
+  //    completion marker (null = not yet onboarded), readable by the owner for their
+  //    own row under RLS; it drives the wizard-vs-editor routing below.
   const { data: profileRow } = await supabase
     .from('profiles')
-    .select('username, storage_used_bytes, locked')
+    .select('username, storage_used_bytes, locked, onboarded_at')
     .eq('id', sub)
     .maybeSingle();
   // WR-02 (D-14 defense-in-depth): a suspended account must never load an authed
@@ -89,6 +97,41 @@ export default async function DashboardPage() {
     // A verified session with no profile row should not happen post-bootstrap, but
     // degrade safely rather than render a broken editor.
     redirect('/login');
+  }
+
+  // 3a) FIRST-RUN ROUTING GATE (D-02 / ONB-02 / ONB-05, 18-03). This RSC is the
+  //     single chokepoint every authenticated entry path (login, email-confirm,
+  //     direct nav) funnels through, so the gate lives here — NOT in middleware
+  //     (which stays lean: no per-request DB read; the "no code between
+  //     createServerClient and getClaims" rule is preserved).
+  //
+  //     Route a NOT-YET-ONBOARDED owner (`onboarded_at IS NULL`) into `/onboarding`
+  //     unless the one-shot `onboarding-skip` cookie is present (a soft-skipper, D-04).
+  //     The skip cookie is READ-AND-CLEARED (one-shot): when present, this visit falls
+  //     through to the editor and the cookie is deleted, so the NEXT visit (cookie gone,
+  //     `onboarded_at` still null) re-fires the gate — escapable for one visit, never a
+  //     loop. A finished/published owner has `onboarded_at` non-null (stamped by
+  //     `markOnboardedAndPublish`, plus the 18-01 founder backfill) → the predicate is
+  //     false → NEVER bounced (ONB-05). The redirect target is the LITERAL internal
+  //     `/onboarding` — no client-supplied destination, so no open redirect
+  //     (T-18-redirect). `redirect()` is at top level (it throws NEXT_REDIRECT).
+  //
+  //     ONE-SHOT MECHANICS (D-04 / ONB-05): this RSC only READS the skip cookie — a
+  //     Server Component may NOT mutate cookies (Next 16 throws
+  //     ReadonlyRequestCookiesError on `.set`/`.delete` outside a Server Action /
+  //     Route Handler; the codebase clears its other one-shot signals from a handler,
+  //     never an RSC). The CLEAR therefore happens in `middleware.ts`, which runs
+  //     BEFORE this RSC on the `/dashboard` request and writes the deletion onto the
+  //     outgoing response cookies. So the cookie is present for THIS render (the
+  //     soft-skipper falls through to the editor) and gone on the NEXT request — the
+  //     gate re-fires while `onboarded_at` is still null (escapable for one visit,
+  //     never a loop). The durable `onboarded_at` is untouched (D-04 — resumable).
+  const onboardedAt =
+    (profileRow as { onboarded_at?: string | null } | null)?.onboarded_at ?? null;
+  const cookieStore = await cookies();
+  const skipCookiePresent = cookieStore.get(ONBOARDING_SKIP_COOKIE) != null;
+  if (shouldRedirectToOnboarding(onboardedAt, skipCookiePresent)) {
+    redirect('/onboarding');
   }
 
   // 4) Load the owner's OWN unpublished portfolio INCLUDING HIDDEN SECTIONS
