@@ -18,6 +18,20 @@ import 'server-only';
  * D-07 explicitly treats the IP cap as a minor trivial-flood speed-bump, so a missing
  * secret never blocks a legitimate reporter.
  *
+ * ── TRUSTED-PROXY INVARIANT (WR-03, Phase-16 review) ─────────────────────────────
+ * The client IP is read from `x-forwarded-for[0]` (falling back to `x-real-ip`). That
+ * first entry is trustworthy ONLY because Vercel's edge OWNS and OVERWRITES
+ * `x-forwarded-for` with the real client IP before the request reaches this Node handler.
+ * `x-forwarded-for` is otherwise a fully client-controlled header: if a request ever
+ * reaches this code WITHOUT passing Vercel's trusted proxy (a self-host, a misconfigured
+ * custom domain / alias, or a direct-origin hit that bypasses the edge), an attacker can
+ * forge a fresh IP per request and mint a new hashed subject every time — silently
+ * defeating EVERY per-IP cap that consumes this digest (`auth_*`, `report_*`,
+ * `contact_ip`, `page_view`). LOAD-BEARING DEPLOY INVARIANT: this app MUST stay fronted
+ * by Vercel (the platform owns `x-forwarded-for`). The safe degrade is already `null`
+ * (skip the cap) — do NOT "harden" this by trusting a raw client-supplied XFF off-proxy.
+ * Asserted at deploy: see the security-cost-hardening runbook §5.
+ *
  * `REPORT_IP_HASH_SECRET` is a NEW server-only secret — un-prefixed, NEVER
  * `NEXT_PUBLIC_` (the checkpoint:human-verify in 06-06 sets it in Vercel + .env.local).
  */
@@ -33,6 +47,9 @@ import { createHmac } from 'node:crypto';
  * `null` to signal "skip the per-sender cap" (no IP, or no secret configured).
  */
 export async function hashClientIp(req: Request): Promise<string | null> {
+  // WR-03: x-forwarded-for[0] is trusted ONLY because Vercel's edge overwrites it with
+  // the real client IP — off the trusted proxy it is client-forgeable (see the
+  // TRUSTED-PROXY INVARIANT above). Null (skip the cap) is the safe degrade.
   const fwd = req.headers.get('x-forwarded-for');
   const ip = fwd?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip') ?? null;
   if (!ip) return null;
@@ -69,6 +86,8 @@ export async function hashClientIpFromHeaders(): Promise<string | null> {
   let ip: string | null = null;
   try {
     const h = await headers();
+    // WR-03: trusted ONLY because Vercel's edge owns x-forwarded-for (see the
+    // TRUSTED-PROXY INVARIANT above) — client-forgeable off-proxy; null is the degrade.
     const fwd = h.get('x-forwarded-for');
     ip = fwd?.split(',')[0]?.trim() ?? h.get('x-real-ip') ?? null;
   } catch {

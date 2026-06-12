@@ -184,9 +184,9 @@ review scope and outcomes:
 
 | Surface | What it is | Review outcome |
 |---------|-----------|----------------|
-| `POST /api/contact` | service-role route (Zod → fail-closed Turnstile → public-target guard → `countAndRecord` → insert → generic errors) | **Reviewed — sound.** Added a layered `checkBotId()` gate (16-05/16-06). No structural gap. |
-| `POST /api/report` | service-role route, two-bucket rate-limit (per-page + per-hashed-IP-sender), Turnstile fail-closed | **Reviewed — sound** (the closest analog the new auth rate-limit mirrors). Added `checkBotId()`. |
-| `POST /api/page-view` | beacon: UA denylist + flood cap + silent-drop (Phase-15 D-08) | **Reviewed — sound.** Added `checkBotId()` as a **silent-drop** (keeps the no-friction beacon posture). |
+| `POST /api/contact` | service-role route (Zod → `checkBotId` → per-IP pre-gate → fail-closed Turnstile → public-target guard → `countAndRecord` → insert → generic errors) | **Reviewed — sound.** Layered `checkBotId()` gate (16-05/16-06) + a WR-02 per-hashed-IP throttle (`contact_ip`, 20/min) BEFORE the billed Turnstile siteverify. |
+| `POST /api/report` | service-role route, two-bucket rate-limit (per-page + per-hashed-IP-sender), Turnstile fail-closed | **Reviewed — sound** (the closest analog the new auth rate-limit mirrors). Added `checkBotId()` + a WR-02 per-hashed-IP throttle (`report_ip`, 20/min) BEFORE the billed siteverify. |
+| `POST /api/page-view` | beacon: UA denylist + flood cap + silent-drop (Phase-15 D-08) | **Reviewed — sound.** A `checkBotId()` silent-drop was added then **REMOVED (WR-01, 16 review)**: page-view is excluded from the `<BotIdClient protect>` list, so the server call was signal-less + a per-beacon billed call — the UA denylist + per-hashed-IP flood cap are the gates. |
 | `POST /api/media/upload` | owner-authenticated upload: verified-claims + per-kind byte ceiling + magic-byte sniff + atomic quota trigger | **Gap closed inline (D-12):** see below. |
 | `POST /api/preview/enable` + `.../disable` | owner `draftMode` toggles | **Reviewed — sound.** Owner-gated via `getVerifiedClaims()`; server resolves its own username (ignores any client `?username` → no open-redirect / cross-tenant toggle). **No fix needed.** |
 | `signupAction` / `loginAction` / `requestReset` (auth Server Actions) | `'use server'` credential surfaces | **Gap closed inline (D-11):** see below. |
@@ -202,6 +202,17 @@ review scope and outcomes:
    enumeration vector). **Enumeration-safety preserved:** a throttled login returns the SAME
    generic message as any operational failure — the throttle is never an oracle. BotID +
    Turnstile are the layered bot gates on the same routes.
+
+   > **WR-03 trusted-proxy invariant (16 review) — deploy assertion.** Every per-IP cap
+   > (`auth_*`, `report_*`, `contact_ip`, `page_view`) derives its subject from
+   > `x-forwarded-for[0]` (see `src/lib/trust/ip-hash.ts`). That first entry is trustworthy
+   > **only because Vercel's edge owns and overwrites `x-forwarded-for`** with the real
+   > client IP. **This app MUST stay fronted by Vercel** — off the trusted proxy the header
+   > is client-forgeable and an attacker can mint a fresh hashed subject per request,
+   > silently defeating every per-IP cap. **At deploy, confirm** the app is reachable ONLY
+   > through the Vercel edge (no direct-origin bypass / mis-aliased custom domain). The safe
+   > degrade is already `null` (skip the cap); do NOT trust a raw client-supplied XFF
+   > off-proxy.
 
 2. **Upload Content-Length pre-check (D-12, plan 16-02).** `POST /api/media/upload` buffered the
    **whole** request body into memory before the per-kind byte-ceiling check — a function-OOM /
