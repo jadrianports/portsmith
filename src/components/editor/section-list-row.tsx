@@ -342,46 +342,51 @@ export function SectionListRow({
             excluded from selection). */}
         {statusDot}
 
-        {/* D-10 — chevron up/down move buttons (the touch/keyboard reorder fallback,
-            always visible; the drag handle stays the pointer-device nicety). Each is a
-            44px (`size-11`) icon-only target with the chrome focus ring; the glyph is
-            `aria-hidden` and the `aria-label` is the accessible name. A press commits a
-            within-group ±1 move through `onMove` — the SAME optimistic `commitOrder` →
-            `reorderSectionsAction` (riding the D-13-hardened `reorderByIds`) the drag
-            uses. Disabled (`aria-disabled` + muted + inert) on the group edges; a move
-            NEVER crosses groups (parity with the per-group SortableContext). */}
-        <button
-          type="button"
-          aria-label={`Move ${title} up`}
-          aria-disabled={atTop || undefined}
-          onClick={atTop ? undefined : () => onMove(groupIds, section.id, 'up')}
-          className={
-            'flex size-11 shrink-0 items-center justify-center rounded-sm outline-none ' +
-            'transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 ' +
-            'focus-visible:outline-ring motion-reduce:transition-none ' +
-            (atTop
-              ? 'cursor-default text-border-strong'
-              : 'text-muted-foreground hover:text-foreground')
-          }
-        >
-          <ChevronUp aria-hidden="true" className="size-4" />
-        </button>
-        <button
-          type="button"
-          aria-label={`Move ${title} down`}
-          aria-disabled={atBottom || undefined}
-          onClick={atBottom ? undefined : () => onMove(groupIds, section.id, 'down')}
-          className={
-            'flex size-11 shrink-0 items-center justify-center rounded-sm outline-none ' +
-            'transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 ' +
-            'focus-visible:outline-ring motion-reduce:transition-none ' +
-            (atBottom
-              ? 'cursor-default text-border-strong'
-              : 'text-muted-foreground hover:text-foreground')
-          }
-        >
-          <ChevronDown aria-hidden="true" className="size-4" />
-        </button>
+        {/* D-10 — chevron up/down move buttons (the touch/narrow-viewport reorder
+            fallback). Revealed BELOW `lg` and HIDDEN on the desktop ≥lg rail (`lg:hidden`,
+            the UI-SPEC's sanctioned reveal option) — on desktop the drag handle is the
+            affordance, and the 288px rail has no room for five 44px controls without
+            starving the title's click target; on touch/narrow viewports (where pointer
+            drag is fiddly) these are the deterministic reorder. Each is a 44px (`size-11`)
+            icon-only target with the chrome focus ring; the glyph is `aria-hidden` and the
+            `aria-label` is the accessible name. A press commits a within-group ±1 move via
+            `onMove` — the SAME optimistic `commitOrder` → `reorderSectionsAction` (riding
+            the D-13-hardened `reorderByIds`) the drag uses. Disabled (`aria-disabled` +
+            muted + inert) on the group edges; a move NEVER crosses groups. */}
+        <span className="flex shrink-0 items-center lg:hidden">
+          <button
+            type="button"
+            aria-label={`Move ${title} up`}
+            aria-disabled={atTop || undefined}
+            onClick={atTop ? undefined : () => onMove(groupIds, section.id, 'up')}
+            className={
+              'flex size-11 shrink-0 items-center justify-center rounded-sm outline-none ' +
+              'transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 ' +
+              'focus-visible:outline-ring motion-reduce:transition-none ' +
+              (atTop
+                ? 'cursor-default text-border-strong'
+                : 'text-muted-foreground hover:text-foreground')
+            }
+          >
+            <ChevronUp aria-hidden="true" className="size-4" />
+          </button>
+          <button
+            type="button"
+            aria-label={`Move ${title} down`}
+            aria-disabled={atBottom || undefined}
+            onClick={atBottom ? undefined : () => onMove(groupIds, section.id, 'down')}
+            className={
+              'flex size-11 shrink-0 items-center justify-center rounded-sm outline-none ' +
+              'transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 ' +
+              'focus-visible:outline-ring motion-reduce:transition-none ' +
+              (atBottom
+                ? 'cursor-default text-border-strong'
+                : 'text-muted-foreground hover:text-foreground')
+            }
+          >
+            <ChevronDown aria-hidden="true" className="size-4" />
+          </button>
+        </span>
 
         <EyeToggle
           sectionId={section.id}
