@@ -36,45 +36,89 @@
  * control carries the chrome focus ring. Zero inline hex, zero template-token reach.
  */
 import { create } from 'zustand';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/lib/stores/uiStore';
 
 /**
- * WR-01 — the ACTIVE-SAVE registry. The dirty dialog's "Save and continue" must
- * actually SAVE the active panel before navigating (it used to silently discard).
- * The active form island (SectionForm / ProfileForm) registers its save function
- * here while mounted; the guard invokes it and only proceeds when the save
- * RESOLVES SUCCESSFULLY (the form clears `dirty` on a resolved ok save). The save
- * returns `{ ok }` so the guard can keep the user on a FAILED save instead of
- * navigating away from unsaved edits.
+ * WR-01 / WR-02 — the ACTIVE-SAVE registry. The dirty dialog's "Save and
+ * continue" must actually SAVE every saveable panel before navigating (it used to
+ * silently discard). A mounted form island (SectionForm / ProfileForm /
+ * HeroIdentityFields) registers its save function here under a STABLE per-panel
+ * key while mounted; the guard invokes ALL of them (flush-all) and only proceeds
+ * when EVERY save RESOLVES SUCCESSFULLY. Each save returns `{ ok }` so the guard
+ * can keep the user on a FAILED save instead of navigating away from unsaved edits.
+ *
+ * WR-02 — keyed by panel id (Map), NOT a single slot. The onboarding wizard's Hero
+ * step mounts TWO saveable panels at once (the identity fields + the hero
+ * SectionForm); a single slot let the last registrant clobber the first, so a flush
+ * saved only one. A keyed Map lets BOTH contribute their save, and `flushAll` awaits
+ * every one. The dashboard editor mounts ONE panel at a time, so flush-all is a safe
+ * superset there (exactly one registrant → identical behavior to the old single slot).
  */
 type ActiveSaveFn = () => Promise<{ ok: boolean }>;
 
 interface ActiveSaveState {
-  /** The active panel's save function, or null when no saveable panel is mounted. */
-  save: ActiveSaveFn | null;
-  /** Register / replace the active save fn (a mounted form calls this). */
-  setSave: (fn: ActiveSaveFn | null) => void;
+  /** The mounted saveable panels' save fns, keyed by a stable per-panel id. */
+  saves: ReadonlyMap<string, ActiveSaveFn>;
+  /** Register / replace the save fn for a panel key (a mounted form calls this). */
+  setSave: (key: string, fn: ActiveSaveFn) => void;
+  /** Clear a panel's registration (called on unmount). */
+  clearSave: (key: string) => void;
 }
 
 const useActiveSaveStore = create<ActiveSaveState>((set) => ({
-  save: null,
-  setSave: (fn) => set({ save: fn }),
+  saves: new Map<string, ActiveSaveFn>(),
+  setSave: (key, fn) =>
+    set((s) => {
+      const next = new Map(s.saves);
+      next.set(key, fn);
+      return { saves: next };
+    }),
+  clearSave: (key) =>
+    set((s) => {
+      if (!s.saves.has(key)) return s;
+      const next = new Map(s.saves);
+      next.delete(key);
+      return { saves: next };
+    }),
 }));
 
 /**
- * Register the active panel's save function for the dirty guard's "Save and
- * continue" (WR-01). Call from a form island; the registration is cleared on
- * unmount so a stale handler can never run after the panel changes.
+ * Register a panel's save function for the dirty guard's "Save and continue"
+ * (WR-01/WR-02). Call from a form island; the registration is keyed by a stable
+ * per-instance id so multiple saveable panels can each contribute (the Hero step's
+ * identity fields + hero SectionForm), and it is cleared on unmount so a stale
+ * handler can never run after the panel changes.
  */
 export function useRegisterActiveSave(save: ActiveSaveFn): void {
+  const key = useId();
   const setSave = useActiveSaveStore((s) => s.setSave);
+  const clearSave = useActiveSaveStore((s) => s.clearSave);
   useEffect(() => {
-    setSave(save);
-    return () => setSave(null);
-  }, [save, setSave]);
+    setSave(key, save);
+    return () => clearSave(key);
+  }, [key, save, setSave, clearSave]);
+}
+
+/**
+ * Flush EVERY registered panel save (WR-02 flush-all). Awaits all in parallel and
+ * returns `{ ok: true }` only when every save resolved ok — so the dirty guard
+ * proceeds only when nothing was left unsaved. With zero registrants it resolves
+ * `{ ok: true }` (nothing to save). Reads the live registry at call time (not via a
+ * render subscription) so it always flushes the CURRENTLY-mounted panels.
+ *
+ * Exported for the onboarding wizard (WR-01): its "Continue"/"Back"/stepper-jump are
+ * a flush-THEN-move (save the mounted panel(s), advance only on ok) rather than the
+ * dashboard's dialog-on-dirty flow — so it calls this directly instead of routing
+ * through the in-app `UnsavedChangesGuard` dialog.
+ */
+export async function flushAllActiveSaves(): Promise<{ ok: boolean }> {
+  const saves = Array.from(useActiveSaveStore.getState().saves.values());
+  if (saves.length === 0) return { ok: true };
+  const results = await Promise.all(saves.map((fn) => fn()));
+  return { ok: results.every((r) => r.ok) };
 }
 
 /** Copy (04-UI-SPEC §14 Copywriting / Destructive-confirm — load-bearing). */
@@ -152,7 +196,10 @@ export function UnsavedChangesGuard({ sectionLabel }: UnsavedChangesGuardProps) 
   const setDirty = useUIStore((s) => s.setDirty);
   const pending = useGuardState((s) => s.pending);
   const clear = useGuardState((s) => s.clear);
-  const activeSave = useActiveSaveStore((s) => s.save);
+  // WR-02: at least one saveable panel mounted (the keyed registry's size) — gates
+  // whether "Save and continue" is offered (never a button that promises a save it
+  // cannot perform). "Save and continue" flushes ALL mounted panels (flush-all).
+  const hasSaveablePanel = useActiveSaveStore((s) => s.saves.size > 0);
 
   // ── Path 2: arm beforeunload WHILE dirty; remove it when clean. ──
   useEffect(() => {
@@ -178,13 +225,12 @@ export function UnsavedChangesGuard({ sectionLabel }: UnsavedChangesGuardProps) 
   }
 
   async function handleSaveAndContinue() {
-    // WR-01: run the active panel's real save; proceed ONLY on a resolved ok save.
-    // On failure (validation/network) we KEEP the dialog open so the user does not
-    // lose their edits — the form surfaces its own field/banner errors. If no save
-    // is registered, the button is not rendered (see `canSave` below), so this is
-    // unreachable without a real save.
-    if (!activeSave) return;
-    const result = await activeSave();
+    // WR-01/WR-02: flush ALL mounted saveable panels; proceed ONLY when every save
+    // resolves ok. On any failure (validation/network) we KEEP the dialog open so
+    // the user does not lose their edits — each form surfaces its own field/banner
+    // errors. If no save is registered the button is not rendered (see `canSave`
+    // below), so this is unreachable without a real save.
+    const result = await flushAllActiveSaves();
     if (result.ok) runPending();
     // else: stay on the dialog (honest — no silent discard).
   }
@@ -198,9 +244,9 @@ export function UnsavedChangesGuard({ sectionLabel }: UnsavedChangesGuardProps) 
   return (
     <DirtyDialog
       sectionLabel={sectionLabel}
-      // Only offer "Save and continue" when a real save is registered (WR-01 —
-      // never a button that promises to save and then discards).
-      canSave={activeSave !== null}
+      // Only offer "Save and continue" when ≥1 real save is registered (WR-01/WR-02
+      // — never a button that promises to save and then discards).
+      canSave={hasSaveablePanel}
       onSaveAndContinue={handleSaveAndContinue}
       onDiscard={handleDiscard}
       onKeepEditing={clear}
