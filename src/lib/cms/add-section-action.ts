@@ -154,6 +154,9 @@ export async function addSectionAction(
     .from('portfolios')
     .select('id')
     .eq('user_id', sub) // RLS scopes to the owner; WR-05: `sub` guaranteed present.
+    //                      WR-04: `portfolios.user_id == auth.uid()` (001:95 FK to
+    //                      profiles.id, itself the auth.users FK at 001:54) — same
+    //                      `sub` axis as the profiles fallback read below.
     .maybeSingle();
   if (portfolioError) return { ok: false, error: ADD_FAILED };
   const portfolioId = (portfolioRow as { id?: string } | null)?.id;
@@ -196,10 +199,18 @@ export async function addSectionAction(
   //    public page (a hidden row renders nothing, but the page is purged for parity).
   let resolvedUsername = username;
   if (!resolvedUsername) {
+    // WR-04: this fallback keys `profiles.id` on `sub` while the portfolio read above
+    // keys `portfolios.user_id` on `sub`. The asymmetry is CORRECT and pinned by the
+    // schema: `profiles.id UUID PRIMARY KEY REFERENCES auth.users(id)`
+    // (001_initial_schema.sql:54) and `portfolios.user_id ... REFERENCES profiles(id)`
+    // (001:95), so `profiles.id == portfolios.user_id == auth.uid() == sub`. If a
+    // future migration ever makes `profiles.id` a surrogate distinct from auth.uid(),
+    // THIS read silently resolves to null → revalidatePath skipped → stale public page
+    // with no error surfaced; update both keys together if that contract changes.
     const { data } = await supabase
       .from('profiles')
       .select('username')
-      .eq('id', sub) // WR-05: `sub` guaranteed present (no `?? ''`).
+      .eq('id', sub) // WR-05: `sub` guaranteed present (no `?? ''`). WR-04: == auth.uid().
       .single();
     resolvedUsername = (data as { username?: string } | null)?.username ?? undefined;
   }
