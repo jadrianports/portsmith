@@ -46,6 +46,8 @@ import {
   type ContentStepSection,
   type ContentStepType,
 } from './steps/content-step';
+import { PublishStep } from './steps/publish-step';
+import { PayoffStep } from './steps/payoff-step';
 import {
   STEP_LABEL,
   type OnboardingStep,
@@ -222,9 +224,10 @@ export function OnboardingWizard({
   const contentSection = contentStep ? stepData[contentStep] : undefined;
 
   // 18-05 (D-15): once Publish resolves ok, the wizard hands the whole viewport to the
-  // full-screen "You're live" payoff. The PublishStep + PayoffStep are wired in Task 3
-  // (this is the content-step wiring); until then the publish step shows the placeholder.
-  void showPayoff;
+  // full-screen "You're live" payoff (copy-link / share / view-live + disable-on-exit).
+  if (showPayoff) {
+    return <PayoffStep username={username} />;
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12 lg:py-16">
@@ -266,6 +269,12 @@ export function OnboardingWizard({
             currentSlug={currentTemplateSlug}
             allowed={allowedTemplates}
           />
+        ) : current === 'publish' ? (
+          <PublishStep
+            published={published}
+            hasPlaceholders={hasPlaceholders}
+            onPublished={() => setShowPayoff(true)}
+          />
         ) : contentStep && contentSection ? (
           <ContentStep
             step={contentStep}
@@ -274,8 +283,8 @@ export function OnboardingWizard({
             identity={contentStep === 'hero' ? identity : undefined}
           />
         ) : (
-          // The Publish step (6) + the payoff are wired in Task 3; until then the
-          // placeholder holds the slot (and any content step missing its section row).
+          // The placeholder holds the slot for any content step missing its section row
+          // (post-bootstrap this never happens; it is a calm degrade, never a fake).
           <StepPlaceholder step={current} published={published} />
         )}
       </section>
