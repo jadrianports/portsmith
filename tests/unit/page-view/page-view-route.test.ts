@@ -60,13 +60,10 @@ vi.mock('@/lib/analytics/bot-denylist', () => ({
   isKnownBot: (ua: string | null) => isKnownBot(ua),
 }));
 
-// BotID server gate (D-06 / WR-01) — controllable per-case. Default: human. On the
-// high-volume beacon the disposition is a SILENT 200 drop (NOT 403/429), and a thrown
-// checkBotId degrades OPEN (isBot=false) so a BotID/OIDC outage never fails the beacon.
-const checkBotId = vi.fn(async (): Promise<{ isBot: boolean }> => ({ isBot: false }));
-vi.mock('botid/server', () => ({
-  checkBotId: () => checkBotId(),
-}));
+// NOTE (WR-01, Phase-16 review): page-view intentionally does NOT call `checkBotId()` —
+// it is excluded from the `<BotIdClient protect>` list, so a server call would be
+// signal-less + billed. The route does not import `botid/server`, so there is no mock
+// here and no BotID case below.
 
 // Runtime variable-specifier import (RED-tolerant: ERR_MODULE_NOT_FOUND at runtime,
 // NOT a tsc TS2307) — identical to report-route.test.ts's loadPost().
@@ -111,11 +108,9 @@ describe('ANLY-01/02 — POST /api/page-view (GREENED BY 15-03)', () => {
     countAndRecord.mockClear();
     hashClientIp.mockClear();
     isKnownBot.mockClear();
-    checkBotId.mockReset();
     countAndRecord.mockResolvedValue(true);
     hashClientIp.mockResolvedValue('deadbeef-hash');
     isKnownBot.mockReturnValue(false);
-    checkBotId.mockResolvedValue({ isBot: false });
   });
 
   it('(a) rejects a malformed body with 400 and does NOT insert', async () => {
@@ -185,27 +180,8 @@ describe('ANLY-01/02 — POST /api/page-view (GREENED BY 15-03)', () => {
     expect(arg.country).toBe('US');
   });
 
-  // WR-01 (Phase-16 code-review fix, a80ebde) — the BotID silent-drop on the beacon.
-  // Unlike contact/report (generic 403), page-view keeps its dropped-beacon posture:
-  //   - isBot -> a SILENT 200 { ok:true } with NO insert (never a 403/429 cap-oracle).
-  //   - a thrown checkBotId degrades OPEN (isBot=false) so a BotID/OIDC outage never
-  //     500s the high-volume beacon — the view is still recorded.
-  describe('WR-01 — BotID silent-drop / degrade-open (D-06)', () => {
-    it('isBot → silent 200 { ok:true } with NO insert (beacon posture, NOT 403/429)', async () => {
-      const POST = await loadPost();
-      checkBotId.mockResolvedValue({ isBot: true });
-      const res = await POST(postReq(validBody));
-      expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ ok: true });
-      expect(insert).not.toHaveBeenCalled();
-    });
-
-    it('WR-01: a thrown checkBotId degrades OPEN — the view is still recorded, never a 500', async () => {
-      const POST = await loadPost();
-      checkBotId.mockRejectedValue(new Error('VERCEL_OIDC_TOKEN is not set'));
-      const res = await POST(postReq(validBody));
-      expect(res.status).toBe(200);
-      expect(insert).toHaveBeenCalledTimes(1);
-    });
-  });
+  // WR-01 (Phase-16 review) — page-view's `checkBotId()` silent-drop was REMOVED: the
+  // beacon is excluded from the BotIdClient protect list, so the server call was
+  // signal-less + a per-beacon billed call. The route now relies on the UA denylist (d)
+  // + the per-hashed-IP flood cap (c) — both asserted above. There is no BotID case here.
 });

@@ -46,7 +46,6 @@
  * client AND `node:crypto` for the IP hash both require Node, never edge) + typed
  * JSON bodies only.
  */
-import { checkBotId } from 'botid/server';
 import { NextResponse } from 'next/server';
 
 import { isKnownBot } from '@/lib/analytics/bot-denylist';
@@ -89,22 +88,13 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: true }, { status: 200 });
   }
 
-  // 2b) D-06 / HARD-02 — BotID silent-drop, keep the beacon posture (no friction);
-  //     no-op off-Vercel. Joins the UA denylist as a SILENT drop returning the route's
-  //     EXISTING dropped-beacon shape (200 {ok:true}) — NOT a 403/429/204, so the
-  //     high-volume beacon never surfaces friction. No BotIdClient protect entry here.
-  let isBot = false;
-  try {
-    ({ isBot } = await checkBotId());
-  } catch {
-    // A transient BotID/OIDC outage must NOT fail the surface — degrade to "allow"
-    // (isBot=false), matching the ledger's fail-open posture (WR-01 / ledger.ts). BotID
-    // is a defense-in-depth speed-bump here, not the gate (UA denylist + ledger remain).
-    isBot = false;
-  }
-  if (isBot) {
-    return NextResponse.json({ ok: true }, { status: 200 });
-  }
+  // NO BotID gate here BY DESIGN (WR-01, Phase-16 review). `/api/page-view` is
+  // deliberately EXCLUDED from the `<BotIdClient protect>` list (layout.tsx:20-21 — the
+  // high-volume beacon collects no client signal), so a server `checkBotId()` here would
+  // be signal-less AND, in production, a per-beacon BILLED `/v1/is-bot` call + a
+  // per-request console warning — pure cost/noise on the single highest-volume route,
+  // against this phase's cost-hardening intent and the route's own exclusion contract.
+  // The UA denylist (above) + the per-hashed-IP flood cap (below) are the documented gates.
 
   // 3) Flood-guard via the shared ledger (count THEN insert — D-08). Subject =
   //    hashed IP. A null subject (no IP / no secret) SKIPS the cap (degrade, D-09).
