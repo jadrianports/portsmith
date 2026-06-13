@@ -40,7 +40,7 @@
  */
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ExternalLink, Eye, Mail, X } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Eye, Mail, Settings, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -507,6 +507,26 @@ export function EditorShell({
                 {unreadMessageCount}
               </span>
             ) : null}
+          </Link>
+
+          {/* Settings → the /dashboard/settings surface (D-16, 19-05): the persistent
+              account-settings entry link (password / email / export / delete). Sits
+              next to Messages — both are durable dashboard nav, not editor controls.
+              Same chrome Link styling as the sibling Messages/Preview links (border,
+              hover:text-accent — the accent is hover/focus only, NEVER a fill —
+              focus-visible ring). Chrome single-layer (Inter + Evergreen/Copper). */}
+          <Link
+            href="/dashboard/settings"
+            className={
+              'inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border px-4 ' +
+              'text-sm font-semibold text-foreground outline-none transition-colors ' +
+              'hover:border-border-strong hover:text-accent ' +
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+              'motion-reduce:transition-none'
+            }
+          >
+            <Settings aria-hidden="true" className="size-3.5" />
+            <span>Settings</span>
           </Link>
 
           {/* Preview → the 04-07 enable route. prefetch={false} is MANDATORY:
