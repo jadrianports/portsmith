@@ -1,0 +1,42 @@
+<!--
+  Portsmith — Secure email-change confirm template (ACCT-02 / D-05 / D-06 / D-08).
+
+  Pitfall 1 (the highest-risk item in Phase 19): WITHOUT this custom template,
+  gotrue falls back to its built-in email-change default which emits
+  `{{ .ConfirmationURL }}` (the PKCE `?code=` form). The hardened /auth/confirm
+  route ONLY does `verifyOtp({ token_hash, type })` — never
+  `exchangeCodeForSession` — so a `?code=` link would never deliver a token_hash
+  and the confirm would bounce generically to /login?error=auth. This template
+  emits the token_hash form, exactly like confirmation.html / recovery.html.
+
+  D-05 (Secure email change / `double_confirm_changes = true`): gotrue sends TWO
+  emails — one to the OLD address, one to the NEW address — each with its own
+  single-use `token_hash`, both carrying `type=email_change`. The user clicks
+  each; the change takes effect only after BOTH are verified (gotrue tracks the
+  half-confirmed state server-side — the app does not).
+
+  HARD RULES (verified by acceptance criteria — do NOT change to the alternatives):
+    - USE the token_hash + /auth/confirm link below (type=email_change).
+    - Do NOT switch to `{{ .ConfirmationURL }}` (PKCE code flow — breaks verifyOtp).
+    - Do NOT use type=email (that is the signup-confirm type, confirmation.html).
+    - `next=/dashboard/settings` lands the confirmed user back on the settings page;
+      it is a bare internal path accepted by the route's safeInternalPath guard
+      (T-19-02 open-redirect mitigation — the route still constrains `next`).
+
+  {{ .SiteURL }} resolves to config.toml [auth] site_url; /auth/confirm is in
+  additional_redirect_urls (it is).
+-->
+<h2>Confirm your new email address</h2>
+
+<p>We received a request to change the email address on your Portsmith account. To complete the change, confirm this address by clicking below.</p>
+
+<p>
+  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change&next=/dashboard/settings">
+    Confirm my email change
+  </a>
+</p>
+
+<p>If the button doesn't work, copy and paste this link into your browser:</p>
+<p>{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email_change&next=/dashboard/settings</p>
+
+<p>If you didn't request an email change, you can safely ignore this email — your email address won't change unless both the old and new addresses confirm it.</p>

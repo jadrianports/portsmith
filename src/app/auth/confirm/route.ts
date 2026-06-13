@@ -57,16 +57,23 @@ const DEFAULT_NEXT = '/dashboard';
 const RECOVERY_NEXT = '/update-password';
 
 /**
- * The ONLY `type` values this handler accepts (CR-02). The Supabase email
- * templates emit exactly these two — confirmation links carry `type=email` and
- * recovery links carry `type=recovery` (see supabase/templates/*.html). Anything
- * else (`signup`, `email_change`, `magiclink`, `invite`, or arbitrary attacker
- * input) is treated as a generic failure: we do NOT pass an unvalidated string
- * into `verifyOtp`, and we never route a non-`recovery` verified token through the
+ * The ONLY `type` values this handler accepts (CR-02 / D-06). The Supabase email
+ * templates emit exactly these three — confirmation links carry `type=email`,
+ * recovery links carry `type=recovery`, and the secure email-change template
+ * (`change-email.html`, ACCT-02) carries `type=email_change` (see
+ * supabase/templates/*.html). `email_change` was DELIBERATELY rejected before
+ * Phase 19; it is now emitted by a real runtime path (the change-email flow), so
+ * it is allowed here — the single literal added (T-19-02). It needs NO new switch
+ * case: an `email_change` success falls through the existing non-recovery branch
+ * to the validated `next` (the template passes `next=/dashboard/settings`, a bare
+ * internal path the safeInternalPath guard accepts), so the user lands back on
+ * the settings page. Anything else (`signup`, `magiclink`, `invite`, or arbitrary
+ * attacker input) is still a generic failure: we never pass an unvalidated string
+ * into `verifyOtp`, and never route a non-`recovery` verified token through the
  * attacker-controlled `next`. Add a value here ONLY when a real runtime path emits
  * it through this route.
  */
-const ALLOWED_TYPES = new Set<EmailOtpType>(['email', 'recovery']);
+const ALLOWED_TYPES = new Set<EmailOtpType>(['email', 'recovery', 'email_change']);
 
 /**
  * Returns a safe, INTERNAL redirect path or `null` if `raw` is not a same-origin

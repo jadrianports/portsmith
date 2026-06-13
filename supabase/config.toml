@@ -137,6 +137,16 @@ content_path = "./supabase/templates/confirmation.html"
 subject = "Reset your Portsmith password"
 content_path = "./supabase/templates/recovery.html"
 
+# Secure email-change confirm template (ACCT-02 / D-06 / D-08). Required, NOT
+# optional: without it gotrue's email-change default emits `{{ .ConfirmationURL }}`
+# (PKCE `?code=`) which the token_hash-only /auth/confirm route cannot consume
+# (Pitfall 1). This template emits `token_hash&type=email_change`, the form
+# verifyOtp consumes. `double_confirm_changes = true` (above, under [auth.email])
+# makes gotrue issue TWO OTPs (old + new inbox); both must confirm.
+[auth.email.template.email_change]
+subject = "Confirm your email change"
+content_path = "./supabase/templates/change-email.html"
+
 # Use an external OAuth provider. The full list of providers are:
 # `apple`, `azure`, `bitbucket`, `discord`, `facebook`, `github`, `gitlab`,
 # `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`, `twitter`,
