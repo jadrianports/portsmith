@@ -7,11 +7,15 @@
  * validated `next` (default /dashboard). This test pins:
  *
  *   - CR-02 (the headline fix): the `type` query param is ALLOWLISTED. Only
- *     `email` and `recovery` are accepted — anything else (`signup`,
- *     `email_change`, `magiclink`, arbitrary input) is treated as null → generic
+ *     `email`, `recovery`, and `email_change` (added in Phase 19 / D-06, emitted by
+ *     the secure email-change template) are accepted — anything else (`signup`,
+ *     `magiclink`, `invite`, arbitrary input) is treated as null → generic
  *     /login?error=auth, and `verifyOtp` is NEVER called with the rogue type. A
  *     non-recovery verified token therefore can never be routed through the
  *     attacker-controlled `next` for a disallowed type.
+ *   - email_change (D-06): accepted, verifyOtp called with type=email_change, and
+ *     routed through the SAME validated `next` branch as `email` (no special case);
+ *     a crafted off-origin `next` still falls back to /dashboard (hardening preserved).
  *   - the recovery branch ignores `next` and lands on /update-password.
  *   - the email branch honors a SAFE internal `next` but rejects an off-origin
  *     `next` (open-redirect hardening), defaulting to /dashboard.
@@ -93,7 +97,40 @@ describe('/auth/confirm — CR-02 type allowlist', () => {
     expect(locationOf(res).pathname).toBe('/update-password');
   });
 
-  it.each(['signup', 'email_change', 'magiclink', 'invite', 'phone_change', 'bogus'])(
+  it('accepts type=email_change and routes through the validated next (D-06)', async () => {
+    const res = await GET(
+      confirmRequest({
+        token_hash: 'tok',
+        type: 'email_change',
+        next: '/dashboard/settings',
+      }),
+    );
+    // email_change is now allowlisted: verifyOtp IS called with the literal type,
+    // and the destination is the validated `next` (no special-case switch — the
+    // change-email template passes next=/dashboard/settings).
+    expect(verifyOtp).toHaveBeenCalledTimes(1);
+    expect(verifyOtp.mock.calls[0][0]).toEqual({
+      type: 'email_change',
+      token_hash: 'tok',
+    });
+    expect(locationOf(res).pathname).toBe('/dashboard/settings');
+  });
+
+  it('email_change with a crafted off-origin next still falls back to /dashboard', async () => {
+    const res = await GET(
+      confirmRequest({
+        token_hash: 'tok',
+        type: 'email_change',
+        next: '//evil.com/phish',
+      }),
+    );
+    // Hardening preserved: the same safeInternalPath guard rejects the off-origin
+    // next for email_change exactly as for email.
+    expect(rawLocation(res)).toBe('/dashboard');
+    expect(rawLocation(res)).not.toContain('evil.com');
+  });
+
+  it.each(['signup', 'magiclink', 'invite', 'phone_change', 'bogus'])(
     'REJECTS a disallowed type=%s without ever calling verifyOtp → generic /login?error=auth',
     async (badType) => {
       const res = await GET(

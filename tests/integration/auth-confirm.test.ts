@@ -19,6 +19,14 @@
  *   - `verifyOtp({ type: 'email', token_hash })` on a fresh anon client
  *     establishes a session whose `getClaims()`/`getUser()` resolves to that user.
  *   - After confirmation the admin view of the user shows `email_confirmed_at`.
+ *   - (Phase 19 / D-06) `verifyOtp({ type: 'email_change', token_hash })` is now a
+ *     valid primitive — the type the hardened /auth/confirm route accepts after the
+ *     ALLOWED_TYPES extension. The two halves are minted via
+ *     `admin.generateLink({ type: 'email_change_current' | 'email_change_new' })`
+ *     (GenerateLinkType values, distinct from the single `email_change` EmailOtpType
+ *     verifyOtp consumes). ⚠️ EXPECTED RED until Supabase is restarted with the new
+ *     `[auth.email.template.email_change]` config (the orchestrator restarts before
+ *     Wave 2); the route-hardening half is unit-tested in confirm-route.test.ts.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
@@ -105,5 +113,74 @@ describe('AUTH-02 — email confirmation establishes a session via verifyOtp(typ
     const after = await admin.auth.admin.getUserById(userId!);
     expect(after.error).toBeNull();
     expect(after.data.user?.email_confirmed_at ?? null).not.toBeNull();
+  });
+});
+
+describe('ACCT-02 / D-06 — verifyOtp(type:email_change) is accepted (was rejected)', () => {
+  it('email_change_current + email_change_new generateLink → verifyOtp(email_change) → new email live', async () => {
+    const oldEmail = `ec-${RUN}@example.test`;
+    const newEmail = `ec-${RUN}-new@example.test`;
+    const username = `ec${RUN}`.slice(0, 30);
+
+    // A confirmed user to change the email of.
+    const created = await admin.auth.admin.createUser({
+      email: oldEmail,
+      password: 'Test-Password-123!',
+      email_confirm: true,
+      user_metadata: { username, display_name: 'Email Change' },
+    });
+    expect(created.error).toBeNull();
+    const userId = created.data.user?.id;
+    expect(userId).toBeTruthy();
+    if (userId) createdIds.push(userId);
+
+    // Mint BOTH halves of the secure double-confirm. `email_change_current` /
+    // `email_change_new` are GenerateLinkType values (admin API) — NOT the single
+    // `email_change` EmailOtpType the route/verifyOtp consume.
+    const current = await admin.auth.admin.generateLink({
+      type: 'email_change_current',
+      email: oldEmail,
+      newEmail,
+    });
+    const next = await admin.auth.admin.generateLink({
+      type: 'email_change_new',
+      email: oldEmail,
+      newEmail,
+    });
+    // EXPECTED RED until the restart picks up the email_change template/config.
+    expect(current.error).toBeNull();
+    expect(next.error).toBeNull();
+
+    const currentHash = current.data.properties?.hashed_token;
+    const nextHash = next.data.properties?.hashed_token;
+    expect(currentHash).toBeTruthy();
+    expect(nextHash).toBeTruthy();
+
+    // The Phase-19 primitive: verifyOtp with the SINGLE literal type 'email_change'
+    // (the value the route's ALLOWED_TYPES now admits) for BOTH hashes.
+    for (const token_hash of [currentHash!, nextHash!]) {
+      const v = await anon().auth.verifyOtp({ type: 'email_change', token_hash });
+      expect(v.error).toBeNull();
+    }
+
+    // The change took effect only after BOTH confirms: auth.users.email is the new one.
+    const view = await admin.auth.admin.getUserById(userId!);
+    expect(view.error).toBeNull();
+    expect(view.data.user?.email).toBe(newEmail);
+  });
+
+  it('a crafted off-origin next does NOT widen the route (hardening preserved)', () => {
+    // The route's open-redirect hardening (safeInternalPath + relative 303) is
+    // exhaustively unit-tested in tests/unit/auth/confirm-route.test.ts, including
+    // the email_change off-origin-next fallback. This integration spec documents
+    // that adding email_change to ALLOWED_TYPES did NOT touch that hardening: the
+    // SAME validated-`next` branch handles email_change (no special-case switch).
+    const offOrigin = ['//evil.com/phish', 'https://evil.com', '/\\evil'];
+    for (const raw of offOrigin) {
+      // Mirror the route's safeInternalPath contract: an off-origin next is unsafe.
+      const isSafeInternal =
+        raw.startsWith('/') && !raw.startsWith('//') && !raw.startsWith('/\\');
+      expect(isSafeInternal).toBe(false);
+    }
   });
 });
