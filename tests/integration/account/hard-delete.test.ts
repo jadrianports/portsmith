@@ -39,6 +39,7 @@ import {
 } from '../_setup';
 
 import { verifyCurrentPassword } from '@/lib/auth/reauth';
+import { sweepUserStorage } from '@/lib/media/sweep-user-storage';
 
 const admin = adminClient();
 const RUN = crypto.randomUUID().slice(0, 8);
@@ -65,18 +66,33 @@ async function signIn(user: TestUser): Promise<SupabaseClient> {
   return c;
 }
 
-/** Seed one object per bucket under {sub}/{context}/… via the service-role client. */
+/**
+ * Seed one object per bucket under {sub}/{context}/… via the service-role client.
+ *
+ * The buckets enforce a MIME allowlist (migration 003): `avatars`/`media` accept
+ * `image/jpeg|png|webp`, `resumes` accepts `application/pdf` only. An upload with a
+ * disallowed type (e.g. the `application/octet-stream` an unhinted `.bin` Blob
+ * defaults to) is rejected 415 and the object never lands — so each upload MUST set
+ * an allowed `contentType` and the seed MUST assert the upload succeeded (a silent
+ * seed failure would make the sweep assertions vacuously pass/fail on 0 objects).
+ */
 async function seedStorage(sub: string): Promise<void> {
-  const body = new Blob([new Uint8Array([1, 2, 3, 4])]);
-  await admin.storage.from('avatars').upload(`${sub}/avatar/seed.bin`, body, {
-    upsert: true,
-  });
-  await admin.storage.from('media').upload(`${sub}/project/seed.bin`, body, {
-    upsert: true,
-  });
-  await admin.storage.from('resumes').upload(`${sub}/resume/seed.bin`, body, {
-    upsert: true,
-  });
+  const bytes = new Uint8Array([1, 2, 3, 4]);
+  const image = new Blob([bytes], { type: 'image/webp' });
+  const pdf = new Blob([bytes], { type: 'application/pdf' });
+
+  const a = await admin.storage
+    .from('avatars')
+    .upload(`${sub}/avatar/seed.webp`, image, { upsert: true, contentType: 'image/webp' });
+  expect(a.error).toBeNull();
+  const m = await admin.storage
+    .from('media')
+    .upload(`${sub}/project/seed.webp`, image, { upsert: true, contentType: 'image/webp' });
+  expect(m.error).toBeNull();
+  const r = await admin.storage
+    .from('resumes')
+    .upload(`${sub}/resume/seed.pdf`, pdf, { upsert: true, contentType: 'application/pdf' });
+  expect(r.error).toBeNull();
 }
 
 /** Two-level list under {sub}/ → all object paths in one bucket (the sweep shape). */
@@ -282,10 +298,11 @@ describe('ACCT-03 — admin.deleteUser cascades the whole tree to 0 rows', () =>
   });
 });
 
-// HELPER-DRIVEN assertion — un-skip in the Wave-2 slice once
-// src/lib/media/sweep-user-storage.ts exists. Kept skipped (with a dynamic import)
-// so this file collects green under tsc while the module is absent.
-describe.skip('ACCT-03 — sweepUserStorage helper (un-skip when built)', () => {
+// HELPER-DRIVEN assertion — UN-SKIPPED in the Wave-2 slice (19-04) now that
+// src/lib/media/sweep-user-storage.ts exists. The Wave-0 scaffold reached the
+// not-yet-built module via a non-literal dynamic import inside `describe.skip`;
+// it is now a STATIC top-level import (see the top of this file) asserted live.
+describe('ACCT-03 — sweepUserStorage helper', () => {
   it('sweepUserStorage(sub) clears all {sub}/ objects across 3 buckets', async () => {
     const name = `delh${RUN}`.slice(0, 30);
     const user = await createTestUser({
@@ -297,18 +314,47 @@ describe.skip('ACCT-03 — sweepUserStorage helper (un-skip when built)', () => 
     createdIds.push(user.id);
     await seedStorage(user.id);
 
-    // Dynamic import via a NON-LITERAL specifier so tsc never resolves a
-    // not-yet-built module while this block is skipped (a literal dynamic-import
-    // path is still type-checked; a computed one is not). The Wave-2 slice that
-    // builds sweep-user-storage.ts replaces this with a static top-level import.
-    const sweepModulePath = ['@/lib/media', 'sweep-user-storage'].join('/');
-    const mod = (await import(/* @vite-ignore */ sweepModulePath)) as {
-      sweepUserStorage: (sub: string) => Promise<void>;
-    };
-    await mod.sweepUserStorage(user.id);
+    // Sanity: objects are present before the sweep.
+    const before =
+      (await listAllUnder('avatars', user.id)).length +
+      (await listAllUnder('media', user.id)).length +
+      (await listAllUnder('resumes', user.id)).length;
+    expect(before).toBeGreaterThanOrEqual(3);
+
+    await sweepUserStorage(user.id);
 
     for (const bucket of SWEEP_BUCKETS) {
       expect(await listAllUnder(bucket, user.id)).toHaveLength(0);
     }
+  });
+
+  it("never sweeps another tenant's folder (own-folder guard re-asserted)", async () => {
+    const aName = `delha${RUN}`.slice(0, 30);
+    const bName = `delhb${RUN}`.slice(0, 30);
+    const userA = await createTestUser({
+      email: `${aName}@example.test`,
+      password: PASSWORD,
+      username: aName,
+      display_name: 'Helper Tenant A',
+    });
+    const userB = await createTestUser({
+      email: `${bName}@example.test`,
+      password: PASSWORD,
+      username: bName,
+      display_name: 'Helper Tenant B',
+    });
+    createdIds.push(userA.id, userB.id);
+
+    await seedStorage(userB.id);
+
+    // Sweeping under A's sub must leave B's objects untouched (the guard rejects
+    // any path whose first segment is not the owner's sub).
+    await sweepUserStorage(userA.id);
+
+    const bSurvives =
+      (await listAllUnder('avatars', userB.id)).length +
+      (await listAllUnder('media', userB.id)).length +
+      (await listAllUnder('resumes', userB.id)).length;
+    expect(bSurvives).toBeGreaterThanOrEqual(3);
   });
 });
