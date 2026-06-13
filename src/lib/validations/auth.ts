@@ -35,7 +35,7 @@ import { usernameSchema } from './username';
  * "no chained `z.string().email()`" rule is about the VALIDATOR, which still lives
  * in the top-level `z.email()` on the pipe target.)
  */
-const canonicalEmail = z
+export const canonicalEmail = z
   .string()
   .trim()
   .toLowerCase()

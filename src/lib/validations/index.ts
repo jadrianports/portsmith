@@ -28,5 +28,8 @@ export * from './posts';
 // Auth (signup/login/reset/update-password request bodies — server-boundary gate).
 export * from './auth';
 
+// Account settings (change-email + delete-account request bodies — ACCT-01..04).
+export * from './account';
+
 // Page-view beacon (POST /api/page-view request body — server gate, D-04; no Turnstile).
 export * from './page-view';
