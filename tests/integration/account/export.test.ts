@@ -41,6 +41,21 @@ const PASSWORD = 'Test-Password-123!';
 /** Non-secret profile content columns (D-13 allowlist). */
 const PROFILE_COLUMNS = 'username, display_name, headline, avatar_url, resume_url';
 
+/**
+ * D-13 user-facing portfolio_settings allowlist — INCLUDES `email_public` (the
+ * intended-public contact address); EXCLUDES the internal id / portfolio_id /
+ * updated_at. Mirrors the route's SETTINGS_COLUMNS.
+ */
+const SETTINGS_COLUMNS =
+  'color_preset, dribbble_url, email_public, favicon_url, font_preset, ' +
+  'github_url, linkedin_url, meta_description, og_image_url, page_title, ' +
+  'theme_mode, twitter_url, visitor_theme_toggle, website_url';
+
+/** Authored blog-post fields (the markdown column is `body_md`, not `body`). */
+const BLOG_POST_COLUMNS =
+  'title, slug, body_md, excerpt, cover_image_url, cover_image_alt, ' +
+  'meta_title, meta_description, tags, published, published_at';
+
 interface ExportEnvelope {
   export_version: number;
   exported_at: string;
@@ -67,19 +82,40 @@ async function signIn(user: TestUser): Promise<SupabaseClient> {
 }
 
 /**
- * The route's read assembly (D-14) — authenticated RLS reads, no tenant filter in
- * app code (RLS scopes each read to the caller's own portfolio).
+ * The route's read assembly (D-14) — authenticated RLS reads, OWNER-SCOPED by the
+ * verified subject. NOTE: `profiles` and `portfolio_settings` BOTH carry a
+ * public-select RLS policy (published profiles / public portfolios — 004:70/117)
+ * IN ADDITION to the owner policy, so a bare unscoped read returns the owner's row
+ * PLUS every published tenant's row (a `.single()` then fails PGRST116 and an
+ * unscoped read would LEAK other tenants' published content). RLS alone does NOT
+ * scope these to one tenant — the route therefore scopes `profiles` by `id = sub`
+ * and settings/sections/blog_posts by the owner's OWN `portfolios.id` (resolved via
+ * `user_id = sub`). The `sub` is the server-verified claim subject, never client
+ * input — cross-tenant export is impossible. This mirrors the route exactly.
  */
-async function buildExport(owner: SupabaseClient): Promise<ExportEnvelope> {
+async function buildExport(owner: SupabaseClient, sub: string): Promise<ExportEnvelope> {
+  const { data: portfolio } = await owner
+    .from('portfolios')
+    .select('id')
+    .eq('user_id', sub)
+    .maybeSingle();
+  const portfolioId = (portfolio as { id?: string } | null)?.id ?? null;
+
   const [profile, settings, sections, posts] = await Promise.all([
-    owner.from('profiles').select(PROFILE_COLUMNS).single(),
-    owner.from('portfolio_settings').select('*').single(),
-    owner.from('sections').select('type, sort_order, visible, content'),
-    owner
-      .from('blog_posts')
-      .select(
-        'title, slug, body_md, excerpt, cover_image_url, cover_image_alt, meta_title, meta_description, tags, published, published_at',
-      ),
+    owner.from('profiles').select(PROFILE_COLUMNS).eq('id', sub).single(),
+    portfolioId
+      ? owner
+          .from('portfolio_settings')
+          .select(SETTINGS_COLUMNS)
+          .eq('portfolio_id', portfolioId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    portfolioId
+      ? owner.from('sections').select('type, sort_order, visible, content').eq('portfolio_id', portfolioId)
+      : Promise.resolve({ data: [] }),
+    portfolioId
+      ? owner.from('blog_posts').select(BLOG_POST_COLUMNS).eq('portfolio_id', portfolioId)
+      : Promise.resolve({ data: [] }),
   ]);
   return {
     export_version: 1,
@@ -121,7 +157,7 @@ describe('ACCT-04 — export shape + non-secret allowlist (D-13)', () => {
       .eq('portfolio_id', pid as unknown as string)
       .eq('type', 'about');
 
-    const env = await buildExport(owner);
+    const env = await buildExport(owner, user.id);
 
     // Envelope shape.
     expect(env.export_version).toBe(1);
@@ -164,19 +200,32 @@ describe('ACCT-04 — serialized export leaks no secret columns and excludes mes
       body: 'should never be exported',
     });
 
-    const serialized = JSON.stringify(await buildExport(owner), null, 2);
+    const env = await buildExport(owner, user.id);
+    const serialized = JSON.stringify(env, null, 2);
 
-    // Secret columns must be absent. `email_public` (settings) is the ALLOWED
-    // exception — strip it before asserting on the bare `"email"` token so the
-    // intended-public contact address doesn't trip the secret check.
-    const withoutEmailPublic = serialized.replace(/"email_public"/g, '"<allowed>"');
+    // The secret-column exclusion (D-13) applies to the STRUCTURED tenant-data
+    // objects at the trust boundary — `profile` + `settings`. It does NOT apply to
+    // user-AUTHORED `sections.content` JSONB, which legitimately carries arbitrary
+    // keys (a default `projects`/`experience` section ships a `"role": "Your Role"`
+    // field, and bios mention "the role you played") — that is the user's own
+    // content, which D-13 explicitly INCLUDES. So assert the secret PROFILE/SETTINGS
+    // columns are absent from those two objects, not from the whole blob (which
+    // would false-positive on legitimate content). `email_public` (settings) is the
+    // ALLOWED exception — strip it before the bare `"email"` token check.
+    const structured = JSON.stringify(
+      { profile: env.profile, settings: env.settings },
+      null,
+      2,
+    );
+    const withoutEmailPublic = structured.replace(/"email_public"/g, '"<allowed>"');
     expect(withoutEmailPublic).not.toContain('"email"');
     expect(withoutEmailPublic).not.toContain('"role"');
     expect(withoutEmailPublic).not.toContain('"storage_used_bytes"');
     expect(withoutEmailPublic).not.toContain('"locked"');
     expect(withoutEmailPublic).not.toContain('"deleted_at"');
 
-    // Messages (visitor PII) are excluded entirely.
+    // Messages (visitor PII) are excluded entirely — assert against the WHOLE
+    // envelope (there must be no `messages` key and no seeded visitor body anywhere).
     expect(serialized).not.toContain('"messages"');
     expect(serialized).not.toContain('should never be exported');
   });
@@ -206,7 +255,7 @@ describe('ACCT-04 — RLS isolation: user B cannot export user A (D-14)', () => 
     await ownerB.rpc('initialize_portfolio');
 
     // B's export, read on B's authenticated client, contains B's profile — never A's.
-    const envB = await buildExport(ownerB);
+    const envB = await buildExport(ownerB, userB.id);
     expect(envB.profile).not.toBeNull();
     expect(envB.profile!.username).toBe(bName);
     expect(envB.profile!.username).not.toBe(aName);
