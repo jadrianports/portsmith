@@ -39,6 +39,7 @@ import { notFound } from 'next/navigation';
 
 import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
 import { accentForSlug } from '@/lib/og/template-accent';
+import { resolveDisplayName } from '@/lib/og/og-image-url';
 import { ShareCard } from '@/lib/og/share-card';
 import { siteOrigin } from '@/lib/url';
 
@@ -94,8 +95,14 @@ export async function GET(
   // D-01/D-02: the accent is the ONLY thing pulled from the template world, PRE-RESOLVED to a hex
   // here (the card never imports accentForSlug). Null-guard every public-view column (all `| null`).
   const accent = accentForSlug(data.templateSlug);
-  const displayName = data.profile.display_name ?? username; // a published page always has one.
+  const displayName = resolveDisplayName(data, username); // WR-04 — the ONE shared fallback.
   const headline = data.profile.headline; // `null` → the card drops the headline line (D-04).
+  // WR-03: drive the monogram + URL line from the READ-CONFIRMED canonical username, not the raw
+  // request param. getPortfolioByUsername filters on `.eq('username', ...)` so they match today,
+  // but if that filter ever loosened (e.g. redirect-alias support) the card must render the
+  // canonical row's username, not the requested alias. Fall back to the param only if the view
+  // column is null (all public-view columns are `| null`).
+  const canonicalUsername = data.profile.username ?? username;
   // The bare host for the URL line (e.g. `portsmith.vercel.app`) — env-driven, never request Host.
   const siteHost = siteOrigin().replace(/^https?:\/\//, '');
 
@@ -126,7 +133,7 @@ export async function GET(
       <ShareCard
         displayName={displayName}
         headline={headline}
-        username={username}
+        username={canonicalUsername}
         accent={accent}
         siteHost={siteHost}
       />
