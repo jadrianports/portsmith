@@ -77,6 +77,10 @@ export default defineConfig({
             'tests/unit/**/*.test.ts',
             'tests/unit/**/*.test.tsx',
             'tests/build/**/*.test.ts',
+            // 20-01: the dynamic-share-image unit tests (pure accent map + D-06 URL
+            // builder) — same fast node env + @/* alias as tests/unit (no I/O, no DOM).
+            'tests/og/**/*.test.ts',
+            'tests/og/**/*.test.tsx',
           ],
         },
       },
