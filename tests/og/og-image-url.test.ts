@@ -47,4 +47,16 @@ describe('SHARE-03 / D-06 — shareImageUrl precedence ladder', () => {
       'https://cdn.example.com/me.png',
     );
   });
+
+  // CR-01 regression: og_image_url is validated to permit the empty string
+  // (`.or(z.literal(''))`), and the public view passes it through verbatim. An empty /
+  // whitespace-only override is "no override" and MUST fall through to the dynamic card —
+  // a `??` ladder would emit `og:image: ['']` (a blank tag on every crawler) instead.
+  it('falls through to the dynamic card when og_image_url is the empty string (CR-01)', () => {
+    expect(shareImageUrl('u', '')).toBe(siteUrl('/u/opengraph-image'));
+  });
+
+  it('falls through to the dynamic card when og_image_url is whitespace-only (CR-01)', () => {
+    expect(shareImageUrl('u', '   ')).toBe(siteUrl('/u/opengraph-image'));
+  });
 });

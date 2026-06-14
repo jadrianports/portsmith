@@ -5,7 +5,8 @@
  * `/[username]`, `/blog`, and `/services` metadata call sites (D-05) all derive the share-card
  * URL from ONE place and the precedence stays unit-testable:
  *
- *   1. explicit `settings.og_image_url`  — a user who deliberately set a custom image wins.
+ *   1. explicit, NON-BLANK `settings.og_image_url`  — a user who deliberately set a custom image
+ *      wins. An empty / whitespace-only value is "no override" and falls through (CR-01).
  *   2. the dynamic per-portfolio card    — `siteUrl('/<username>/opengraph-image')`.
  *
  * The static `og-default.png` is intentionally NOT part of this ladder: per D-04 it is reserved
@@ -26,7 +27,14 @@ import { siteUrl } from '@/lib/url';
  *
  * @param username    the portfolio owner's username (the dynamic card's route segment).
  * @param ogImageUrl  `settings.og_image_url` — the explicit per-portfolio override, or `null`.
+ *
+ * CR-01: coalesce on EMPTINESS, not just nullishness. `og_image_url` is validated by
+ * `httpUrlOrEmptyOptional`, which permits the empty string (`.or(z.literal(''))`), and the public
+ * view passes it through verbatim. A `??` ladder would emit `og:image: ['']` (a blank tag on every
+ * crawler) for a saved-empty override. An empty / whitespace-only value means "no override," so it
+ * must fall through to the dynamic card — not blank the tag. `?.trim()` also guards null/undefined.
  */
 export function shareImageUrl(username: string, ogImageUrl: string | null): string {
-  return ogImageUrl ?? siteUrl(`/${username}/opengraph-image`);
+  const override = ogImageUrl?.trim();
+  return override ? override : siteUrl(`/${username}/opengraph-image`);
 }
