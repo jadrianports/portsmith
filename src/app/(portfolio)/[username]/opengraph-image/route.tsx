@@ -53,13 +53,17 @@ export const revalidate = 3600;
 /** Mirror page.tsx: usernames not prebuilt render + cache on first request (bounded by ISR). */
 export const dynamicParams = true;
 
-/** The standard summary_large_image dimensions. */
-export const size = { width: 1200, height: 630 };
+/**
+ * The standard summary_large_image dimensions — re-used as the ImageResponse size.
+ * NOTE: this is a Route Handler (`route.tsx`), NOT the `opengraph-image.tsx`
+ * metadata-file convention, so `size`/`contentType`/`alt` are NOT special segment
+ * exports here (the build's RouteHandlerConfig validator rejects those) — they are
+ * plain module constants the GET handler reads, kept for the Plan-02 unit tests.
+ */
+export const SIZE = { width: 1200, height: 630 } as const;
 
-/** The OG image alt text (accessibility / crawler hint). */
-export const alt = 'Portfolio share card';
-
-export const contentType = 'image/png';
+/** The PNG content type the ImageResponse emits (kept as a named constant, not a segment export). */
+export const CONTENT_TYPE = 'image/png';
 
 /**
  * Pre-render the one known seeded username at build time — MUST match page.tsx's
@@ -69,11 +73,18 @@ export async function generateStaticParams(): Promise<{ username: string }[]> {
   return [{ username: 'jadrianports' }];
 }
 
-export default async function Image({
-  params,
-}: {
-  params: Promise<{ username: string }>;
-}): Promise<Response> {
+/**
+ * GET handler — a Route Handler returns a `Response`; `ImageResponse` IS one. This is
+ * option (b) (RESEARCH §3): a non-metadata-file Route Handler, so Next does NOT
+ * auto-inject an `og:image` and Plan-03's `buildPublicMetadata` owns tag emission +
+ * the D-06 override precedence. The default-`Image()`/`size`/`contentType` metadata-
+ * file shape would be auto-injected AND is rejected by the Route Handler type
+ * validator — hence the GET signature.
+ */
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ username: string }> },
+): Promise<Response> {
   const { username } = await params; // Next 16: params is a Promise — MUST await.
 
   // The SAME cookie-LESS, cache()'d, public-views-only read the page uses — zero new dynamism.
@@ -105,8 +116,7 @@ export default async function Image({
       />
     ),
     {
-      width: 1200,
-      height: 630,
+      ...SIZE,
       fonts: [
         { name: 'Inter', data: interSemiBold, weight: 600, style: 'normal' },
         { name: 'Inter', data: interRegular, weight: 400, style: 'normal' },

@@ -1,8 +1,8 @@
 /**
  * SHARE-01 / SHARE-02 — the opengraph-image Route Handler renders a real PNG.
  *
- * Invokes the route's default `Image({ params })` export with the Next-16 awaited-params shape and
- * asserts the returned `Response` is a real 1200×630 PNG: `content-type` includes `image/png` and
+ * Invokes the route's `GET(req, { params })` Route-Handler export with the Next-16 awaited-params
+ * shape and asserts the returned `Response` is a real 1200×630 PNG: `content-type` includes `image/png` and
  * the body is non-trivial (> 5000 bytes — a real card is tens of KB; a broken render is tiny or
  * throws). This exercises the full `new ImageResponse(<ShareCard/>, { fonts })` path including the
  * genuine `node:fs` Inter `.ttf` reads (Plan-01 bundled them), so it proves Satori actually
@@ -53,12 +53,19 @@ function makeData(overrides: Record<string, unknown> = {}) {
 const ROUTE = '@/app/(portfolio)/[username]/opengraph-image/route';
 
 async function loadImage(): Promise<
-  (arg: { params: Promise<{ username: string }> }) => Promise<Response>
+  (params: { username: string }) => Promise<Response>
 > {
   const mod = (await import(/* @vite-ignore */ ROUTE)) as {
-    default: (arg: { params: Promise<{ username: string }> }) => Promise<Response>;
+    GET: (
+      req: Request,
+      ctx: { params: Promise<{ username: string }> },
+    ) => Promise<Response>;
   };
-  return mod.default;
+  // Adapt the Route-Handler GET(req, ctx) signature to the test's params-only caller.
+  return (params: { username: string }) =>
+    mod.GET(new Request('https://portsmith.vercel.app/'), {
+      params: Promise.resolve(params),
+    });
 }
 
 const PREV = process.env.NEXT_PUBLIC_SITE_URL;
@@ -74,7 +81,7 @@ describe('SHARE-01 — GET /<username>/opengraph-image renders a real 1200×630 
     getPortfolioByUsername.mockResolvedValue(makeData());
     const Image = await loadImage();
 
-    const res = await Image({ params: Promise.resolve({ username: 'jadrianports' }) });
+    const res = await Image({ username: 'jadrianports' });
 
     expect(res).toBeInstanceOf(Response);
     expect(res.headers.get('content-type')).toContain('image/png');
@@ -90,7 +97,7 @@ describe('SHARE-01 — GET /<username>/opengraph-image renders a real 1200×630 
     );
     const Image = await loadImage();
 
-    const res = await Image({ params: Promise.resolve({ username: 'cher' }) });
+    const res = await Image({ username: 'cher' });
 
     expect(res.headers.get('content-type')).toContain('image/png');
     const body = new Uint8Array(await res.arrayBuffer());
@@ -101,9 +108,7 @@ describe('SHARE-01 — GET /<username>/opengraph-image renders a real 1200×630 
     getPortfolioByUsername.mockResolvedValue(null);
     const Image = await loadImage();
 
-    await expect(
-      Image({ params: Promise.resolve({ username: 'ghost' }) }),
-    ).rejects.toThrow(NotFoundError);
+    await expect(Image({ username: 'ghost' })).rejects.toThrow(NotFoundError);
   });
 });
 
@@ -129,14 +134,21 @@ describe('SHARE-02 / D-22 — the route mirrors page.tsx ISR config + introduces
     expect(mod.dynamicParams).toBe(true);
   });
 
-  it('exports size = { width: 1200, height: 630 }', async () => {
+  it('exports SIZE = { width: 1200, height: 630 } (the ImageResponse dimensions)', async () => {
     const mod = await import(/* @vite-ignore */ ROUTE);
-    expect(mod.size).toEqual({ width: 1200, height: 630 });
+    expect(mod.SIZE).toEqual({ width: 1200, height: 630 });
   });
 
-  it("exports contentType = 'image/png'", async () => {
+  it("exports CONTENT_TYPE = 'image/png'", async () => {
     const mod = await import(/* @vite-ignore */ ROUTE);
-    expect(mod.contentType).toBe('image/png');
+    expect(mod.CONTENT_TYPE).toBe('image/png');
+  });
+
+  it('exports a GET Route-Handler (option b — not the default-Image metadata-file shape)', async () => {
+    const mod = (await import(/* @vite-ignore */ ROUTE)) as { GET?: unknown; default?: unknown };
+    expect(typeof mod.GET).toBe('function');
+    // No default `Image` export — the metadata-file convention would auto-inject og:image.
+    expect(mod.default).toBeUndefined();
   });
 
   it('generateStaticParams() returns exactly [{ username: "jadrianports" }] (matches page.tsx)', async () => {
