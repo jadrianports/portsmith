@@ -100,10 +100,26 @@ export async function GET(
   const siteHost = siteOrigin().replace(/^https?:\/\//, '');
 
   // Satori needs raw font bytes (ArrayBuffer). Read both bundled Inter static weights via node:fs.
-  const [interSemiBold, interRegular] = await Promise.all([
-    readFile(join(process.cwd(), 'public/Inter-SemiBold.ttf')),
-    readFile(join(process.cwd(), 'public/Inter-Regular.ttf')),
-  ]);
+  // WR-02: the font read is this route's single I/O failure point (the card itself does zero I/O).
+  // A missing/renamed/locked font file would otherwise reject and surface a raw 500 — and because
+  // the route is ISR (`revalidate=3600`) a transient failure could be CACHED. Guard it: on failure
+  // degrade to Satori's default font (a valid, if unstyled, card) rather than crashing a cacheable
+  // response. No new dynamism, no host/secret read — the degrade path stays D-22-clean.
+  let fonts:
+    | { name: string; data: Buffer; weight: 400 | 600; style: 'normal' }[]
+    | undefined;
+  try {
+    const [interSemiBold, interRegular] = await Promise.all([
+      readFile(join(process.cwd(), 'public/Inter-SemiBold.ttf')),
+      readFile(join(process.cwd(), 'public/Inter-Regular.ttf')),
+    ]);
+    fonts = [
+      { name: 'Inter', data: interSemiBold, weight: 600, style: 'normal' },
+      { name: 'Inter', data: interRegular, weight: 400, style: 'normal' },
+    ];
+  } catch {
+    fonts = undefined; // Satori falls back to its default font — a degraded but valid card.
+  }
 
   return new ImageResponse(
     (
@@ -117,10 +133,7 @@ export async function GET(
     ),
     {
       ...SIZE,
-      fonts: [
-        { name: 'Inter', data: interSemiBold, weight: 600, style: 'normal' },
-        { name: 'Inter', data: interRegular, weight: 400, style: 'normal' },
-      ],
+      ...(fonts ? { fonts } : {}),
     },
   );
 }
