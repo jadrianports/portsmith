@@ -18,6 +18,17 @@
  * leak onto a client bundle, asserted separately by `check:bundle`). Each must prerender a
  * concrete ISR instance; a dynamic flip would break the same perf budget. T-13.2-22.
  *
+ * EXTENDED 20-03-T2 (SHARE-02) — the dynamic share-card GENERATOR segment
+ * (`/[username]/opengraph-image`, Plan 02's option-(b) Route Handler) must ITSELF
+ * prerender as ISR. This proves SHARE-02's POSITIVE half: the OG route prerendered
+ * (not dynamic), so the founder's card is built and ISR-cached on the same
+ * `revalidate=3600` posture as the page. The negative half — the page did NOT flip
+ * dynamic — is proved by the EXISTING `/[username]` + sub-route assertions staying
+ * green UNCHANGED (the page is untouched by Phase 20). The build emits the instance
+ * `/jadrianports/opengraph-image` with `srcRoute === '/[username]/opengraph-image'`
+ * and `initialRevalidateSeconds === 3600` (VERIFIED against the real prerender
+ * manifest — RESEARCH §7.2).
+ *
  * It reads the SAME authoritative build artifact `scripts/check-bundle-budget.ts`
  * uses — `.next/prerender-manifest.json` — and asserts the concrete prerendered
  * instance (`/jadrianports`, produced by `generateStaticParams`) exists with the
@@ -132,4 +143,44 @@ describe('D-21/D-22 — the dedicated sub-routes (/blog, /blog/[slug], /services
       });
     });
   }
+});
+
+/**
+ * SHARE-02 (20-03) — the dynamic share-card GENERATOR route prerenders as ISR.
+ *
+ * The Plan-02 `opengraph-image/route.tsx` Route Handler (option b) mirrors page.tsx's
+ * `revalidate`/`dynamicParams`/`generateStaticParams`, so the founder's card prebuilds
+ * into the manifest as `/jadrianports/opengraph-image` (srcRoute `/[username]/opengraph-image`,
+ * `initialRevalidateSeconds === 3600`). Asserting its PRESENCE is the deterministic
+ * proof the generator is ISR/static, not dynamic (Pitfall 6 — generateStaticParams
+ * drift would absent the instance). This is a NEW, additive case — it does not touch
+ * the `/[username]` or SUB_ROUTES assertions above (whose staying-green is SHARE-02's
+ * regression half).
+ */
+const OG_ROUTE_SRC = '/[username]/opengraph-image';
+const OG_ROUTE_INSTANCE = '/jadrianports/opengraph-image';
+
+describe('SHARE-02 — the opengraph-image generator route prerenders ● (SSG)/ISR, never ƒ (dynamic)', () => {
+  it('has a concrete prerendered instance in the prerender manifest (the OG card prebuilt)', () => {
+    const pm = readPrerenderManifest();
+    expect(
+      pm.routes?.[OG_ROUTE_INSTANCE],
+      `${OG_ROUTE_SRC} is NOT ISR/static — no prerendered instance "${OG_ROUTE_INSTANCE}" in ` +
+        'prerender-manifest.routes. The generator likely went DYNAMIC (ƒ) or its ' +
+        'generateStaticParams drifted from page.tsx (Pitfall 6), so the founder card ' +
+        'is not prebuilt — breaking the SHARE-02 positive proof.',
+    ).toBeTruthy();
+  });
+
+  it('maps the prerendered instance back to the /[username]/opengraph-image source route', () => {
+    const pm = readPrerenderManifest();
+    expect(pm.routes?.[OG_ROUTE_INSTANCE]?.srcRoute).toBe(OG_ROUTE_SRC);
+  });
+
+  it('carries a positive ISR revalidate (mirrors page.tsx revalidate=3600), confirming ISR not dynamic', () => {
+    const pm = readPrerenderManifest();
+    const revalidate = pm.routes?.[OG_ROUTE_INSTANCE]?.initialRevalidateSeconds;
+    expect(typeof revalidate).toBe('number');
+    expect(revalidate as number).toBeGreaterThan(0);
+  });
 });
