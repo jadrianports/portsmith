@@ -9,6 +9,10 @@
  *      wins. An empty / whitespace-only value is "no override" and falls through (CR-01).
  *   2. the dynamic per-portfolio card    — `siteUrl('/<username>/opengraph-image')`.
  *
+ * This module also owns `resolveDisplayName` (WR-04) — the ONE `display_name → username` fallback
+ * the metadata builder, the OG card route, and the `/blog`/`/services` sub-routes all share, so the
+ * card's rendered name can never drift from the `<title>`/`og:title` a crawler reads.
+ *
  * The static `og-default.png` is intentionally NOT part of this ladder: per D-04 it is reserved
  * for NON-portfolio pages (its art direction is LAUNCH-09 / Phase 23). A PUBLISHED portfolio
  * always has a `display_name`, so the dynamic card always renders something good — the override
@@ -20,6 +24,7 @@
  * creates (RESEARCH §3 option b: a non-metadata-file Route Handler, so `buildPublicMetadata`
  * owns tag emission and the D-06 override can actually win).
  */
+import type { PortfolioData } from '@/components/templates/types';
 import { siteUrl } from '@/lib/url';
 
 /**
@@ -37,4 +42,19 @@ import { siteUrl } from '@/lib/url';
 export function shareImageUrl(username: string, ogImageUrl: string | null): string {
   const override = ogImageUrl?.trim();
   return override ? override : siteUrl(`/${username}/opengraph-image`);
+}
+
+/**
+ * WR-04 — the ONE display-name fallback, shared by the metadata builder (`buildPublicMetadata`),
+ * the OG card route, and the `/blog`/`/services` sub-routes so the card's rendered name can never
+ * drift from the `<title>`/`og:title` a crawler reads. A published page always has a `display_name`;
+ * the `username` fallback (and the empty-string guard) is belt-and-suspenders for an in-progress
+ * profile. PURE over the already-loaded `PortfolioData` — no new request-time read (D-22 preserved).
+ *
+ * @param data      the already-loaded `PortfolioData` (no new I/O — pure over the loaded row).
+ * @param username  the route `username`, used as the fallback when `display_name` is null/blank.
+ */
+export function resolveDisplayName(data: PortfolioData, username: string): string {
+  const name = data.profile.display_name?.trim();
+  return name ? name : username;
 }

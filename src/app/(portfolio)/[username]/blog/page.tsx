@@ -23,7 +23,7 @@ import { getPublishedPosts } from '@/lib/portfolio/get-posts';
 import { EdgerunnerV2PageShell } from '@/components/templates/edgerunner-v2/pages/page-shell';
 import { BlogIndexContent } from '@/components/templates/edgerunner-v2/pages/blog/blog-index-content';
 import { subRouteRobots } from '@/lib/seo/public-metadata';
-import { shareImageUrl } from '@/lib/og/og-image-url';
+import { resolveDisplayName, shareImageUrl } from '@/lib/og/og-image-url';
 import { siteUrl } from '@/lib/url';
 
 /** D-21 ISR backstop — matches [username]/page.tsx */
@@ -54,7 +54,7 @@ export async function generateMetadata({
     return { title: 'Not found', robots: { index: false, follow: false } };
   }
 
-  const displayName = data.profile.display_name ?? username;
+  const displayName = resolveDisplayName(data, username); // WR-04 — the ONE shared fallback.
   const canonical = siteUrl(`/${username}/blog`);
   // Template-neutral, profession-agnostic blog description for the SHARED route
   // metadata — NO template-specific voice (the on-page heading/intro is the

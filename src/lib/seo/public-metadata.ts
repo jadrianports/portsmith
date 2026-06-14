@@ -33,7 +33,7 @@ import type { Metadata } from 'next';
 
 import type { PortfolioData } from '@/components/templates/types';
 import { isPublishReady } from '@/lib/cms/completeness';
-import { shareImageUrl } from '@/lib/og/og-image-url';
+import { resolveDisplayName, shareImageUrl } from '@/lib/og/og-image-url';
 import { siteUrl } from '@/lib/url';
 
 /**
@@ -74,7 +74,7 @@ export function subRouteRobots(data: PortfolioData): Pick<Metadata, 'robots'> {
  * over `data` + env (`siteUrl`); no request access.
  */
 export function buildPublicMetadata(data: PortfolioData, username: string): Metadata {
-  const displayName = data.profile.display_name ?? username;
+  const displayName = resolveDisplayName(data, username); // WR-04 — the ONE shared fallback.
   const title = data.settings.page_title ?? `${displayName} — Portfolio`;
   const description =
     data.settings.meta_description ?? data.profile.headline ?? undefined;
