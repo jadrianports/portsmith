@@ -20,6 +20,7 @@ import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
 import { EdgerunnerV2PageShell } from '@/components/templates/edgerunner-v2/pages/page-shell';
 import { ServicesPageContent } from '@/components/templates/edgerunner-v2/pages/services-page-content';
 import { subRouteRobots } from '@/lib/seo/public-metadata';
+import { shareImageUrl } from '@/lib/og/og-image-url';
 import { siteUrl } from '@/lib/url';
 
 /** D-21 ISR backstop — matches [username]/page.tsx */
@@ -62,11 +63,21 @@ export async function generateMetadata({
     alternates: { canonical },
     // D-18: inherit the portfolio's isPublishReady noindex gate (no side-door).
     ...subRouteRobots(data),
+    // D-05/D-06: reuse the SAME per-portfolio dynamic card (override → card ladder)
+    // the root page uses — one generator, env-driven via siteUrl (PUB-03); never the
+    // static og-default.png (D-04, reserved for non-portfolio pages).
     openGraph: {
       title: `Services — ${displayName}`,
       description,
       url: canonical,
-      images: [data.settings.og_image_url ?? siteUrl('/og-default.png')],
+      images: [shareImageUrl(username, data.settings.og_image_url)],
+    },
+    // SHARE-03: net-new Twitter/X large-image card (parity with /blog) — same card.
+    twitter: {
+      card: 'summary_large_image',
+      title: `Services — ${displayName}`,
+      description,
+      images: [shareImageUrl(username, data.settings.og_image_url)],
     },
   };
 }

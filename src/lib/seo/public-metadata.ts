@@ -18,18 +18,22 @@
  * │ outbound links crawlable even while the page itself is noindex.                 │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
- * PUB-03 (T-06-06): the canonical, the openGraph `url`, and the static OG default
- * are ALL built from `siteUrl()` — env-driven, never the request host — so the
- * route stays ISR-cacheable (D-22) and host-header injection cannot poison them.
+ * PUB-03 (T-06-06): the canonical, the openGraph `url`, and the share-image URL are
+ * ALL built from `siteUrl()` — env-driven, never the request host — so the route
+ * stays ISR-cacheable (D-22) and host-header injection cannot poison them.
  *
- * D-10: the share/OG image is a single static neutral default for every portfolio
- * (`/og-default.png`), with an optional per-portfolio `og_image_url` override when
- * one is set on the settings row (the editable preview image is otherwise deferred).
+ * SHARE-03 / D-06 (Phase 20): the share/OG image is the per-portfolio DYNAMIC card —
+ * `shareImageUrl(username, og_image_url)` resolves the D-06 ladder (explicit
+ * `settings.og_image_url` override → the dynamic `/<username>/opengraph-image` card).
+ * The static `og-default.png` is NO LONGER used for a portfolio page (D-04 reserves it
+ * for non-portfolio pages). A net-new `twitter` summary_large_image card mirrors the
+ * SAME resolved image URL (Twitter was absent entirely before this phase).
  */
 import type { Metadata } from 'next';
 
 import type { PortfolioData } from '@/components/templates/types';
 import { isPublishReady } from '@/lib/cms/completeness';
+import { shareImageUrl } from '@/lib/og/og-image-url';
 import { siteUrl } from '@/lib/url';
 
 /**
@@ -65,8 +69,9 @@ export function subRouteRobots(data: PortfolioData): Pick<Metadata, 'robots'> {
 
 /**
  * Build the PUBLIC-page Metadata for a published portfolio: per-portfolio
- * title/description, the siteUrl canonical, the SAFE-04 robots gate, and the
- * static OG default. PURE over `data` + env (`siteUrl`); no request access.
+ * title/description, the siteUrl canonical, the SAFE-04 robots gate, the D-06
+ * dynamic-card OG image, and the net-new Twitter summary_large_image card. PURE
+ * over `data` + env (`siteUrl`); no request access.
  */
 export function buildPublicMetadata(data: PortfolioData, username: string): Metadata {
   const displayName = data.profile.display_name ?? username;
@@ -78,6 +83,11 @@ export function buildPublicMetadata(data: PortfolioData, username: string): Meta
   // SAFE-04: noindex-but-reachable until the page is reasonably complete (D-11).
   const complete = isPublishReady(toGateInput(data));
 
+  // D-06: explicit og_image_url override → the dynamic per-portfolio card. The one
+  // shared URL builder feeds BOTH the OpenGraph and the net-new Twitter card so a
+  // single resolved URL drives every crawler (D-05 — /blog + /services reuse it too).
+  const ogImage = shareImageUrl(username, data.settings.og_image_url);
+
   return {
     title,
     description,
@@ -86,13 +96,20 @@ export function buildPublicMetadata(data: PortfolioData, username: string): Meta
     alternates: { canonical },
     // Withheld from indexes while incomplete; still followed + reachable (D-11).
     ...(complete ? {} : { robots: { index: false, follow: true } }),
-    // D-10: static neutral OG default for every portfolio (optional per-portfolio
-    // override when og_image_url is set). All URLs env-driven via siteUrl (PUB-03).
+    // SHARE-03 / D-06: the per-portfolio dynamic card (override → card ladder). All
+    // URLs env-driven via siteUrl (PUB-03); never the static og-default.png (D-04).
     openGraph: {
       title,
       description,
       url: canonical,
-      images: [data.settings.og_image_url ?? siteUrl('/og-default.png')],
+      images: [ogImage],
+    },
+    // SHARE-03: net-new Twitter/X large-image card mirroring the SAME resolved image.
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [ogImage],
     },
   };
 }

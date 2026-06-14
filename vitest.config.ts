@@ -81,6 +81,9 @@ export default defineConfig({
             // builder) — same fast node env + @/* alias as tests/unit (no I/O, no DOM).
             'tests/og/**/*.test.ts',
             'tests/og/**/*.test.tsx',
+            // 20-03: the public-metadata image-ladder + Twitter-card unit test
+            // (SHARE-03/D-06) — pure, env-pinned, same fast node env + @/* alias.
+            'tests/seo/**/*.test.ts',
           ],
         },
       },
