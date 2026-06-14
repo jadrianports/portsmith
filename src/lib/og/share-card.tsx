@@ -188,9 +188,14 @@ export function ShareCard({
             maxWidth: 820,
           }}
         >
+          {/* WR-01: display_name is validated up to 100 chars; line-clamp to 2 so a long
+              name can't wrap past the layout and push the bottom URL row off-canvas. */}
           <div
             style={{
-              display: 'flex',
+              display: '-webkit-box',
+              WebkitBoxOrient: 'vertical',
+              WebkitLineClamp: 2,
+              overflow: 'hidden',
               fontSize: 76,
               fontWeight: 600,
               lineHeight: 1.05,
@@ -201,9 +206,14 @@ export function ShareCard({
             {displayName}
           </div>
           {showHeadline ? (
+            // WR-01: headline is validated up to 500 chars; line-clamp to 2 so a long
+            // headline can't wrap into many lines and collapse the space-between layout.
             <div
               style={{
-                display: 'flex',
+                display: '-webkit-box',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: 2,
+                overflow: 'hidden',
                 marginTop: 20,
                 fontSize: 38,
                 fontWeight: 400,
