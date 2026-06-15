@@ -18,16 +18,13 @@ export function Hero() {
   return (
     <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
       <div className="landing-reveal mx-auto flex max-w-3xl flex-col items-start gap-6">
-        {/* D-10 DRAFT — James approves */}
         <h1 className="text-[1.75rem] font-semibold leading-tight tracking-[-0.02em] text-foreground sm:text-4xl">
           A polished portfolio in about 15 minutes — without designing anything.
         </h1>
-        {/* D-10 DRAFT — James approves */}
         <p className="max-w-2xl text-base leading-relaxed text-muted-foreground">
           Pick a curated template, fill in your experience, and publish. Portsmith handles
           the design, so you get a page you&rsquo;re proud to share — no skills required.
         </p>
-        {/* D-10 DRAFT — James approves */}
         <CtaLink href="/signup">Get started — free</CtaLink>
       </div>
     </section>

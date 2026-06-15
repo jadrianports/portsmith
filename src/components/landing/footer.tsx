@@ -19,16 +19,12 @@ export function Footer() {
           href="/"
           className="rounded-sm font-semibold text-brand outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          {/* D-10 DRAFT — James approves */}
           Portsmith
         </Link>
         <nav className="flex items-center gap-6">
-          {/* D-10 DRAFT — James approves */}
           <TextLink href="/legal">Terms</TextLink>
-          {/* D-10 DRAFT — James approves */}
           <TextLink href="/legal">Privacy</TextLink>
         </nav>
-        {/* D-10 DRAFT — James approves */}
         <p className="text-sm text-muted-foreground">© 2026 Portsmith</p>
       </div>
     </footer>

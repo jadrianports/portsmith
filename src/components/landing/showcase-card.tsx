@@ -67,7 +67,6 @@ export function ShowcaseCard({ username, imageSrc, alt, caption, name }: Showcas
       <img src={imageSrc} alt={alt} loading="lazy" className="block aspect-[16/10] w-full object-cover" />
       {/* Caption naming the profession contrast + a decorative external-link glyph. */}
       <div className="flex items-center justify-between gap-3 px-4 py-3">
-        {/* D-10 DRAFT — James approves */}
         <span className="text-base text-muted-foreground">{caption}</span>
         <ExternalLink aria-hidden="true" className="size-4 text-muted-foreground" />
       </div>

@@ -13,15 +13,12 @@ export function FinalCta() {
   return (
     <section className="px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
       <div className="landing-reveal mx-auto flex max-w-3xl flex-col items-start gap-6">
-        {/* D-10 DRAFT — James approves */}
         <h2 className="text-[1.75rem] font-semibold leading-tight tracking-[-0.02em] text-foreground sm:text-4xl">
           Your portfolio is 15 minutes away.
         </h2>
-        {/* D-10 DRAFT — James approves */}
         <p className="max-w-2xl text-base leading-relaxed text-muted-foreground">
           Pick a template, add your experience, and publish — free.
         </p>
-        {/* D-10 DRAFT — James approves */}
         <CtaLink href="/signup">Get started — free</CtaLink>
       </div>
     </section>

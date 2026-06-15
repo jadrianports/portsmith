@@ -22,7 +22,6 @@ export function LandingHeader() {
   return (
     <header className="border-b border-border">
       <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-        {/* D-10 DRAFT — James approves */}
         <Link
           href="/"
           className="rounded-sm text-lg font-semibold text-brand outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -30,12 +29,8 @@ export function LandingHeader() {
           Portsmith
         </Link>
         <div className="flex items-center gap-3 sm:gap-4">
-          {/* D-10 DRAFT — James approves */}
           <TextLink href="/login">Login</TextLink>
-          <CtaLink href="/signup">
-            {/* D-10 DRAFT — James approves */}
-            Get started — free
-          </CtaLink>
+          <CtaLink href="/signup">Get started — free</CtaLink>
         </div>
       </nav>
     </header>

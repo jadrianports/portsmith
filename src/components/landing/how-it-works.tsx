@@ -21,11 +21,9 @@ export function HowItWorks() {
   return (
     <section className="bg-surface-muted px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
       <div className="mx-auto max-w-6xl">
-        {/* D-10 DRAFT — James approves */}
         <h2 className="text-xl font-semibold text-foreground">How it works</h2>
         <div className="mt-8 grid gap-8 sm:grid-cols-3">
           <div className="landing-reveal">
-            {/* D-10 DRAFT — James approves */}
             <Step
               glyph={LayoutTemplate}
               title="Pick a template"
@@ -33,7 +31,6 @@ export function HowItWorks() {
             />
           </div>
           <div className="landing-reveal landing-reveal-delay-1">
-            {/* D-10 DRAFT — James approves */}
             <Step
               glyph={Pencil}
               title="Fill in your content"
@@ -41,7 +38,6 @@ export function HowItWorks() {
             />
           </div>
           <div className="landing-reveal landing-reveal-delay-2">
-            {/* D-10 DRAFT — James approves */}
             <Step
               glyph={Globe}
               title="Publish"
