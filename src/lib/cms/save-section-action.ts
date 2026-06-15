@@ -176,6 +176,24 @@ export async function saveSectionAction(input: SaveSectionInput): Promise<SaveSe
     return { ok: false, error: SAVE_FAILED };
   }
 
+  // 3b-i) ACTV-01 / D-06 — best-effort write-once first_save event. Fires ONLY here,
+  //   AFTER a CONFIRMED genuine content edit (the `updatedRows.length` gate above) —
+  //   never on a reorder/visibility/profile write, and never on the untouched-placeholder
+  //   case (those paths never run this action). The authenticated `supabase` client +
+  //   verified `sub` write under the activation_events own-INSERT RLS policy (NEVER
+  //   service-role — ACTV-03). `.upsert(..., { onConflict: 'user_id,event_type',
+  //   ignoreDuplicates: true })` is the write-once mechanism (PostgREST has no direct
+  //   ON CONFLICT DO NOTHING) — the UNIQUE(user_id, event_type) makes a 2nd save a no-op.
+  //   Wrapped in try/catch swallow: a failed event insert NEVER fails the save (T-21-07).
+  try {
+    await supabase.from('activation_events').upsert(
+      { user_id: sub, event_type: 'first_save' },
+      { onConflict: 'user_id,event_type', ignoreDuplicates: true },
+    );
+  } catch {
+    /* best-effort, swallow — the save already succeeded (T-21-07) */
+  }
+
   // 3c) WR-03 SERVER-RECOMPUTED orphan-delete leg (D-09 / D-10 / MEDIA-04) — runs ONLY
   //     AFTER the section UPDATE is confirmed (WR-02), so a failed save never deletes an
   //     object the surviving row still references. The delete set is recomputed ENTIRELY

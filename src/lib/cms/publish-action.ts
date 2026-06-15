@@ -97,6 +97,24 @@ export async function setPublished(published: boolean): Promise<SetPublishedResu
     .single();
   if (error) return { ok: false, error: UPDATE_FAILED };
 
+  // 2b) ACTV-01 / D-06 — best-effort write-once first_publish event. Fires ONLY when the
+  //    `published` argument is TRUE (a genuine publish flip); a `published=false` unpublish
+  //    records nothing (Pitfall 3). The authenticated `supabase` client + verified `sub`
+  //    write under the own-INSERT RLS policy (NEVER service-role — ACTV-03);
+  //    `.upsert(..., { ignoreDuplicates: true })` on the UNIQUE(user_id,event_type) is the
+  //    write-once mechanism, so publish→unpublish→republish leaves exactly one row.
+  //    Wrapped in try/catch swallow: a failed insert NEVER fails the publish (T-21-07).
+  if (published) {
+    try {
+      await supabase.from('activation_events').upsert(
+        { user_id: sub, event_type: 'first_publish' },
+        { onConflict: 'user_id,event_type', ignoreDuplicates: true },
+      );
+    } catch {
+      /* best-effort, swallow — the publish already succeeded (T-21-07) */
+    }
+  }
+
   // 3) Revalidate the public page so the live/404 flip is within seconds (PUB-01 /
   //    D-P4-02). LITERAL path, NO second arg (RESEARCH Pitfall 1 / CLAUDE.md).
   const username = (prof as { username?: string } | null)?.username;
@@ -196,6 +214,21 @@ export async function markOnboardedAndPublish(): Promise<SetPublishedResult> {
     .eq('id', sub)
     .is('onboarded_at', null);
   if (stampError) return { ok: false, error: UPDATE_FAILED };
+
+  // 2c) ACTV-01 / D-06 — best-effort write-once first_publish event. markOnboardedAndPublish
+  //    ALWAYS sets published=true (the wizard's terminal publish), so it ALWAYS fires. Same
+  //    authenticated client + verified `sub` + write-once upsert as setPublished — the
+  //    UNIQUE(user_id,event_type) makes a later publish (editor toggle or a 2nd wizard run)
+  //    a no-op, so a user reaching publish via either path records exactly one first_publish.
+  //    Wrapped in try/catch swallow: a failed insert NEVER fails the publish (T-21-07).
+  try {
+    await supabase.from('activation_events').upsert(
+      { user_id: sub, event_type: 'first_publish' },
+      { onConflict: 'user_id,event_type', ignoreDuplicates: true },
+    );
+  } catch {
+    /* best-effort, swallow — the publish already succeeded (T-21-07) */
+  }
 
   // 3) Revalidate the public page so the live/404 flip is within seconds (PUB-01 /
   //    D-P4-02). LITERAL path, NO second arg (RESEARCH Pitfall 1 / CLAUDE.md).
