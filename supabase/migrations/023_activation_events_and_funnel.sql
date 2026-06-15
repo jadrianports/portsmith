@@ -83,3 +83,71 @@ ALTER TABLE public.activation_events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY activation_events_own_insert ON public.activation_events
   FOR INSERT TO authenticated
   WITH CHECK (user_id = auth.uid());         -- the action inserts its own verified sub only
+
+-- (2) Signup event — a SEPARATE trigger on profiles INSERT (Discretion #2), NOT an
+--     edit to handle_new_user() and NOT inside initialize_portfolio(). Rationale:
+--       - initialize_portfolio() is the WRONG home: it fires at first dashboard load
+--         (auth.uid()-gated, idempotent early-return — 002:334-368), so it would MISS
+--         the signup moment and never fire for a user who signs up but never opens the
+--         dashboard. The signup moment is the profile-create path (handle_new_user,
+--         AFTER INSERT ON auth.users — 002:281-331) at the signUp call (D-06: fires at
+--         signUp, before email confirmation).
+--       - We do NOT edit handle_new_user's body: it has CR-02/CR-03 security carve-outs
+--         + an `EXCEPTION WHEN unique_violation` block; adding an event insert there
+--         risks that clause swallowing the WRONG error. A separate trigger keeps
+--         handle_new_user byte-unchanged, fires atomically in the same transaction as
+--         the profile insert (unbypassable), and covers EVERY profile-create path incl.
+--         future OAuth.
+--     SECURITY DEFINER so the insert bypasses RLS in the GoTrue/auth-admin execution
+--     context (same reason handle_new_user is DEFINER — 002:253-262). Degrade-open:
+--     ON CONFLICT DO NOTHING (write-once) + `EXCEPTION WHEN OTHERS THEN RETURN NEW` so a
+--     failed event insert NEVER blocks account creation (T-21-06).
+CREATE OR REPLACE FUNCTION public.record_signup_activation()
+RETURNS TRIGGER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  INSERT INTO public.activation_events (user_id, event_type)
+    VALUES (NEW.id, 'signup')
+    ON CONFLICT (user_id, event_type) DO NOTHING;   -- write-once, best-effort
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RETURN NEW;   -- degrade-open: a failed event insert NEVER blocks signup (T-21-06)
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER record_signup_activation_trigger
+  AFTER INSERT ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.record_signup_activation();
+
+-- (3) The aggregate funnel RPC (D-07) — mirrors 019's DEFINER RPCs VERBATIM:
+--     LANGUAGE plpgsql, SECURITY DEFINER SET search_path = '', every object
+--     public.-qualified, the is_admin() self-gate as the FIRST body statement, GRANT
+--     TO authenticated only. Returns ONLY per-stage aggregate counts (never raw
+--     activation_event rows — D-16). The DEFINER context bypasses RLS, so the inner
+--     `IF NOT public.is_admin() THEN RAISE` is the REAL (and only) authorization
+--     (T-21-03); the empty search_path + public.-qualified refs close the
+--     search-path-hijack footgun.
+--     ADMIN-EXCLUSION (Discretion #3 / D-08): JOIN profiles, filter `role <> 'admin'`
+--     so the operator/founder never inflates the funnel. `role` is NOT NULL DEFAULT
+--     'user' (001), so `<>` has no null-role edge case. Combined with the no-founder-
+--     backfill posture above, the founder contributes zero either way (Pitfall 6).
+CREATE OR REPLACE FUNCTION public.activation_funnel_counts()
+RETURNS TABLE (signup BIGINT, first_save BIGINT, first_publish BIGINT)
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = ''
+AS $$
+BEGIN
+  -- Self-gate (DEFINER bypasses RLS — this is the REAL authorization). T-21-03.
+  IF NOT public.is_admin() THEN RAISE EXCEPTION 'Not authorized'; END IF;
+  RETURN QUERY
+    SELECT
+      count(*) FILTER (WHERE e.event_type = 'signup')::bigint,
+      count(*) FILTER (WHERE e.event_type = 'first_save')::bigint,
+      count(*) FILTER (WHERE e.event_type = 'first_publish')::bigint
+    FROM public.activation_events e
+    JOIN public.profiles pr ON pr.id = e.user_id
+    WHERE pr.role <> 'admin';            -- admin/founder excluded (D-08 / Discretion #3)
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.activation_funnel_counts() TO authenticated;
