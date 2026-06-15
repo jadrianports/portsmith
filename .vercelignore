@@ -15,11 +15,16 @@
 # Planning corpus + docs + DB migrations + test suites never ship to the runtime bundle.
 # (supabase/ is safe to exclude: prod DB is provisioned out-of-band via `db push` from the
 # dev machine — see docs/runbooks/launch.md — never from the Vercel build.)
-.planning/
-docs/
-supabase/
-tests/
-e2e/
+#
+# LEADING SLASH IS LOAD-BEARING: an unanchored `supabase/` matches a `supabase` dir at ANY
+# depth — which silently excludes `src/lib/supabase/` (client/server/middleware/service-role)
+# and breaks the Vercel build with 58 "Can't resolve '@/lib/supabase/*'" errors. The local
+# build never catches it (nothing is excluded locally). Anchor every top-level dir to root.
+/.planning/
+/docs/
+/supabase/
+/tests/
+/e2e/
 
 # Local env + caches — re-covered here because .vercelignore replaces .gitignore (precedence).
 .env.local
