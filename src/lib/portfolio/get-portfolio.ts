@@ -37,6 +37,8 @@ import { resolveSpec, slugForTemplateId } from '@/components/templates/registry'
 import type { PortfolioData } from '@/components/templates/types';
 import type { Database } from '@/types/database';
 
+import { withHeroResumeUrl } from './inject-hero-resume';
+
 /**
  * Assemble {@link PortfolioData} for a published username, or `null` when the
  * username is missing/unpublished (which drives `notFound()` in the page).
@@ -138,7 +140,9 @@ export const getPortfolioByUsername = cache(
     return {
       profile,
       settings,
-      sections: sections ?? [],
+      // D-14: inject the LIVE profiles.resume_url into the hero content so a CMS resume
+      // change drives the "Download CV" button — instead of the value the seed baked in.
+      sections: withHeroResumeUrl(sections ?? [], profile.resume_url ?? null),
       portfolioId: portfolio.id, // feeds the dedicated blog routes' get-posts reads (D-16)
       recentPosts: recentPosts ?? [], // D-16 teaser source (latest 3 published posts)
       templateSlug, // resolved from the static map — drives <TemplateRenderer slug>

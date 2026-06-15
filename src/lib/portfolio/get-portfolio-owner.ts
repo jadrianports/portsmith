@@ -55,6 +55,7 @@ import type {
   PublicSection,
   PublicSettings,
 } from '@/components/templates/types';
+import { withHeroResumeUrl } from '@/lib/portfolio/inject-hero-resume';
 import { createClient } from '@/lib/supabase/server';
 
 /** The owner read returns the template contract PLUS the live `published` flag the
@@ -217,7 +218,9 @@ export async function getPortfolioOwnerByUsername(
   return {
     profile: profileData,
     settings: settingsData,
-    sections: projectedSections,
+    // D-14: inject the LIVE profiles.resume_url into the hero content (single source of
+    // truth) so the owner preview's "Download CV" button matches the public render.
+    sections: withHeroResumeUrl(projectedSections, profile.resume_url ?? null),
     portfolioId: portfolio.id, // owner's portfolio id (mirrors the public read).
     recentPosts: [], // owner preview does not render the homepage teaser from posts.
     templateSlug, // owner's persisted slug (resolved from the static map).
