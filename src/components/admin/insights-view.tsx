@@ -29,10 +29,11 @@
  * `@/components/ui/alert`; the typed shape from `@/lib/analytics/operator-analytics`;
  * `siteUrl` from `@/lib/url`.
  */
-import { Activity, BarChart3, ExternalLink, TrendingUp } from 'lucide-react';
+import { Activity, BarChart3, ExternalLink, Filter, TrendingUp } from 'lucide-react';
 
 import { Alert } from '@/components/ui/alert';
 import type {
+  ActivationFunnel,
   DailyViewsRow,
   OperatorInsights,
 } from '@/lib/analytics/operator-analytics';
@@ -47,7 +48,7 @@ export interface InsightsViewProps {
 }
 
 export function InsightsView({ insights }: InsightsViewProps) {
-  const { total, top, daily, buckets, reports, error } = insights;
+  const { total, top, daily, buckets, reports, funnel, error } = insights;
 
   // Total reports across the report-volume window — a passive count the operator
   // eyeballs (D-15: no comparison/warning copy, just the number).
@@ -205,6 +206,106 @@ export function InsightsView({ insights }: InsightsViewProps) {
           </div>
         )}
       </section>
+
+      {/* ── Section 3: Activation funnel (ACTV-02 / D-09) ───────────────────────── */}
+      <section aria-labelledby="insights-activation-heading">
+        <h2
+          id="insights-activation-heading"
+          className="mb-1 flex items-center gap-1.5 text-base font-semibold text-foreground"
+        >
+          <Filter aria-hidden="true" className="size-4 text-muted-foreground" />
+          Activation funnel
+        </h2>
+        {/* Window qualifier — "All time" (contrasts Traffic's "Last 30 days"). */}
+        <p className="mb-4 text-[13px] text-muted-foreground">All time</p>
+
+        <ActivationFunnelBlock funnel={funnel} />
+      </section>
+    </div>
+  );
+}
+
+/**
+ * The 3-stage activation funnel block (Surface A, UI-SPEC) — Signup → First save →
+ * Published, as three stacked rows. Each row is a stage label (Label 14/600) + its
+ * count (`tabular-nums`) over a proportional bar (fill width ∝ count relative to the
+ * Signup reference). The bar fill is brand EVERGREEN (`--color-brand`, the data-viz
+ * accent-scarcity rule — NEVER copper) over a `--color-surface-muted` track, and is
+ * decorative (`aria-hidden`) — the count + the between-stage conversion % carry the
+ * data TEXTUALLY (the source of truth). All-zero renders the reused `EmptyState`.
+ */
+function ActivationFunnelBlock({ funnel }: { funnel: ActivationFunnel }) {
+  const { signup, first_save: firstSave, first_publish: firstPublish } = funnel;
+
+  // All three stages empty → the reused EmptyState (no bars to draw).
+  if (signup === 0 && firstSave === 0 && firstPublish === 0) {
+    return (
+      <EmptyState
+        heading="No activation data yet"
+        body="As people sign up, save their first section, and publish, this funnel fills in."
+      />
+    );
+  }
+
+  // Bar width ∝ count relative to Signup (the reference width); guard divide-by-zero → 0.
+  const widthPct = (count: number) =>
+    signup > 0 ? Math.round((count / signup) * 100) : 0;
+  // Between-stage conversion = stage[n] / stage[n-1]; guard divide-by-zero → 0%.
+  const conversionPct = (curr: number, prev: number) =>
+    prev > 0 ? Math.round((curr / prev) * 100) : 0;
+
+  const stages = [
+    { key: 'signup', label: 'Signup', count: signup },
+    { key: 'first_save', label: 'First save', count: firstSave },
+    { key: 'first_publish', label: 'Published', count: firstPublish },
+  ] as const;
+
+  return (
+    <div className="rounded-md border border-border bg-surface p-4 shadow-[var(--shadow-card)] sm:p-6">
+      <div className="flex flex-col">
+        {stages.map((stage, i) => {
+          const prev = i > 0 ? stages[i - 1] : null;
+          const conversion = prev ? conversionPct(stage.count, prev.count) : null;
+          return (
+            <div key={stage.key}>
+              {/* Between-stage conversion % (caption 13px, tabular-nums) — text, never bar-only. */}
+              {conversion !== null ? (
+                <p className="py-1 text-[13px] tabular-nums text-muted-foreground">
+                  {conversion}% →
+                </p>
+              ) : null}
+
+              {/* Stage row — label + count, then the proportional bar beneath. */}
+              <div
+                aria-label={`${stage.label}: ${stage.count.toLocaleString()}${
+                  conversion !== null
+                    ? ` — ${conversion}% reached from ${prev?.label}`
+                    : ''
+                }`}
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-sm font-semibold text-foreground">
+                    {stage.label}
+                  </span>
+                  <span className="shrink-0 text-sm tabular-nums text-foreground">
+                    {stage.count.toLocaleString()}
+                  </span>
+                </div>
+                {/* Decorative proportional bar — evergreen fill over a muted track. */}
+                <div
+                  aria-hidden="true"
+                  className="mt-1.5 h-2 w-full overflow-hidden rounded-md bg-surface-muted"
+                >
+                  <div
+                    className="h-full rounded-md bg-[var(--color-brand)]"
+                    style={{ width: widthPct(stage.count) + '%' }}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

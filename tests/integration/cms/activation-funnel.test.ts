@@ -82,7 +82,7 @@ function countOf(rows: Array<{ event_type: string }>, type: string): number {
 // outer `.skip` is removed so the live-stack fixture hooks (beforeAll/afterAll) run
 // and the signup/first_save/first_publish write-once semantics + the funnel RPC
 // admin-exclusion / self-gate + the own-INSERT RLS now assert against the real schema.
-describe.skip('Phase 21 Activation Funnel — events + funnel RPC (FLIPPED ACTIVE BY 21-03)', () => {
+describe('Phase 21 Activation Funnel — events + funnel RPC (FLIPPED ACTIVE BY 21-03)', () => {
   beforeAll(async () => {
     // setupTwoUsers signs up two NORMAL owners (each bootstrapped); setupAdminUser
     // promotes one to role='admin'. The signup event fires inside the profile-create
@@ -138,8 +138,11 @@ describe.skip('Phase 21 Activation Funnel — events + funnel RPC (FLIPPED ACTIV
       expect(sec).toBeTruthy();
       const sectionId = (sec as { id: string }).id;
 
-      // First genuine edit → one first_save row (best-effort upsert keyed on
-      // (user_id, event_type) with ignoreDuplicates — the write-once mechanism).
+      // First genuine edit → one first_save row. The event write is a PLAIN `.insert()`
+      // (NOT an `ignoreDuplicates` upsert) keyed on the DB UNIQUE(user_id, event_type) for
+      // write-once — mirroring saveSectionAction's real write. An `ignoreDuplicates` upsert
+      // would force a PostgREST representation read-back that the SELECT-policy-less
+      // activation_events table (D-16) denies with 42501; a plain insert avoids that read-back.
       const save1 = await ctx.clientA
         .from('sections')
         .update({ content: { heading: 'About me', body: 'First real edit.' } })
@@ -148,12 +151,11 @@ describe.skip('Phase 21 Activation Funnel — events + funnel RPC (FLIPPED ACTIV
       expect((save1.data ?? []).length).toBe(1);
       await ctx.clientA
         .from('activation_events')
-        .upsert(
-          { user_id: ctx.userA.id, event_type: FIRST_SAVE },
-          { onConflict: 'user_id,event_type', ignoreDuplicates: true },
-        );
+        .insert({ user_id: ctx.userA.id, event_type: FIRST_SAVE });
 
       // Second edit → STILL one first_save row (write-once; the milestone is "ever saved").
+      // The repeat insert raises a 23505 UNIQUE violation (returned in `.error`, swallowed by
+      // the real action's try/catch) — the first row wins, no second row lands.
       await ctx.clientA
         .from('sections')
         .update({ content: { heading: 'About me', body: 'A second real edit.' } })
@@ -161,10 +163,7 @@ describe.skip('Phase 21 Activation Funnel — events + funnel RPC (FLIPPED ACTIV
         .select('id');
       await ctx.clientA
         .from('activation_events')
-        .upsert(
-          { user_id: ctx.userA.id, event_type: FIRST_SAVE },
-          { onConflict: 'user_id,event_type', ignoreDuplicates: true },
-        );
+        .insert({ user_id: ctx.userA.id, event_type: FIRST_SAVE });
 
       const rows = await eventsFor(ctx.userA.id);
       expect(countOf(rows, FIRST_SAVE)).toBe(1);
@@ -183,12 +182,11 @@ describe.skip('Phase 21 Activation Funnel — events + funnel RPC (FLIPPED ACTIV
           .update({ published })
           .eq('id', ctx.portfolioA);
         if (published) {
+          // Plain `.insert()` + DB UNIQUE for write-once — mirrors publish-action. The
+          // republish re-insert raises a swallowed 23505, so the row count stays at 1.
           await ctx.clientA
             .from('activation_events')
-            .upsert(
-              { user_id: ctx.userA.id, event_type: FIRST_PUBLISH },
-              { onConflict: 'user_id,event_type', ignoreDuplicates: true },
-            );
+            .insert({ user_id: ctx.userA.id, event_type: FIRST_PUBLISH });
         }
       };
 
@@ -282,12 +280,12 @@ describe.skip('Phase 21 Activation Funnel — events + funnel RPC (FLIPPED ACTIV
 
     it("user B CAN insert its OWN activation event (own-INSERT WITH CHECK passes)", async () => {
       // The positive half of the own-INSERT policy: B writing B's own user_id succeeds.
+      // A PLAIN `.insert()` (no `ignoreDuplicates` upsert) so PostgREST does NOT attempt the
+      // representation read-back the SELECT-policy-less table (D-16) would deny — the write
+      // is admitted because user_id = auth.uid() satisfies the WITH CHECK.
       const ok = await ctx.clientB
         .from('activation_events')
-        .upsert(
-          { user_id: ctx.userB.id, event_type: FIRST_SAVE },
-          { onConflict: 'user_id,event_type', ignoreDuplicates: true },
-        );
+        .insert({ user_id: ctx.userB.id, event_type: FIRST_SAVE });
       expect(ok.error).toBeNull();
       const bRows = await eventsFor(ctx.userB.id);
       expect(countOf(bRows, FIRST_SAVE)).toBe(1);

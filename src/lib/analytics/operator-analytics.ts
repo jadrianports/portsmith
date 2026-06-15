@@ -61,6 +61,21 @@ export interface ReportVolumeRow {
   reports: number;
 }
 
+/**
+ * The 3-stage activation funnel counts (ACTV-02 / D-09) — per-stage totals from the
+ * admin-self-gated `activation_funnel_counts` DEFINER RPC (migration 023). All-time,
+ * admin-excluded. The RPC `RETURNS TABLE(...)`, so its `data` is a SINGLE-ROW array we
+ * narrow with `[0]` (distinct from the scalar `page_view_total_count`).
+ */
+export interface ActivationFunnel {
+  /** Distinct non-admin users who signed up (the funnel reference width). */
+  signup: number;
+  /** …who then recorded a genuine first content save. */
+  first_save: number;
+  /** …who then published their portfolio at least once. */
+  first_publish: number;
+}
+
 /** The typed shape the `/admin/insights` RSC + `InsightsView` island consume. */
 export interface OperatorInsights {
   /** Total page views in the fixed recent window (30 days). */
@@ -73,6 +88,8 @@ export interface OperatorInsights {
   buckets: RateLimitBucketRow[];
   /** Per-day report-volume series (14-day window). */
   reports: ReportVolumeRow[];
+  /** The 3-stage activation funnel counts (all-time, admin-excluded — ACTV-02). */
+  funnel: ActivationFunnel;
   /**
    * True when at least one RPC returned an error (the data fields then hold their
    * calm defaults). The view shows the `<Alert variant="error">` load-error state
@@ -90,13 +107,17 @@ export async function getOperatorInsights(): Promise<OperatorInsights> {
   const supabase = await createClient(); // authenticated identity — the layout proved is_admin().
 
   // Each RPC self-gates on is_admin(); a non-admin would get an error (defense-in-depth).
-  const [totalRes, topRes, dailyRes, bucketsRes, reportsRes] = await Promise.all([
-    supabase.rpc('page_view_total_count', { p_days: 30 }),
-    supabase.rpc('page_view_top_portfolios', { p_days: 30, p_limit: 10 }),
-    supabase.rpc('page_view_daily_series', { p_days: 30 }),
-    supabase.rpc('rate_limit_events_by_bucket', { p_days: 7 }),
-    supabase.rpc('report_volume_series', { p_days: 14 }),
-  ]);
+  // The funnel RPC is the SAME authenticated DEFINER-RPC read posture (D-16) — never
+  // service-role, never a raw activation_events SELECT (the table has no SELECT policy).
+  const [totalRes, topRes, dailyRes, bucketsRes, reportsRes, funnelRes] =
+    await Promise.all([
+      supabase.rpc('page_view_total_count', { p_days: 30 }),
+      supabase.rpc('page_view_top_portfolios', { p_days: 30, p_limit: 10 }),
+      supabase.rpc('page_view_daily_series', { p_days: 30 }),
+      supabase.rpc('rate_limit_events_by_bucket', { p_days: 7 }),
+      supabase.rpc('report_volume_series', { p_days: 14 }),
+      supabase.rpc('activation_funnel_counts'),
+    ]);
 
   // A transient read error degrades to calm defaults + the `error` flag (so the
   // view shows the load-error Alert, not a misleading "no traffic" empty state).
@@ -105,7 +126,8 @@ export async function getOperatorInsights(): Promise<OperatorInsights> {
       topRes.error ||
       dailyRes.error ||
       bucketsRes.error ||
-      reportsRes.error,
+      reportsRes.error ||
+      funnelRes.error,
   );
 
   return {
@@ -114,6 +136,12 @@ export async function getOperatorInsights(): Promise<OperatorInsights> {
     daily: (dailyRes.data as DailyViewsRow[] | null) ?? [],
     buckets: (bucketsRes.data as RateLimitBucketRow[] | null) ?? [],
     reports: (reportsRes.data as ReportVolumeRow[] | null) ?? [],
+    // RETURNS TABLE(...) → a single-row ARRAY; narrow with [0] and fall back to all-zeros.
+    funnel: (funnelRes.data as ActivationFunnel[] | null)?.[0] ?? {
+      signup: 0,
+      first_save: 0,
+      first_publish: 0,
+    },
     error,
   };
 }
