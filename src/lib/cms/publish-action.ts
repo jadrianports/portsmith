@@ -100,18 +100,21 @@ export async function setPublished(published: boolean): Promise<SetPublishedResu
   // 2b) ACTV-01 / D-06 — best-effort write-once first_publish event. Fires ONLY when the
   //    `published` argument is TRUE (a genuine publish flip); a `published=false` unpublish
   //    records nothing (Pitfall 3). The authenticated `supabase` client + verified `sub`
-  //    write under the own-INSERT RLS policy (NEVER service-role — ACTV-03);
-  //    `.upsert(..., { ignoreDuplicates: true })` on the UNIQUE(user_id,event_type) is the
-  //    write-once mechanism, so publish→unpublish→republish leaves exactly one row.
-  //    Wrapped in try/catch swallow: a failed insert NEVER fails the publish (T-21-07).
+  //    write under the own-INSERT RLS policy (NEVER service-role — ACTV-03).
+  //    WRITE-ONCE via a PLAIN `.insert()` + the DB UNIQUE(user_id,event_type) — NOT an
+  //    `ignoreDuplicates` upsert (Rule-1 fix, 21-03): an `ignoreDuplicates` upsert sends
+  //    `Prefer: resolution=ignore-duplicates`, forcing a PostgREST representation read-back
+  //    that the SELECT-policy-less `activation_events` table (D-16) denies → a 42501 that
+  //    silently kills the write. A plain `.insert()` (no read-back) is admitted by RLS; a
+  //    repeat publish raises a 23505 the catch swallows — so publish→unpublish→republish
+  //    leaves exactly one row. Wrapped in try/catch: a failed insert NEVER fails the publish (T-21-07).
   if (published) {
     try {
-      await supabase.from('activation_events').upsert(
-        { user_id: sub, event_type: 'first_publish' },
-        { onConflict: 'user_id,event_type', ignoreDuplicates: true },
-      );
+      await supabase
+        .from('activation_events')
+        .insert({ user_id: sub, event_type: 'first_publish' });
     } catch {
-      /* best-effort, swallow — the publish already succeeded (T-21-07) */
+      /* best-effort, swallow — a 23505 dup (write-once) or any insert error; the publish already succeeded (T-21-07) */
     }
   }
 
@@ -217,17 +220,19 @@ export async function markOnboardedAndPublish(): Promise<SetPublishedResult> {
 
   // 2c) ACTV-01 / D-06 — best-effort write-once first_publish event. markOnboardedAndPublish
   //    ALWAYS sets published=true (the wizard's terminal publish), so it ALWAYS fires. Same
-  //    authenticated client + verified `sub` + write-once upsert as setPublished — the
-  //    UNIQUE(user_id,event_type) makes a later publish (editor toggle or a 2nd wizard run)
-  //    a no-op, so a user reaching publish via either path records exactly one first_publish.
+  //    authenticated client + verified `sub` + plain `.insert()` write-once as setPublished —
+  //    the UNIQUE(user_id,event_type) makes a later publish (editor toggle or a 2nd wizard run)
+  //    a no-op (the repeat raises a 23505 the catch swallows), so a user reaching publish via
+  //    either path records exactly one first_publish. A plain `.insert()` (NOT an
+  //    `ignoreDuplicates` upsert) avoids the PostgREST read-back that the SELECT-policy-less
+  //    table denies (D-16 — the 42501 Rule-1 fix, 21-03).
   //    Wrapped in try/catch swallow: a failed insert NEVER fails the publish (T-21-07).
   try {
-    await supabase.from('activation_events').upsert(
-      { user_id: sub, event_type: 'first_publish' },
-      { onConflict: 'user_id,event_type', ignoreDuplicates: true },
-    );
+    await supabase
+      .from('activation_events')
+      .insert({ user_id: sub, event_type: 'first_publish' });
   } catch {
-    /* best-effort, swallow — the publish already succeeded (T-21-07) */
+    /* best-effort, swallow — a 23505 dup (write-once) or any insert error; the publish already succeeded (T-21-07) */
   }
 
   // 3) Revalidate the public page so the live/404 flip is within seconds (PUB-01 /

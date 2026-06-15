@@ -181,17 +181,25 @@ export async function saveSectionAction(input: SaveSectionInput): Promise<SaveSe
   //   never on a reorder/visibility/profile write, and never on the untouched-placeholder
   //   case (those paths never run this action). The authenticated `supabase` client +
   //   verified `sub` write under the activation_events own-INSERT RLS policy (NEVER
-  //   service-role — ACTV-03). `.upsert(..., { onConflict: 'user_id,event_type',
-  //   ignoreDuplicates: true })` is the write-once mechanism (PostgREST has no direct
-  //   ON CONFLICT DO NOTHING) — the UNIQUE(user_id, event_type) makes a 2nd save a no-op.
+  //   service-role — ACTV-03).
+  //
+  //   WRITE-ONCE via a PLAIN `.insert()` + the DB `UNIQUE(user_id, event_type)` — NOT an
+  //   `.upsert(..., { ignoreDuplicates: true })`. RATIONALE (Rule-1 fix, 21-03): an
+  //   `ignoreDuplicates` upsert sends `Prefer: resolution=ignore-duplicates`, which makes
+  //   PostgREST read the affected row BACK as the response representation. `activation_events`
+  //   has NO SELECT RLS policy by design (D-16 — the table is read ONLY via the admin DEFINER
+  //   RPC), so that read-back is denied and the whole write fails with 42501 — silently
+  //   killing every best-effort event write. A plain `.insert()` (no chained `.select()`)
+  //   defaults to `return=minimal` (no read-back), so RLS admits it; a SECOND save then raises
+  //   a 23505 UNIQUE violation that the catch below swallows — the first write wins, every
+  //   later one is a no-op, exactly the write-once intent the UNIQUE constraint models.
   //   Wrapped in try/catch swallow: a failed event insert NEVER fails the save (T-21-07).
   try {
-    await supabase.from('activation_events').upsert(
-      { user_id: sub, event_type: 'first_save' },
-      { onConflict: 'user_id,event_type', ignoreDuplicates: true },
-    );
+    await supabase
+      .from('activation_events')
+      .insert({ user_id: sub, event_type: 'first_save' });
   } catch {
-    /* best-effort, swallow — the save already succeeded (T-21-07) */
+    /* best-effort, swallow — a 23505 dup (write-once) or any insert error; the save already succeeded (T-21-07) */
   }
 
   // 3c) WR-03 SERVER-RECOMPUTED orphan-delete leg (D-09 / D-10 / MEDIA-04) — runs ONLY
