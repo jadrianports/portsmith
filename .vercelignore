@@ -1,0 +1,28 @@
+# .vercelignore (D-02 — LAUNCH-01 / LAUNCH-10)
+#
+# The Vercel CLI uploads the working tree (NOT git history) on `vercel --prod`, filtered by
+# THIS file. PRECEDENCE: when a .vercelignore exists the CLI uses it INSTEAD of .gitignore —
+# they are NOT merged. So this list is self-sufficient: it cannot assume any .gitignore pattern
+# still applies, which is why the local env files + caches below are explicitly re-covered.
+# Vercel still applies its own built-in defaults (node_modules, .next, .git), but .env.local is
+# re-listed here as a belt-and-suspenders secret-leak guard (T-23-04).
+#
+# DO NOT add `scripts/`, `src/`, `public/`, `next.config.ts`, `package.json`, or `.env.example`
+# here — the build/`prebuild` runs `scripts/check-env.mjs`, and `public/` serves og-default.png,
+# the Inter .ttf fonts, and the landing showcase webp (src/components/landing/proof.tsx). D-03:
+# NO vercel.json — CSP/HSTS headers ship in next.config.ts headers() from Phase 16.
+
+# Planning corpus + docs + DB migrations + test suites never ship to the runtime bundle.
+# (supabase/ is safe to exclude: prod DB is provisioned out-of-band via `db push` from the
+# dev machine — see docs/runbooks/launch.md — never from the Vercel build.)
+.planning/
+docs/
+supabase/
+tests/
+e2e/
+
+# Local env + caches — re-covered here because .vercelignore replaces .gitignore (precedence).
+.env.local
+.env.*.local
+*.log
+.lighthouseci/
