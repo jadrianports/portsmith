@@ -1,0 +1,29 @@
+{
+  "_comment": "Lighthouse-CI config (D-12 / LAUNCH-02, plan 23-04). The four ci.collect.url values MIRROR scripts/seed/demo-usernames.ts (DEMO_USERNAMES: minimal=devon-park, editorial=lena-voss, edgerunner-v2=jadrianports, aurora=aurora-demo) and MUST be kept in sync with that single-source constant — a username change is one edit there + here. JSON has no comments, so this _comment key documents the coupling. These are already-live prod pages (deploy-gated): NO startServerCommand. ci.assert.assertions['categories:performance'] IS the perf gate — a sub-0.90 mobile run exits non-zero. Run: npm run lighthouse (lhci autorun); output to .lighthouseci (gitignored, plan 23-02). The live green numbers are recorded in the phase HUMAN-UAT, not this plan.",
+  "ci": {
+    "collect": {
+      "url": [
+        "https://portsmith.vercel.app/devon-park",
+        "https://portsmith.vercel.app/lena-voss",
+        "https://portsmith.vercel.app/jadrianports",
+        "https://portsmith.vercel.app/aurora-demo"
+      ],
+      "numberOfRuns": 3,
+      "settings": {
+        "formFactor": "mobile",
+        "screenEmulation": {
+          "mobile": true
+        }
+      }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["error", { "minScore": 0.9 }]
+      }
+    },
+    "upload": {
+      "target": "filesystem",
+      "outputDir": ".lighthouseci"
+    }
+  }
+}
