@@ -1,101 +1,151 @@
 /**
- * Generates `public/og-default.png` — the neutral fallback Open Graph share-card
- * image referenced by `buildPublicMetadata` (06-03 / SEO-01, D-10).
+ * Generates `public/og-default.png` — the BRAND Open Graph share-card fallback (LAUNCH-09 / D-16).
  *
- * This is a PLACEHOLDER per 06-UI-SPEC Surface 6: a 1200x630 (1.91:1) Midnight-Outrun
- * canvas at LOW intensity — a deep-midnight (#0c0b1e) field with a restrained sunset
- * horizon glow. NO branding/logo/wordmark, NO avatar, NO text. The founder may swap in
- * an art-directed asset later (tracked as a pre-public-launch item); regenerate/tweak
- * the palette here and re-run `node scripts/generate-og-default.mjs`.
+ * This is the OG image for CHROME pages without a dynamic per-portfolio card: the landing page
+ * (`src/app/(chrome)/page.tsx` → `siteUrl('/og-default.png')`) and the blog/services metadata
+ * fallbacks. It represents the BRAND, never a user — portfolio pages use the dynamic
+ * `/<username>/opengraph-image` card instead.
  *
- * Pure Node — no Sharp, no @vercel/og, no canvas (matches the no-server-image-processing
- * constraint). Hand-encodes a truecolor (RGB) PNG: signature + IHDR + IDAT (zlib) + IEND.
+ * REWRITTEN (Phase 23) from a text-less hand-encoded PNG onto the in-repo `next/og` (Satori +
+ * resvg) path — the same renderer `src/lib/og/share-card.tsx` uses — so it can render the
+ * "Portsmith" wordmark + the verbatim locked landing headline in Inter. The standalone-script
+ * `ImageResponse` → `await res.arrayBuffer()` path is verified (RESEARCH A2); `next/og` is bundled
+ * in next 16.2.6 (ZERO new packages).
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ SATORI CSS SUBSET — LOAD-BEARING (mirrors share-card.tsx):                      │
+ * │ - Every element with 2+ children sets `display:'flex'` (Satori has no block).   │
+ * │ - Inline `style` ONLY (no classNames).                                          │
+ * │ - Resolved hex ONLY — NO `oklch()` (Satori cannot parse it).                    │
+ * │ - The card is built as plain React-element-shaped objects ({type,props}) so this│
+ * │   stays a JSX-free `.mjs` script with no compile step.                          │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * DETERMINISTIC: pure inputs only (fixed text/hex + bundled Inter .ttf bytes) — no timestamp,
+ * no random — so a no-op re-run produces byte-identical output and `git diff` stays empty.
+ *
+ * Run: `node scripts/generate-og-default.mjs` → writes `public/og-default.png`. The output path
+ * is overridable via the `OG_DEFAULT_OUT` env var (used by the determinism unit test).
  */
-import { deflateSync } from 'node:zlib';
-import { writeFileSync, mkdirSync } from 'node:fs';
+// eslint-disable-next-line import/no-unresolved -- `next` has no exports map for ./og; the
+// explicit .js suffix is required under Node's ESM resolver (verified: bare `next/og` ERR_MODULE_NOT_FOUND).
+import { ImageResponse } from 'next/og.js';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
-const W = 1200;
-const H = 630;
+const CARD_WIDTH = 1200;
+const CARD_HEIGHT = 630;
 
-// CRC32 (PNG polynomial 0xEDB88320).
-const CRC = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (let i = 0; i < buf.length; i++) c = CRC[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-function chunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length, 0);
-  const typeBuf = Buffer.from(type, 'ascii');
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 0);
-  return Buffer.concat([len, typeBuf, data, crc]);
-}
-const clamp = (v) => (v < 0 ? 0 : v > 255 ? 255 : Math.round(v));
+// Brand palette (chrome @theme tokens, resolved hex — src/app/(chrome)/globals.css).
+const EVERGREEN = '#1B3A2E'; // --color-brand (background)
+const COPPER = '#C9683A'; // --color-accent (the accent rule)
+const BRAND_FOREGROUND = '#FBFAF8'; // --color-brand-foreground (wordmark + headline ink)
+const MUTED_FOREGROUND = '#C9D4CC'; // a quieter evergreen-tinted ink for the URL line
 
-// Midnight-Outrun palette (LOW intensity / restrained).
-const TOP = [12, 11, 30]; // #0c0b1e deep midnight
-const BOTTOM = [15, 12, 34]; // barely deeper toward the base
-const GLOW = [46, 20, 58]; // soft magenta-purple horizon bloom (peak add)
-const GLOW_CENTER = 0.8;
-const GLOW_SIGMA = 0.085;
-const LINE = [72, 34, 56]; // thin warmer sunset line just below the bloom
-const LINE_CENTER = 0.815;
-const LINE_SIGMA = 0.012;
+// The verbatim locked landing headline (incl. the em-dash) — src/components/landing/hero.tsx.
+const HEADLINE = 'A polished portfolio in about 15 minutes — without designing anything.';
 
-const rowBytes = W * 3 + 1; // +1 filter byte per scanline
-const raw = Buffer.alloc(rowBytes * H);
-for (let y = 0; y < H; y++) {
-  const t = y / (H - 1);
-  let r = TOP[0] + (BOTTOM[0] - TOP[0]) * t;
-  let g = TOP[1] + (BOTTOM[1] - TOP[1]) * t;
-  let b = TOP[2] + (BOTTOM[2] - TOP[2]) * t;
-  const gw = Math.exp(-((t - GLOW_CENTER) ** 2) / (2 * GLOW_SIGMA * GLOW_SIGMA));
-  r += GLOW[0] * gw;
-  g += GLOW[1] * gw;
-  b += GLOW[2] * gw;
-  const lw = Math.exp(-((t - LINE_CENTER) ** 2) / (2 * LINE_SIGMA * LINE_SIGMA));
-  r += LINE[0] * lw;
-  g += LINE[1] * lw;
-  b += LINE[2] * lw;
-  const R = clamp(r);
-  const G = clamp(g);
-  const B = clamp(b);
-  const rowStart = y * rowBytes;
-  raw[rowStart] = 0; // filter type: none
-  for (let x = 0; x < W; x++) {
-    const o = rowStart + 1 + x * 3;
-    raw[o] = R;
-    raw[o + 1] = G;
-    raw[o + 2] = B;
-  }
+const OUT_PATH = process.env.OG_DEFAULT_OUT
+  ? process.env.OG_DEFAULT_OUT
+  : join(process.cwd(), 'public', 'og-default.png');
+
+/** Tiny React-element constructor — keeps this a JSX-free `.mjs` (no compile step). */
+function el(type, style, children) {
+  return { type, props: { style, ...(children !== undefined ? { children } : {}) } };
 }
 
-const ihdr = Buffer.alloc(13);
-ihdr.writeUInt32BE(W, 0);
-ihdr.writeUInt32BE(H, 4);
-ihdr[8] = 8; // bit depth
-ihdr[9] = 2; // color type 2 = truecolor RGB
-ihdr[10] = 0; // compression
-ihdr[11] = 0; // filter
-ihdr[12] = 0; // interlace
+async function main() {
+  // Read the SAME bundled Inter static weights the dynamic ShareCard route loads.
+  const [interSemiBold, interRegular] = await Promise.all([
+    readFile(join(process.cwd(), 'public', 'Inter-SemiBold.ttf')),
+    readFile(join(process.cwd(), 'public', 'Inter-Regular.ttf')),
+  ]);
 
-const png = Buffer.concat([
-  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
-  chunk('IHDR', ihdr),
-  chunk('IDAT', deflateSync(raw, { level: 9 })),
-  chunk('IEND', Buffer.alloc(0)),
-]);
+  const card = el(
+    'div',
+    {
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+      width: '100%',
+      height: '100%',
+      backgroundColor: EVERGREEN,
+      padding: 96,
+      fontFamily: 'Inter',
+      color: BRAND_FOREGROUND,
+    },
+    [
+      // Top: the "Portsmith" wordmark (Inter SemiBold) — the brand, front and center.
+      el(
+        'div',
+        {
+          display: 'flex',
+          fontSize: 44,
+          fontWeight: 600,
+          letterSpacing: -0.5,
+          color: BRAND_FOREGROUND,
+        },
+        'Portsmith',
+      ),
+      // Middle: a Copper accent rule above the locked headline (Inter Regular).
+      el(
+        'div',
+        { display: 'flex', flexDirection: 'column' },
+        [
+          // The share-card accent-bar idiom: width:96, height:5, borderRadius:9999.
+          el('div', {
+            display: 'flex',
+            width: 96,
+            height: 5,
+            borderRadius: 9999,
+            backgroundColor: COPPER,
+            marginBottom: 36,
+          }),
+          el(
+            'div',
+            {
+              display: 'flex',
+              fontSize: 60,
+              fontWeight: 400,
+              lineHeight: 1.15,
+              letterSpacing: -1,
+              maxWidth: 920,
+              color: BRAND_FOREGROUND,
+            },
+            HEADLINE,
+          ),
+        ],
+      ),
+      // Bottom: a quiet brand URL line (env-agnostic — the public brand domain).
+      el(
+        'div',
+        {
+          display: 'flex',
+          fontSize: 30,
+          fontWeight: 400,
+          color: MUTED_FOREGROUND,
+        },
+        'portsmith.vercel.app',
+      ),
+    ],
+  );
 
-mkdirSync('public', { recursive: true });
-writeFileSync('public/og-default.png', png);
-console.log(`wrote public/og-default.png — ${W}x${H}, ${png.length} bytes`);
+  const res = new ImageResponse(card, {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    fonts: [
+      { name: 'Inter', data: interSemiBold, weight: 600, style: 'normal' },
+      { name: 'Inter', data: interRegular, weight: 400, style: 'normal' },
+    ],
+  });
+
+  const bytes = Buffer.from(await res.arrayBuffer());
+  await mkdir(dirname(OUT_PATH), { recursive: true });
+  await writeFile(OUT_PATH, bytes);
+  console.log(`wrote ${OUT_PATH} — ${CARD_WIDTH}x${CARD_HEIGHT}, ${bytes.length} bytes`);
+}
+
+main().catch((err) => {
+  console.error(`[generate-og-default] FAIL: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
+});
