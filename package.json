@@ -15,6 +15,7 @@
     "seed:founder": "tsx scripts/seed-founder-portfolio.ts",
     "seed:aurora": "tsx scripts/seed-aurora-demo.ts",
     "check:bundle": "tsx scripts/check-bundle-budget.ts",
+    "capture:landing-proof": "node scripts/capture-landing-proof.mjs",
     "ingest:scan": "tsx scripts/ingest-scan.ts",
     "gate:template": "node scripts/gate-template.mjs",
     "gate:security": "npx vitest run tests/unit/templates/security-grep.test.ts",
