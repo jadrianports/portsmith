@@ -26,6 +26,25 @@ import { Resend } from 'resend';
 /** The send result — deliberately tiny; callers only need ok/skipped/error, never throw. */
 export type ResendSendResult = 'sent' | 'skipped' | 'error';
 
+/** The minimal client surface this module uses (a subset of the Resend instance). */
+type ResendClient = { emails: { send: (...args: unknown[]) => Promise<{ error: unknown }> } };
+
+/**
+ * Construct the Resend client. The real SDK `Resend` is a CLASS (must be invoked with
+ * `new`); a `new`-first call covers that. The `catch` fallback to a plain call exists
+ * ONLY so a test double that mocks `Resend` as a plain factory function (not a class)
+ * still resolves a client — it never changes real-SDK behavior (the real class always
+ * succeeds on the `new` path and never reaches the fallback).
+ */
+function createResendClient(apiKey: string): ResendClient {
+  const Ctor = Resend as unknown as new (k: string) => ResendClient;
+  try {
+    return new Ctor(apiKey);
+  } catch {
+    return (Resend as unknown as (k: string) => ResendClient)(apiKey);
+  }
+}
+
 /** The minimal email shape this wrapper sends (a subset of the Resend SDK params). */
 export interface ResendEmail {
   /** The verified platform sender (`RESEND_FROM_EMAIL`) — NEVER the visitor (D-02). */
@@ -53,7 +72,7 @@ export async function sendOwnerEmail(email: ResendEmail): Promise<ResendSendResu
   if (!apiKey || !from) return 'skipped';
 
   try {
-    const resend = new Resend(apiKey);
+    const resend = createResendClient(apiKey);
     // The SDK's `{ data, error }` shape does NOT throw on an API-level error, but a
     // missing key / network failure / SDK internal CAN throw — hence the try/catch
     // wraps BOTH the construction and the send (NOTIF-02).

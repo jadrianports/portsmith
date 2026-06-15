@@ -101,7 +101,7 @@ const notification = {
 const ENV_KEYS = ['RESEND_API_KEY', 'RESEND_FROM_EMAIL'] as const;
 let savedEnv: Record<string, string | undefined>;
 
-describe.skip('NOTIF — notifyOwnerOfMessage wired to Resend (FLIPPED ACTIVE BY 21-04)', () => {
+describe('NOTIF — notifyOwnerOfMessage wired to Resend (FLIPPED ACTIVE BY 21-04)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset the lookup chain to the happy owner on every case.
