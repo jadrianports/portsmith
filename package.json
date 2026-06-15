@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/check-env.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -28,6 +29,8 @@
     "gate:parity": "npx playwright test e2e/template-visual-parity.spec.ts",
     "gate:blog-prod": "node scripts/gate-blog-prod-parity.mjs",
     "gate:budget": "npm run check:bundle",
+    "lighthouse": "lhci autorun",
+    "smoke:prod": "playwright test --config playwright.prod.config.ts",
     "preview:template": "tsx scripts/preview-template.ts"
   },
   "dependencies": {
@@ -61,6 +64,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.11.3",
+    "@lhci/cli": "0.15.1",
     "@playwright/test": "1.60.0",
     "@tailwindcss/postcss": "4.3.0",
     "@types/node": "^22",
