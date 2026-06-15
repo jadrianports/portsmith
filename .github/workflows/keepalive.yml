@@ -1,0 +1,35 @@
+name: Supabase keep-alive
+
+# Free-tier Supabase pauses after 7 days of inactivity. Ping the public /api/health
+# route twice a week (Mon + Thu — ~3-4 day gaps, safely under 7) so one trivial DB read
+# keeps Postgres warm. NO secrets: it only hits the public production URL. Also runnable
+# on demand from the Actions tab (workflow_dispatch).
+#
+# NOTE: GitHub auto-disables scheduled workflows after 60 days with no repo commits — a
+# push/commit to this repo resets that timer. If the prod URL ever changes (custom
+# domain), update PING_URL below.
+
+on:
+  schedule:
+    - cron: '17 8 * * 1,4' # Mon & Thu at 08:17 UTC (off-the-hour: GitHub delays :00 crons)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+env:
+  PING_URL: https://portsmith.vercel.app/api/health
+
+jobs:
+  ping:
+    name: Ping /api/health
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep Supabase warm
+        run: |
+          echo "Pinging Supabase keep-alive endpoint: $PING_URL"
+          curl --fail --show-error --silent --location \
+            --retry 3 --retry-delay 15 --max-time 30 \
+            "$PING_URL"
+          echo ""
+          echo "OK — Supabase activity registered."
