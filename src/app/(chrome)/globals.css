@@ -179,4 +179,42 @@ body {
   .payoff-enter {
     animation: payoff-rise-in 250ms ease-out;
   }
+
+  /*
+   * Landing-page reveal (Phase 22 / D-02 — LAND-05's zero-JS, reduced-motion-safe motion).
+   * The public landing page (hero, how-it-works steps, proof, final CTA) fades + rises ~250ms
+   * ease-out, in the SAME scoped-keyframe idiom as the onboarding payoff (Tailwind v4 ships no
+   * `animate-in`; the chrome bundle has NO animation plugin — `motion` is template-only). It
+   * animates ONLY under `prefers-reduced-motion: no-preference` — there is DELIBERATELY no base
+   * (outside-media-query) rule that sets `opacity: 0` on `.landing-reveal`, so a reduced-motion
+   * user sees the element in its FINAL visible state instantly (no transform/opacity tween),
+   * satisfying the mandatory reduced-motion-safe contract (SHARED-E / D-02).
+   *
+   * The how-it-works staggered reveal is a per-element delay, still zero-JS: apply
+   * `.landing-reveal` + one of the `.landing-reveal-delay-*` helpers below (each only adds an
+   * `animation-delay` inside this same no-preference block, so it too vanishes under
+   * reduced-motion). Every value resolves through standard CSS — no inline hex, no new @theme token.
+   */
+  @keyframes landing-rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .landing-reveal {
+    animation: landing-rise-in 250ms ease-out;
+  }
+
+  .landing-reveal-delay-1 {
+    animation-delay: 80ms;
+  }
+
+  .landing-reveal-delay-2 {
+    animation-delay: 160ms;
+  }
 }
