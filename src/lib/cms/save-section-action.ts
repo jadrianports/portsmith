@@ -190,9 +190,14 @@ export async function saveSectionAction(input: SaveSectionInput): Promise<SaveSe
   //   has NO SELECT RLS policy by design (D-16 — the table is read ONLY via the admin DEFINER
   //   RPC), so that read-back is denied and the whole write fails with 42501 — silently
   //   killing every best-effort event write. A plain `.insert()` (no chained `.select()`)
-  //   defaults to `return=minimal` (no read-back), so RLS admits it; a SECOND save then raises
-  //   a 23505 UNIQUE violation that the catch below swallows — the first write wins, every
-  //   later one is a no-op, exactly the write-once intent the UNIQUE constraint models.
+  //   defaults to `return=minimal` (no read-back), so RLS admits it. WR-02 / IN-04: only the
+  //   FIRST save lands a row; the 23505 UNIQUE-violation swallow is therefore the STEADY-STATE
+  //   path on EVERY save after the first (not a rare edge case) — a user saves many times and
+  //   only the first is novel, so each later save fires a guaranteed-to-fail insert the catch
+  //   below absorbs. The first write wins, every later one is a no-op, exactly the write-once
+  //   intent the UNIQUE constraint models. (Accepted cost: activation_events has no SELECT
+  //   policy (D-16) so a cheap "skip if present" pre-check is impossible without a schema
+  //   change; if save volume ever matters, route through an ON CONFLICT DO NOTHING DEFINER RPC.)
   //   Wrapped in try/catch swallow: a failed event insert NEVER fails the save (T-21-07).
   try {
     await supabase

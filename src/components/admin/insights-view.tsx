@@ -248,11 +248,14 @@ function ActivationFunnelBlock({ funnel }: { funnel: ActivationFunnel }) {
   }
 
   // Bar width ∝ count relative to Signup (the reference width); guard divide-by-zero → 0.
+  // WR-01: clamp — a funnel conversion is definitionally ≤100%; >100% is a
+  // pre-migration-cohort artifact (a non-admin user who predates migration 023 has
+  // save/publish events but no signup row — no backfill, D-08), not a real signal.
   const widthPct = (count: number) =>
-    signup > 0 ? Math.round((count / signup) * 100) : 0;
+    signup > 0 ? Math.min(100, Math.round((count / signup) * 100)) : 0;
   // Between-stage conversion = stage[n] / stage[n-1]; guard divide-by-zero → 0%.
   const conversionPct = (curr: number, prev: number) =>
-    prev > 0 ? Math.round((curr / prev) * 100) : 0;
+    prev > 0 ? Math.min(100, Math.round((curr / prev) * 100)) : 0;
 
   const stages = [
     { key: 'signup', label: 'Signup', count: signup },
