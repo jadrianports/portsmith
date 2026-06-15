@@ -2,7 +2,8 @@
  * Footer — the slim closing utility band (D-06).
  *
  * A `<footer>` with a `border-t border-border` hairline holding the wordmark, the two
- * `/legal` links (Terms / Privacy via the `Link` primitive — copper-on-hover), and a
+ * legal links (Terms → `/legal#terms-heading`, Privacy → `/legal#privacy-heading` via
+ * the `Link` primitive — copper-on-hover; the combined `/legal` page anchors both), and a
  * `--color-muted-foreground` copyright line. No newsletter, no sitemap, no social row
  * (out of the focused-single-page scope). Deliberately non-focal — subordinate to the
  * final CTA above it. Stacks on mobile, single row on desktop. Chrome tokens only.
@@ -22,8 +23,8 @@ export function Footer() {
           Portsmith
         </Link>
         <nav className="flex items-center gap-6">
-          <TextLink href="/legal">Terms</TextLink>
-          <TextLink href="/legal">Privacy</TextLink>
+          <TextLink href="/legal#terms-heading">Terms</TextLink>
+          <TextLink href="/legal#privacy-heading">Privacy</TextLink>
         </nav>
         <p className="text-sm text-muted-foreground">© 2026 Portsmith</p>
       </div>

@@ -58,7 +58,7 @@
  *   Prod:   SEED_TARGET=prod npm run seed:aurora         (or `npm run seed:aurora -- --confirm-prod`)
  */
 import { createClient } from '@supabase/supabase-js';
-import { profileSchema, validateSectionContent } from '@/lib/validations';
+import { profileSchema, settingsSchema, validateSectionContent } from '@/lib/validations';
 import { AURORA_DEMO } from './seed/aurora-content';
 
 // Load .env.local so `npm run seed:aurora` works without manual `export`s.
@@ -352,19 +352,35 @@ async function main(): Promise<void> {
   // `index.tsx`: defaultMode = theme_mode==='dark' ? 'dark' : 'light'). The rosy look is
   // the showcase that makes the dev-vs-marketer contrast pop in the LAND-03 proof block
   // (D-04 "always looks good"); the visitor toggle stays on so dark mode is still reachable.
+  // Gate the user-editable settings through the SAME `settingsSchema` the CMS uses
+  // (the CR-01 stored-XSS URL gate) BEFORE this service-role write — the privileged
+  // path must NOT bypass the Zod gate (WR-02). Pass `undefined` (not `null`) for absent
+  // URLs since the schema is URL-or-empty-or-omitted; a throw aborts the seed.
+  const validatedSettings = settingsSchema.parse({
+    theme_mode: 'light',
+    visitor_theme_toggle: true,
+    color_preset: 'default',
+    font_preset: 'default',
+    page_title: AURORA_DEMO.settings.page_title,
+    meta_description: AURORA_DEMO.settings.meta_description,
+    email_public: AURORA_DEMO.settings.email_public,
+    linkedin_url: AURORA_DEMO.settings.linkedin_url ?? undefined,
+    twitter_url: AURORA_DEMO.settings.twitter_url ?? undefined,
+    website_url: AURORA_DEMO.settings.website_url ?? undefined,
+  });
   const { error: settingsError } = await admin.from('portfolio_settings').upsert(
     {
       portfolio_id: portfolioId,
-      theme_mode: 'light',
-      visitor_theme_toggle: true,
-      color_preset: 'default',
-      font_preset: 'default',
-      page_title: AURORA_DEMO.settings.page_title,
-      meta_description: AURORA_DEMO.settings.meta_description,
-      email_public: AURORA_DEMO.settings.email_public,
-      linkedin_url: AURORA_DEMO.settings.linkedin_url ?? null,
-      twitter_url: AURORA_DEMO.settings.twitter_url ?? null,
-      website_url: AURORA_DEMO.settings.website_url ?? null,
+      theme_mode: validatedSettings.theme_mode,
+      visitor_theme_toggle: validatedSettings.visitor_theme_toggle,
+      color_preset: validatedSettings.color_preset,
+      font_preset: validatedSettings.font_preset,
+      page_title: validatedSettings.page_title,
+      meta_description: validatedSettings.meta_description,
+      email_public: validatedSettings.email_public,
+      linkedin_url: validatedSettings.linkedin_url ?? null,
+      twitter_url: validatedSettings.twitter_url ?? null,
+      website_url: validatedSettings.website_url ?? null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'portfolio_id' },
