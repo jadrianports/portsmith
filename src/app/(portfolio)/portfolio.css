@@ -1,20 +1,83 @@
 /*
- * Chrome-token-free CSS entry for the LEAN public (portfolio) root layout (D-02).
+ * CSS entry for the LEAN public (portfolio) root layout (D-02).
  *
- * D-02 VERDICT (08-RESEARCH.md): the public portfolio templates use ZERO Tailwind
+ * D-02 VERDICT (08-RESEARCH.md): the public portfolio TEMPLATES use ZERO Tailwind
  * utility classes but DO depend on Tailwind PREFLIGHT — `*, ::before, ::after {
  * box-sizing: border-box }`, `body { margin: 0 }`, and the heading/button/img
  * normalizations. So this entry keeps `@import "tailwindcss";` (preflight + the
- * tree-shaken-to-nothing utilities layer) while shipping ZERO platform-chrome:
+ * tree-shaken utilities layer). Templates paint their OWN scoped, full-bleed canvas
+ * via `theme.css` (`.tmpl-*` sets `background: var(--bg)` + `min-height: 100vh`), so
+ * the lean root needs no chrome `body` rule.
  *
- *   - NONE of the chrome design tokens (Evergreen/Copper — CMS-only, two-layer
- *     isolation): no at-theme block, no `--color-*` custom properties.
- *   - NO chrome `body { background/color/font-family/font-feature-settings }` rules.
- *   - NONE of the chrome preview-banner / crop-modal keyframes.
- *
- * Templates paint their OWN scoped, full-bleed canvas via `theme.css` (`.tmpl-*`
- * sets `background: var(--bg)` + `min-height: 100vh`), so the lean root needs no
- * body background. This is the entire chrome-free public-root strip — Plan 03's
- * pixel-diff against Plan 01's pre-refactor baselines is the proof this call held.
+ * THE ONE CHROME EXCEPTION — the PreviewBanner (D-17 / 07-05). The owner-only
+ * draft-mode `PreviewBanner` is the SINGLE chrome client component that ever renders
+ * on this root (a sibling of the template in the `draftMode()` branch of
+ * `[username]/page.tsx`). It styles itself with chrome utility classes
+ * (`bg-surface-muted`, `text-foreground`, `bg-brand`, `border-border`, …). Without the
+ * chrome `--color-*` tokens those classes resolve to NOTHING here — the banner renders
+ * transparent and DISSOLVES into the template behind it (catastrophic over a dark
+ * template like `edgerunner-v2`: the banner + its "Use this template" button become
+ * invisible/unclickable). The local build never catches it because the chrome tokens
+ * exist on the (chrome) root. So the chrome token subset the banner consumes is
+ * provided below, light + dark, MIRRORED FROM `(chrome)/globals.css` (the source of
+ * truth — keep in sync). These tokens are inert for the public render: templates use
+ * their OWN `.tmpl-*` scoped vars and never read `--color-*`, so this neither leaks
+ * into nor is consumed by the template layer (two-layer isolation preserved).
  */
 @import "tailwindcss";
+
+/* Chrome token subset for the draft-mode PreviewBanner — see header. Mirror of the
+ * matching tokens in (chrome)/globals.css; only what the banner + its
+ * TemplateMismatchWarning child consume. */
+@theme {
+  /* ---- Neutral roles (light) ---- */
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F2F0EC;
+  --color-foreground: #16181C;
+  --color-muted-foreground: #5B6066;
+  --color-border: #E4E1DB;
+
+  /* ---- Brand (deep evergreen — the confirm-button fill) ---- */
+  --color-brand: #1B3A2E;
+  --color-brand-foreground: #FBFAF8;
+  --color-brand-hover: #142C23;
+
+  /* ---- Accent + semantic (success/error/warning beats + focus ring) ---- */
+  --color-accent: #C9683A;
+  --color-success: #1F7A4D;
+  --color-success-bg: #E7F4EC;
+  --color-destructive: #B23A2E;
+  --color-destructive-bg: #FBEAE7;
+  --color-warning: #B8791B;
+  --color-ring: #C9683A;
+
+  /* ---- Radius (rounded-md/-sm on the banner + buttons) ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+
+  /* ---- Typography (the banner sets the chrome Inter face explicitly) ---- */
+  --font-sans: var(--font-inter), Inter, ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface: #16181C;
+    --color-surface-muted: #1F2228;
+    --color-foreground: #ECEDEE;
+    --color-muted-foreground: #9BA1A8;
+    --color-border: #2A2E35;
+
+    --color-brand: #3E7A60;
+    --color-brand-foreground: #0B0C0E;
+    --color-brand-hover: #4A8E70;
+
+    --color-accent: #E08A55;
+    --color-success: #46B07C;
+    --color-success-bg: #13251C;
+    --color-destructive: #E06A5C;
+    --color-destructive-bg: #2A1714;
+    --color-warning: #E0A040;
+    --color-ring: #E08A55;
+  }
+}
