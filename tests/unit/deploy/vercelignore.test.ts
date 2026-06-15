@@ -2,18 +2,21 @@
  * LAUNCH-01 / LAUNCH-10 / D-02 / D-03 — the committed `.vercelignore` membership gate.
  *
  * When a `.vercelignore` exists, the Vercel CLI uses it INSTEAD of `.gitignore` (the two are
- * NOT merged — orchestrator-confirmed Vercel CLI precedence finding). So the committed file
- * must be self-sufficient: it explicitly re-covers `.env.local`/`.env.*.local` so a prod
- * deploy never leaks a secret (T-23-04), AND it must NOT exclude anything the build or runtime
- * needs (the build/`prebuild` runs `scripts/check-env.mjs`; `public/` serves `og-default.png`
- * + the Inter `.ttf` fonts + the landing showcase `webp`).
- *
- * This test parses the committed `.vercelignore` into its effective glob set (stripping comment
- * and blank lines so header prose never self-invalidates an assertion) and asserts:
- *   1. the leak-safety / lean-upload INCLUDE set is present;
- *   2. the must-ship set is ABSENT (never excluded);
- *   3. no `vercel.json` / `vercel.ts` exists at the repo root (D-03 — headers stay in
- *      `next.config.ts`; a `vercel.json` would duplicate/diverge).
+ * NOT merged). Vercel uploads the WORKING TREE and then runs `next build`, which TYPE-CHECKS
+ * the whole tsconfig project. So the committed file must:
+ *   1. exclude the large local-only `.planning/` corpus (gitignored locally, but the
+ *      working-tree upload would otherwise ship it) and re-cover local env/caches so a prod
+ *      deploy never leaks a secret (T-23-04);
+ *   2. NOT exclude any directory that type-checked code references. This is load-bearing and
+ *      was learned the hard way at launch — two Vercel-only build breaks the local build can
+ *      never catch (because nothing is excluded locally):
+ *        (a) an unanchored `supabase/` recursively matched `src/lib/supabase/`;
+ *        (b) excluding `e2e/` broke the type-check because the shipped `scripts/` (needed for
+ *            the `prebuild` `check-env.mjs`) imports from `e2e/` (preview-template.ts).
+ *      So the policy is: exclude ONLY `.planning/` + local env/caches; ship everything else
+ *      tracked in git (src/, scripts/, public/, docs/, supabase/, tests/, e2e/).
+ *   3. have NO `vercel.json` / `vercel.ts` at the repo root (D-03 — headers stay in
+ *      `next.config.ts`).
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,15 +40,11 @@ describe('LAUNCH-01/10 / D-02 — .vercelignore is self-sufficient + leak-safe',
     expect(existsSync(VERCELIGNORE)).toBe(true);
   });
 
-  // Test 1 — the INCLUDE set (planning/docs/db/tests + the re-covered secrets/local caches).
-  it('EXCLUDES planning, docs, db migrations, tests, local env + caches (leak-safe, lean)', () => {
+  // Test 1 — excludes the local-only planning corpus + re-covers local env/caches.
+  it('EXCLUDES the local-only .planning corpus + local env/caches (leak-safe)', () => {
     const lines = parseVercelIgnore();
     const mustExclude = [
-      '.planning/',
-      'docs/',
-      'supabase/',
-      'tests/',
-      'e2e/',
+      '/.planning/', // anchored to root so it can't recursively match a nested dir
       '.env.local',
       '.env.*.local',
       '*.log',
@@ -56,8 +55,10 @@ describe('LAUNCH-01/10 / D-02 — .vercelignore is self-sufficient + leak-safe',
     }
   });
 
-  // Test 2 — the MUST-SHIP set: anything the build/runtime needs must NOT be excluded.
-  it('does NOT exclude anything the build or runtime needs to ship', () => {
+  // Test 2 — the MUST-SHIP set: anything the build/runtime/type-check needs must NOT be
+  // excluded. Includes docs/supabase/tests/e2e because shipped scripts/ type-check against
+  // them (regression guard for the two launch build-breaks).
+  it('does NOT exclude anything the build, runtime, or type-check needs', () => {
     const lines = parseVercelIgnore();
     const mustShip = [
       'scripts/', // the build/prebuild runs scripts/check-env.mjs
@@ -66,6 +67,17 @@ describe('LAUNCH-01/10 / D-02 — .vercelignore is self-sufficient + leak-safe',
       'next.config.ts',
       'package.json',
       '.env.example',
+      // Excluding any of these broke (or would break) the Vercel type-check because shipped
+      // scripts/src files reference them — they MUST ship. Guard every spelling (bare +
+      // root-anchored) so a future edit can't silently reintroduce the break.
+      'docs/',
+      '/docs/',
+      'supabase/',
+      '/supabase/',
+      'tests/',
+      '/tests/',
+      'e2e/',
+      '/e2e/',
     ];
     for (const entry of mustShip) {
       expect(lines, `.vercelignore must NOT exclude "${entry}"`).not.toContain(entry);
