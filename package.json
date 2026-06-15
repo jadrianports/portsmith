@@ -13,6 +13,7 @@
     "test:integration": "vitest run tests/integration",
     "promote-admin": "tsx scripts/promote-admin.ts",
     "seed:founder": "tsx scripts/seed-founder-portfolio.ts",
+    "seed:aurora": "tsx scripts/seed-aurora-demo.ts",
     "check:bundle": "tsx scripts/check-bundle-budget.ts",
     "ingest:scan": "tsx scripts/ingest-scan.ts",
     "gate:template": "node scripts/gate-template.mjs",
