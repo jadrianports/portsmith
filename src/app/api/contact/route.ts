@@ -155,12 +155,23 @@ export async function POST(req: Request): Promise<NextResponse> {
     return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
 
-  // 6) Owner notification — the no-op seam (D-01; Resend deferred to brand-domain).
-  await notifyOwnerOfMessage({
-    portfolioId: data.portfolio_id,
-    senderName: data.sender_name,
-    subject: data.subject,
-  });
+  // 6) Owner notification — best-effort, degrade-open (NOTIF-02). The `messages`
+  //    insert ALREADY succeeded above; notify is a side-effect that must NEVER fail
+  //    the contact submission. A Resend outage / missing key / send error inside the
+  //    seam is swallowed here so the visitor still gets the generic 200 success — the
+  //    message is safely stored and readable in the dashboard inbox regardless. This
+  //    mirrors the BotID/Turnstile degrade posture (a transient dependency outage
+  //    never 500s the route). 21-04 wires the seam body to Resend; this swallow is
+  //    the route-level guard that keeps it best-effort.
+  try {
+    await notifyOwnerOfMessage({
+      portfolioId: data.portfolio_id,
+      senderName: data.sender_name,
+      subject: data.subject,
+    });
+  } catch {
+    // Swallow — notify is best-effort (the message is already stored).
+  }
 
   // 7) Generic success (D-04).
   return NextResponse.json({ ok: true }, { status: 200 });

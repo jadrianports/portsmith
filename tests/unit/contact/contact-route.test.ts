@@ -90,6 +90,15 @@ vi.mock('botid/server', () => ({
   checkBotId: () => checkBotId(),
 }));
 
+// Owner-notification seam (NOTIF-02 / Phase 21) — best-effort, called AFTER the
+// `messages` insert (route.ts step 6). The route MUST NOT let a notify failure fail
+// the contact submission (the message is already stored). Default: resolves no-op;
+// the degrade case below makes it REJECT and asserts the route still returns 200.
+const notifyOwnerOfMessage = vi.fn(async (..._a: unknown[]) => undefined);
+vi.mock('@/lib/trust/notify', () => ({
+  notifyOwnerOfMessage: (...a: unknown[]) => notifyOwnerOfMessage(...a),
+}));
+
 // The not-yet-existing route module — RUNTIME import through a variable specifier
 // so `tsc` does not resolve it (no TS2307) but the suite is genuinely RED.
 const ROUTE = '@/app/api/contact/route';
@@ -126,10 +135,12 @@ describe('CONT-01 — POST /api/contact (service-role sole writer)', () => {
     countAndRecord.mockClear();
     hashClientIp.mockReset();
     checkBotId.mockReset();
+    notifyOwnerOfMessage.mockReset();
     verifyTurnstile.mockResolvedValue(true);
     countAndRecord.mockResolvedValue(true);
     hashClientIp.mockResolvedValue(null);
     checkBotId.mockResolvedValue({ isBot: false });
+    notifyOwnerOfMessage.mockResolvedValue(undefined);
   });
 
   it('rejects a bad Zod payload with 400 (server re-parse gate, D-02)', async () => {
@@ -232,6 +243,25 @@ describe('CONT-01 — POST /api/contact (service-role sole writer)', () => {
         expect.anything(),
       );
       expect(insert).toHaveBeenCalled();
+    });
+  });
+
+  // NOTIF-02 (Phase 21) — the owner-notification seam is wired to Resend, degrade-open.
+  // The seam is called AFTER the `messages` insert (step 6); the message is already
+  // stored before notify runs. A Resend outage / missing key / send error inside notify
+  // must NEVER fail the contact submission — the route still returns 200 { ok: true }.
+  describe('NOTIF-02 — owner-notify is best-effort (a notify failure never fails the submission)', () => {
+    it('returns 200 even when notifyOwnerOfMessage THROWS (the message was already inserted)', async () => {
+      const POST = await loadPost();
+      // The message insert succeeds; notify (called after it) rejects.
+      notifyOwnerOfMessage.mockRejectedValue(new Error('Resend send failed'));
+      const res = await POST(postReq(validBody));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+      // The message WAS written before the best-effort notify ran.
+      expect(insert).toHaveBeenCalled();
+      // Notify was attempted (step 6) — its failure was swallowed, not propagated.
+      expect(notifyOwnerOfMessage).toHaveBeenCalled();
     });
   });
 });
