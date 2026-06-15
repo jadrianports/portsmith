@@ -1,32 +1,33 @@
 # .vercelignore (D-02 — LAUNCH-01 / LAUNCH-10)
 #
-# The Vercel CLI uploads the working tree (NOT git history) on `vercel --prod`, filtered by
-# THIS file. PRECEDENCE: when a .vercelignore exists the CLI uses it INSTEAD of .gitignore —
-# they are NOT merged. So this list is self-sufficient: it cannot assume any .gitignore pattern
-# still applies, which is why the local env files + caches below are explicitly re-covered.
-# Vercel still applies its own built-in defaults (node_modules, .next, .git), but .env.local is
-# re-listed here as a belt-and-suspenders secret-leak guard (T-23-04).
+# Vercel uploads the WORKING TREE (not git history) on `vercel --prod`, filtered by THIS
+# file (when present it REPLACES .gitignore — they are NOT merged). Vercel then runs
+# `next build`, which TYPE-CHECKS the whole tsconfig project. So this file must NOT exclude
+# any directory that a type-checked file references.
 #
-# DO NOT add `scripts/`, `src/`, `public/`, `next.config.ts`, `package.json`, or `.env.example`
-# here — the build/`prebuild` runs `scripts/check-env.mjs`, and `public/` serves og-default.png,
-# the Inter .ttf fonts, and the landing showcase webp (src/components/landing/proof.tsx). D-03:
-# NO vercel.json — CSP/HSTS headers ship in next.config.ts headers() from Phase 16.
+# HARD-LEARNED (launch): excluding code/test dirs broke the Vercel build two ways the local
+# build can never catch (because nothing is excluded locally):
+#   1. An unanchored `supabase/` recursively matched `src/lib/supabase/` -> 58
+#      "Can't resolve '@/lib/supabase/*'" errors.
+#   2. `scripts/` ships (the build runs `scripts/check-env.mjs` via prebuild), and
+#      `scripts/preview-template.ts` imports from `e2e/` — excluding `e2e/` made the
+#      production type-check fail ("Cannot find module '../e2e/helpers/slugs'").
+#
+# Therefore: exclude ONLY the large, local-only planning corpus and local env/caches. Ship
+# everything tracked in git (src/, scripts/, public/, docs/, supabase/, tests/, e2e/,
+# next.config.ts, package.json, .env.example). None of docs/supabase/tests/e2e is bundled
+# into the runtime — Next.js only bundles what the app actually imports — so shipping them is
+# harmless and keeps the Vercel type-check graph IDENTICAL to local. D-03: NO vercel.json
+# (CSP/HSTS headers ship in next.config.ts headers() from Phase 16).
+#
+# DO NOT add scripts/, src/, public/, next.config.ts, package.json, or .env.example here.
 
-# Planning corpus + docs + DB migrations + test suites never ship to the runtime bundle.
-# (supabase/ is safe to exclude: prod DB is provisioned out-of-band via `db push` from the
-# dev machine — see docs/runbooks/launch.md — never from the Vercel build.)
-#
-# LEADING SLASH IS LOAD-BEARING: an unanchored `supabase/` matches a `supabase` dir at ANY
-# depth — which silently excludes `src/lib/supabase/` (client/server/middleware/service-role)
-# and breaks the Vercel build with 58 "Can't resolve '@/lib/supabase/*'" errors. The local
-# build never catches it (nothing is excluded locally). Anchor every top-level dir to root.
+# The large, local-only planning corpus. It is gitignored locally, but Vercel uploads the
+# working tree (not git history), so it WOULD ship unless excluded here.
 /.planning/
-/docs/
-/supabase/
-/tests/
-/e2e/
 
-# Local env + caches — re-covered here because .vercelignore replaces .gitignore (precedence).
+# Local env files + caches — re-covered here because .vercelignore replaces .gitignore.
+# .env.local is the belt-and-suspenders secret-leak guard (T-23-04).
 .env.local
 .env.*.local
 *.log
