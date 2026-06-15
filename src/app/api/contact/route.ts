@@ -22,7 +22,9 @@
  *      target → a GENERIC failure (do not reveal which condition failed).
  *   5. Insert into `messages` via `supabaseAdmin` (RLS bypassed). `turnstile_token`
  *      is verified, NEVER stored (it is not a `messages` column).
- *   6. `notifyOwnerOfMessage` — the no-op seam (D-01; Resend deferred).
+ *   6. `notifyOwnerOfMessage` — best-effort owner email via Resend (NOTIF-01/02,
+ *      D-01 override; dormant-until-domain, degrade-open — a send failure never fails
+ *      the already-stored message).
  *   7. 200 `{ok:true}` — a generic success (D-04).
  *
  * Mirrors the proven service-role skeleton in `api/media/upload/route.ts`:
@@ -167,7 +169,9 @@ export async function POST(req: Request): Promise<NextResponse> {
     await notifyOwnerOfMessage({
       portfolioId: data.portfolio_id,
       senderName: data.sender_name,
+      senderEmail: data.sender_email,
       subject: data.subject,
+      body: data.body,
     });
   } catch {
     // Swallow — notify is best-effort (the message is already stored).
