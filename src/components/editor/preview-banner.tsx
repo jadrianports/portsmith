@@ -134,7 +134,12 @@ export function PreviewBanner({
         // `text-warning` — the confident base draft reads in foreground/muted chrome
         // tones, not a caution color (per-cluster colors set below). The switch-flow
         // path sets its own colors, so dropping the base warning is safe for both.
-        'preview-banner-enter font-sans fixed inset-x-0 top-0 z-50 flex flex-col gap-2 ' +
+        // z-[100]: this banner is the TOP chrome layer and MUST sit above any template's
+        // own fixed/sticky chrome — templates pin navs/scroll-bars up to z-60 (e.g.
+        // edgerunner-v2 navbar is `fixed top-0 z-50`). At equal z-index the template
+        // (later in the DOM) would paint over the banner and EAT its button clicks, so
+        // the banner must outrank the whole template z-scale.
+        'preview-banner-enter font-sans fixed inset-x-0 top-0 z-[100] flex flex-col gap-2 ' +
         'border-b border-border bg-surface-muted px-4 py-3 text-foreground'
       }
     >

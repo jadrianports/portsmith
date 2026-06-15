@@ -82,4 +82,24 @@ describe('D-17 — PreviewBanner chrome tokens are provided on the (portfolio) r
   it('provides the dark-scheme override so the banner adapts like the rest of chrome', () => {
     expect(portfolioCss).toMatch(/prefers-color-scheme:\s*dark/);
   });
+
+  // The banner is `fixed top-0`; templates pin their OWN nav/scroll chrome `fixed top-0`
+  // too (edgerunner-v2 navbar is `z-50`). At equal z-index the template — later in the DOM
+  // — paints over the banner and EATS its button clicks. The banner MUST outrank the whole
+  // template z-scale (templates top out at z-60).
+  it('renders above every template fixed chrome (z-index outranks template navs)', () => {
+    const bannerZ = banner.match(/\bfixed\b[^'"`]*?\bz-\[(\d+)\]/);
+    expect(bannerZ, 'PreviewBanner root must declare an explicit z-[N]').not.toBeNull();
+    const z = Number(bannerZ![1]);
+
+    // Highest z-index any live template pins its fixed chrome at (the collision source).
+    const navbar = read('src/components/templates/edgerunner-v2/sections/navbar.tsx');
+    const templateMaxZ = Math.max(
+      0,
+      ...[...navbar.matchAll(/\bz-(?:\[)?(\d+)\]?\b/g)].map((m) => Number(m[1])),
+    );
+
+    expect(z).toBeGreaterThan(templateMaxZ);
+    expect(z, 'must clear the z-60 scroll-progress ceiling too').toBeGreaterThanOrEqual(100);
+  });
 });
