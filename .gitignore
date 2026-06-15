@@ -33,6 +33,11 @@ scripts/seed/founder-content.ts
 # The committed `aurora-content.example.ts` template IS the discoverable contract.
 scripts/seed/aurora-content.ts
 
+# minimal/editorial demo seed content (Plan 23-01, D-15) — the tweakable demo copy, NOT committed.
+# The committed `*-content.example.ts` templates ARE the discoverable contract.
+scripts/seed/minimal-content.ts
+scripts/seed/editorial-content.ts
+
 # raw Lovable exports (Phase 11 / D-P11-07) — LOCAL only; heavy dep trees + third-party design.
 # The committed artifacts are the template output folder, <slug>-source.png, and INGEST-MANIFEST.md.
 lovable-exports/
