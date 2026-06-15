@@ -14,6 +14,8 @@
     "promote-admin": "tsx scripts/promote-admin.ts",
     "seed:founder": "tsx scripts/seed-founder-portfolio.ts",
     "seed:aurora": "tsx scripts/seed-aurora-demo.ts",
+    "seed:minimal": "tsx scripts/seed-minimal-demo.ts",
+    "seed:editorial": "tsx scripts/seed-editorial-demo.ts",
     "check:bundle": "tsx scripts/check-bundle-budget.ts",
     "capture:landing-proof": "node scripts/capture-landing-proof.mjs",
     "ingest:scan": "tsx scripts/ingest-scan.ts",
