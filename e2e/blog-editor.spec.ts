@@ -222,4 +222,46 @@ test.describe('D-15 — blog editor: new-post retention + Preview-before-first-s
     await expect(reopenedBody).toBeEnabled({ timeout: 30_000 });
     await expect(reopenedBody).toHaveValue(savedBody);
   });
+
+  // ── BLOG-03 / D-08: dirty navigate-away prompts the unsaved-changes dialog ──
+  //    With edits in flight (the auto-save still pending/saving → the Zustand `dirty`
+  //    flag is set), clicking "← Posts" routes through the shared UnsavedChangesGuard
+  //    instead of navigating directly. "Keep editing" cancels the navigation and stays
+  //    on the editor — no silent content loss. Runs against the production build.
+  test('dirty back-nav from the post editor prompts the unsaved-changes dialog; Keep editing stays put (BLOG-03)', async ({
+    page,
+  }) => {
+    test.setTimeout(150_000);
+
+    const stamp = Date.now().toString(36);
+    const title = `Guard Post ${stamp}`;
+
+    await signInAsOwner(page, owner);
+    await page.getByRole('button', { name: /Write posts/ }).click();
+
+    await page.getByRole('button', { name: 'New post' }).click();
+    const postEditor = page.getByLabel('Section editor');
+    const titleField = postEditor.getByLabel('Title', { exact: true });
+    const bodyField = postEditor.getByLabel('Post body (Markdown)');
+    await expect(titleField).toBeVisible();
+
+    // Type a saveable draft (title + body) so the editor is genuinely dirty — the
+    // unified status line reads "Unsaved changes" while the debounce is pending.
+    await titleField.fill(title);
+    await bodyField.click();
+    await bodyField.pressSequentially(`Body in flight ${stamp}.`, { delay: 12 });
+    await expect(postEditor.getByText('Unsaved changes')).toBeVisible({ timeout: 5_000 });
+
+    // Attempt the in-app back navigation while dirty → the guard dialog appears and
+    // BLOCKS the navigation until resolved.
+    await postEditor.getByRole('button', { name: '← Posts' }).click();
+    const dialog = page.getByRole('alertdialog', { name: 'You have unsaved changes' });
+    await expect(dialog).toBeVisible();
+
+    // "Keep editing" cancels: the dialog closes and we stay on the post editor (the
+    // title field is still shown with the typed value — the edit was not abandoned).
+    await dialog.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(titleField).toHaveValue(title);
+  });
 });

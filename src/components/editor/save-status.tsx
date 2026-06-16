@@ -62,6 +62,24 @@ export interface SaveStatusProps {
    * early) — this renderer trusts the consumer's window, it does not own the timing.
    */
   live?: boolean;
+  /**
+   * D-09 (BLOG-03) — an OPTIONAL "last saved at" stamp the consumer sets when a save
+   * resolves ok. When present (and the resting `saved` state is showing, not the live
+   * beat) the line reads "Saved · HH:MM" so the save is unmistakably timestamped. A
+   * Date or a pre-formatted string; omitted ⇒ the plain "Saved" resting line (every
+   * existing consumer that passes neither prop is unchanged).
+   */
+  savedAt?: Date | string;
+}
+
+/** Format a savedAt value to a stable "HH:MM" (locale 24h-ish), or '' when absent. */
+function formatSavedAt(savedAt: Date | string | undefined): string {
+  if (!savedAt) return '';
+  const d = typeof savedAt === 'string' ? new Date(savedAt) : savedAt;
+  if (Number.isNaN(d.getTime())) return '';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 /** The shared Caption-tier line shell (13/400, tight leading, polite live region). */
@@ -73,7 +91,7 @@ const LINE = 'flex items-center gap-1.5 text-[13px] leading-tight';
  * UI-SPEC Surface 4: "error → the inherited save-error Alert copy"). The beat takes
  * precedence over the resting "Saved" whenever the `live` window is open.
  */
-export function SaveStatus({ state, live = false }: SaveStatusProps) {
+export function SaveStatus({ state, live = false, savedAt }: SaveStatusProps) {
   // D-04 / D-05 — the saved-&-live BEAT (the load-bearing "the public internet just
   // changed" moment for a non-technical user). It outranks the resting "Saved" while
   // the consumer's `live` window is open: circle-check (--color-accent glyph) + the
@@ -121,13 +139,18 @@ export function SaveStatus({ state, live = false }: SaveStatusProps) {
 
     // saved (resting) — "you're up to date" after a save resolved ok and the live
     // beat has settled (the beat itself is the `live` branch above).
-    case 'saved':
+    case 'saved': {
+      // D-09: append a "· HH:MM" stamp when the consumer supplies `savedAt`, so the
+      // resting saved line is unmistakably timestamped ("Saved · 14:32"). Without the
+      // prop it stays the plain "Saved" line (unchanged for every prior consumer).
+      const stamp = formatSavedAt(savedAt);
       return (
         <span aria-live="polite" className={`${LINE} text-muted-foreground`}>
           <CircleCheck aria-hidden="true" className="size-4" />
-          <span>Saved</span>
+          <span>{stamp ? `Saved · ${stamp}` : 'Saved'}</span>
         </span>
       );
+    }
 
     // idle (resting blank) + error (the manager's inherited Alert owns it) → nothing.
     case 'idle':

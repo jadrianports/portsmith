@@ -58,6 +58,8 @@ import { cmsKeys } from '@/lib/query/cms-keys';
 import { useUIStore } from '@/lib/stores/uiStore';
 
 import { ImageUploader } from './image-uploader';
+import { SaveStatus } from './save-status';
+import { useGuardedNavigate, useRegisterActiveSave } from './unsaved-guard';
 import { useDebouncedPostSave } from './use-debounced-post-save';
 
 /** Zod `.max(...)` bounds, hand-mirrored from posts.ts (no validations-barrel import). */
@@ -207,8 +209,12 @@ export function PostEditor({
   const dateId = useId();
   const tagsId = useId();
 
+  // BLOG-03 / D-09: the last time a content save resolved ok — drives the SaveStatus
+  // "Saved · HH:MM" stamp (set only on a real `{ ok: true }`, never on a skip/error).
+  const [savedAt, setSavedAt] = useState<Date | undefined>(undefined);
+
   // The auto-save hook (debounced content saves + separate immediate publish, D-20).
-  const { state, scheduleSave, setPublished } = useDebouncedPostSave({
+  const { state, scheduleSave, immediateSave, setPublished } = useDebouncedPostSave({
     postId,
     portfolioId,
     username,
@@ -216,6 +222,7 @@ export function PostEditor({
       // Promote a CREATE → UPDATE so subsequent saves target the new row, and let
       // the panel refresh its list to surface the new post + status dot.
       setPostId((prev) => prev ?? id);
+      setSavedAt(new Date()); // D-09: stamp the resting "Saved · HH:MM" line.
       onSaved?.(id);
     },
   });
@@ -244,6 +251,24 @@ export function PostEditor({
   const queueSave = useCallback(() => {
     scheduleSave(buildContent());
   }, [scheduleSave, buildContent]);
+
+  // BLOG-03 / D-08: register the post's content save with the dirty guard so the
+  // "Save and continue" path FLUSHES the post (not a silent discard). `immediateSave`
+  // returns the full SavePostResult; adapt it to the guard's `{ ok }` contract. A skip
+  // (incomplete draft) resolves `{ ok:false }` from the hook, which keeps the guard
+  // dialog open — but the editor only arms the guard via the Zustand `dirty` flag while
+  // a real (saveable) edit is pending/saving, so a skip can't strand the dialog.
+  const guardSave = useCallback(
+    async () => ({ ok: (await immediateSave(buildContent())).ok }),
+    [immediateSave, buildContent],
+  );
+  useRegisterActiveSave(guardSave);
+
+  // BLOG-03 / D-08: route the "← Posts" back control through the shared dirty guard so
+  // a navigate-away with unsaved edits prompts the "You have unsaved changes" dialog
+  // (the beforeunload leg is already armed by the mounted guard via the `dirty` flag).
+  const guardedNavigate = useGuardedNavigate();
+  const handleBack = useCallback(() => guardedNavigate(onBack), [guardedNavigate, onBack]);
 
   // Title change → derive the slug (until the user hand-edits it) + queue a save.
   function onTitleChange(next: string) {
@@ -331,14 +356,10 @@ export function PostEditor({
     setPublishing(false);
   }
 
-  const saveLabel =
-    state === 'saving' || state === 'pending'
-      ? 'Saving…'
-      : state === 'saved'
-        ? 'Saved'
-        : state === 'error'
-          ? 'Couldn’t save'
-          : '';
+  /** Retry a failed content save (D-09) — re-dispatch the current draft immediately. */
+  const retrySave = useCallback(() => {
+    void immediateSave(buildContent());
+  }, [immediateSave, buildContent]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -346,7 +367,7 @@ export function PostEditor({
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-border bg-surface py-3">
         <button
           type="button"
-          onClick={onBack}
+          onClick={handleBack}
           className={
             'inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm font-semibold ' +
             'text-foreground outline-none transition-colors hover:text-accent ' +
@@ -357,15 +378,11 @@ export function PostEditor({
           ← Posts
         </button>
 
-        <span
-          aria-live="polite"
-          className={
-            'text-[13px] leading-tight ' +
-            (state === 'error' ? 'text-destructive' : 'text-muted-foreground')
-          }
-        >
-          {saveLabel}
-        </span>
+        {/* BLOG-03 / D-09: the UNIFIED save-status vocabulary (Saving… / Saved · HH:MM /
+            Unsaved changes), identical to the section managers. The `error` state is
+            surfaced separately below as an inline Alert + Retry (SaveStatus renders null
+            for error by contract). */}
+        <SaveStatus state={state} savedAt={savedAt} />
 
         <div className="ml-auto flex items-center gap-2">
           <span className="text-[13px] font-semibold leading-tight text-muted-foreground">
@@ -385,6 +402,20 @@ export function PostEditor({
       </div>
 
       {publishError ? <Alert variant="error">{publishError}</Alert> : null}
+
+      {/* BLOG-03 / D-09: a content-save FAILURE is surfaced as an inline error + Retry
+          (SaveStatus renders null for `error` by contract) — the save is never silently
+          lost; Retry re-dispatches the current draft immediately. */}
+      {state === 'error' ? (
+        <Alert variant="error">
+          <span className="flex flex-wrap items-center gap-3">
+            <span>Couldn’t save your changes.</span>
+            <Button type="button" variant="ghost" onClick={retrySave} className="w-auto">
+              Retry
+            </Button>
+          </span>
+        </Alert>
+      ) : null}
 
       {/* BLOG-01 / D-03: a failed open-time fetch shows an inline error + Retry and
           keeps editing BLOCKED (the inputs below stay disabled) — never a blank,
