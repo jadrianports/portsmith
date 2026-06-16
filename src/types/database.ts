@@ -1385,13 +1385,10 @@ export type Database = {
       portfolio_settings: {
         Row: {
           color_preset: string
-          dribbble_url: string | null
           email_public: string | null
           favicon_url: string | null
           font_preset: string
-          github_url: string | null
           id: string
-          linkedin_url: string | null
           location: string | null
           meta_description: string | null
           og_image_url: string | null
@@ -1400,20 +1397,15 @@ export type Database = {
           portfolio_id: string
           socials: Json
           theme_mode: string
-          twitter_url: string | null
           updated_at: string
           visitor_theme_toggle: boolean
-          website_url: string | null
         }
         Insert: {
           color_preset?: string
-          dribbble_url?: string | null
           email_public?: string | null
           favicon_url?: string | null
           font_preset?: string
-          github_url?: string | null
           id?: string
-          linkedin_url?: string | null
           location?: string | null
           meta_description?: string | null
           og_image_url?: string | null
@@ -1422,20 +1414,15 @@ export type Database = {
           portfolio_id: string
           socials?: Json
           theme_mode?: string
-          twitter_url?: string | null
           updated_at?: string
           visitor_theme_toggle?: boolean
-          website_url?: string | null
         }
         Update: {
           color_preset?: string
-          dribbble_url?: string | null
           email_public?: string | null
           favicon_url?: string | null
           font_preset?: string
-          github_url?: string | null
           id?: string
-          linkedin_url?: string | null
           location?: string | null
           meta_description?: string | null
           og_image_url?: string | null
@@ -1444,10 +1431,8 @@ export type Database = {
           portfolio_id?: string
           socials?: Json
           theme_mode?: string
-          twitter_url?: string | null
           updated_at?: string
           visitor_theme_toggle?: boolean
-          website_url?: string | null
         }
         Relationships: [
           {
@@ -1906,12 +1891,9 @@ export type Database = {
       public_portfolio_settings: {
         Row: {
           color_preset: string | null
-          dribbble_url: string | null
           email_public: string | null
           favicon_url: string | null
           font_preset: string | null
-          github_url: string | null
-          linkedin_url: string | null
           location: string | null
           meta_description: string | null
           og_image_url: string | null
@@ -1920,18 +1902,13 @@ export type Database = {
           portfolio_id: string | null
           socials: Json | null
           theme_mode: string | null
-          twitter_url: string | null
           visitor_theme_toggle: boolean | null
-          website_url: string | null
         }
         Insert: {
           color_preset?: string | null
-          dribbble_url?: string | null
           email_public?: string | null
           favicon_url?: string | null
           font_preset?: string | null
-          github_url?: string | null
-          linkedin_url?: string | null
           location?: string | null
           meta_description?: string | null
           og_image_url?: string | null
@@ -1940,18 +1917,13 @@ export type Database = {
           portfolio_id?: string | null
           socials?: Json | null
           theme_mode?: string | null
-          twitter_url?: string | null
           visitor_theme_toggle?: boolean | null
-          website_url?: string | null
         }
         Update: {
           color_preset?: string | null
-          dribbble_url?: string | null
           email_public?: string | null
           favicon_url?: string | null
           font_preset?: string | null
-          github_url?: string | null
-          linkedin_url?: string | null
           location?: string | null
           meta_description?: string | null
           og_image_url?: string | null
@@ -1960,9 +1932,7 @@ export type Database = {
           portfolio_id?: string | null
           socials?: Json | null
           theme_mode?: string | null
-          twitter_url?: string | null
           visitor_theme_toggle?: boolean | null
-          website_url?: string | null
         }
         Relationships: [
           {
