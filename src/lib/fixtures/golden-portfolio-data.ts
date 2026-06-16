@@ -77,27 +77,34 @@ function goldenProfile(): PublicProfile {
 function goldenSettings(): PublicSettings {
   return {
     color_preset: 'default',
-    dribbble_url: null,
     email_public: 'hello@rileychen.example',
     favicon_url: null,
     font_preset: 'default',
-    github_url: 'https://github.com/rileychen',
-    linkedin_url: 'https://www.linkedin.com/in/rileychen',
     location: 'San Francisco, CA',
     meta_description: 'Riley Chen — full-stack engineer portfolio.',
     og_image_url: null,
     page_title: 'Riley Chen — Portfolio',
     phone: '+1 (555) 010-0042',
     portfolio_id: GOLDEN_PORTFOLIO_ID,
+    // P25 (SET-05): socials is the single source. Enriched toward the full 11-platform
+    // set so the parity/a11y render exercises the 6 NEW brand icons (instagram/youtube/
+    // tiktok/behance/facebook/threads) plus the folded-in ones + the website->Globe
+    // fallback — closes the RESEARCH Wave-0 icon-coverage gap.
     socials: [
       { platform: 'github', url: 'https://github.com/rileychen' },
       { platform: 'linkedin', url: 'https://www.linkedin.com/in/rileychen' },
+      { platform: 'x', url: 'https://x.com/rileychen' },
+      { platform: 'instagram', url: 'https://instagram.com/rileychen' },
+      { platform: 'youtube', url: 'https://youtube.com/@rileychen' },
+      { platform: 'tiktok', url: 'https://tiktok.com/@rileychen' },
+      { platform: 'dribbble', url: 'https://dribbble.com/rileychen' },
+      { platform: 'behance', url: 'https://behance.net/rileychen' },
+      { platform: 'facebook', url: 'https://facebook.com/rileychen' },
+      { platform: 'threads', url: 'https://threads.net/@rileychen' },
       { platform: 'website', url: 'https://rileychen.example' },
     ] as unknown as PublicSettings['socials'],
     theme_mode: 'dark',
-    twitter_url: null,
     visitor_theme_toggle: true,
-    website_url: 'https://rileychen.example',
   };
 }
 

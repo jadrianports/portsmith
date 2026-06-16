@@ -267,9 +267,11 @@ describe('section content schemas', () => {
         projectItemSchema.safeParse({ ...validProjectItem, live_url: bad }).success,
         `project.live_url should reject ${bad}`,
       ).toBe(false);
+      // P25: the fixed social `*_url` fields were dropped from settingsSchema; its
+      // og_image_url (same urlOrEmptyOptional gate) is the representative URL sink now.
       expect(
-        settingsSchema.safeParse({ github_url: bad }).success,
-        `settings.github_url should reject ${bad}`,
+        settingsSchema.safeParse({ og_image_url: bad }).success,
+        `settings.og_image_url should reject ${bad}`,
       ).toBe(false);
     }
     // ACCEPT: valid https (and http, and uppercase scheme) still pass — the gate
@@ -280,9 +282,9 @@ describe('section content schemas', () => {
     expect(
       projectItemSchema.safeParse({ ...validProjectItem, live_url: 'http://x.com/p' }).success,
     ).toBe(true);
-    expect(settingsSchema.safeParse({ website_url: 'HTTPS://x.com' }).success).toBe(true);
+    expect(settingsSchema.safeParse({ og_image_url: 'HTTPS://x.com' }).success).toBe(true);
     // Empty string remains valid (the URL-or-empty contract is preserved).
-    expect(settingsSchema.safeParse({ website_url: '' }).success).toBe(true);
+    expect(settingsSchema.safeParse({ og_image_url: '' }).success).toBe(true);
   });
 
   // --- WR-04: profile resume_url / avatar_url are http(s)-gated ---
@@ -853,10 +855,16 @@ describe('settingsSchema', () => {
     expect(settingsSchema.safeParse({ theme_mode: 'blue' }).success).toBe(false);
   });
 
-  it('accepts an empty string and a valid URL for a social field, rejects a bad URL', () => {
-    expect(settingsSchema.safeParse({ github_url: '' }).success).toBe(true);
-    expect(settingsSchema.safeParse({ github_url: 'https://github.com/jane' }).success).toBe(true);
-    expect(settingsSchema.safeParse({ github_url: 'ftp::bad' }).success).toBe(false);
+  // P25 (SET-05): the fixed `*_url` social subset was DROPPED from settingsSchema
+  // (migration 025); the active social write shape is contactSocialsSettingsSchema.
+  // The schema's urlOrEmptyOptional gate is still exercised by the remaining URL
+  // fields (og_image_url/favicon_url).
+  it('accepts an empty string and a valid URL for a URL field, rejects a bad URL', () => {
+    expect(settingsSchema.safeParse({ og_image_url: '' }).success).toBe(true);
+    expect(settingsSchema.safeParse({ og_image_url: 'https://cdn.example/og.png' }).success).toBe(
+      true,
+    );
+    expect(settingsSchema.safeParse({ og_image_url: 'ftp::bad' }).success).toBe(false);
   });
 
   it('rejects an over-long meta_description', () => {

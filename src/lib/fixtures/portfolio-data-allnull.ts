@@ -56,12 +56,9 @@ export const ALL_NULL_PROFILE_KEYS = [
  */
 export const ALL_NULL_SETTINGS_KEYS = [
   'color_preset',
-  'dribbble_url',
   'email_public',
   'favicon_url',
   'font_preset',
-  'github_url',
-  'linkedin_url',
   'location',
   'meta_description',
   'og_image_url',
@@ -70,9 +67,7 @@ export const ALL_NULL_SETTINGS_KEYS = [
   'portfolio_id',
   'socials',
   'theme_mode',
-  'twitter_url',
   'visitor_theme_toggle',
-  'website_url',
 ] as const;
 
 /**
@@ -105,12 +100,9 @@ function allNullProfile(): PublicProfile {
 function allNullSettings(): PublicSettings {
   return {
     color_preset: null,
-    dribbble_url: null,
     email_public: null,
     favicon_url: null,
     font_preset: null,
-    github_url: null,
-    linkedin_url: null,
     location: null,
     meta_description: null,
     og_image_url: null,
@@ -119,9 +111,7 @@ function allNullSettings(): PublicSettings {
     portfolio_id: null,
     socials: null,
     theme_mode: null,
-    twitter_url: null,
     visitor_theme_toggle: null,
-    website_url: null,
   };
 }
 
