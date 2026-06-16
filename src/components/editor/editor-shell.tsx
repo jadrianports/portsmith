@@ -56,6 +56,7 @@ import type { AllowedTemplate } from '@/lib/templates/available-templates';
 import { BlogPanel } from './blog-panel';
 import { BlogPreviewForm } from './blog-preview-form';
 import { CompletenessChecklist } from './completeness-checklist';
+import { ContactSocialsForm } from './contact-socials-form';
 import { ItemManager, type ItemSectionType } from './item-card';
 import { MoodboardManager } from './moodboard-manager';
 import { ProfileForm } from './profile-form';
@@ -90,6 +91,16 @@ const TEMPLATE_PANEL_ID = '__template__';
  * the panel to the BlogPanel (posts list → post editor, in the same two-pane shell).
  */
 const BLOG_PANEL_ID = '__blog__';
+
+/**
+ * The sentinel `activeSectionId` for the CONTACT & SOCIALS panel (24-03 / D-07). The
+ * contact/social settings are `portfolio_settings` columns, not a `sections` row, so
+ * the panel gets its own non-UUID id; selecting the "Contact & Socials" rail entry
+ * sets this, routing the panel to the ContactSocialsForm (SET-01/02/03). Mirrors the
+ * PROFILE / TEMPLATE / BLOG sentinels exactly.
+ */
+// D-07
+const CONTACT_PANEL_ID = '__contact_socials__';
 
 /**
  * The simple (single-form) section types handled by SectionForm. `blog_preview`
@@ -353,6 +364,8 @@ export function EditorShell({
   const templateActive = activeSectionId === TEMPLATE_PANEL_ID;
   // 13.2-06 / D-19: whether the BLOG authoring panel is the active selection.
   const blogActive = activeSectionId === BLOG_PANEL_ID;
+  // 24-03 / D-07: whether the CONTACT & SOCIALS panel is the active selection.
+  const contactSocialsActive = activeSectionId === CONTACT_PANEL_ID;
 
   // 07-05: the portfolio's CURRENT template slug — threaded into the picker so it can
   // mark the "● Current" card. The dashboard passes it explicitly; fall back to the
@@ -465,9 +478,11 @@ export function EditorShell({
               ? 'Template'
               : profileActive
                 ? 'Profile'
-                : activeRaw
-                  ? titleFor(activeRaw.type, activeRaw.content)
-                  : undefined
+                : contactSocialsActive
+                  ? 'Contact & Socials'
+                  : activeRaw
+                    ? titleFor(activeRaw.type, activeRaw.content)
+                    : undefined
         }
       />
 
@@ -638,6 +653,14 @@ export function EditorShell({
               onSelect={() => selectSection(BLOG_PANEL_ID)}
             />
 
+            {/* CONTACT & SOCIALS entry (24-03 — D-07). Sits with the Profile/Template/
+                Blog entries at the top of the rail; selecting it routes the panel to
+                the ContactSocialsForm. Dirty-guarded like every in-app navigation. */}
+            <ContactSocialsRailEntry
+              active={contactSocialsActive}
+              onSelect={() => selectSection(CONTACT_PANEL_ID)}
+            />
+
             <RailSectionList
               sections={sections}
               portfolioId={portfolioId}
@@ -715,6 +738,22 @@ export function EditorShell({
                   headline: data.profile.headline,
                   avatar_url: data.profile.avatar_url,
                   resume_url: data.profile.resume_url,
+                }}
+                username={username}
+              />
+            ) : contactSocialsActive ? (
+              // 24-03 / D-07: the CONTACT & SOCIALS editor — the UI caller for
+              // saveSettingsAction (SET-01/02/03). Seeded from the owner read's
+              // PublicSettings, which carries socials/location/phone after Plan 01.
+              <ContactSocialsForm
+                key={CONTACT_PANEL_ID}
+                initial={{
+                  email_public: data.settings.email_public,
+                  socials: (data.settings.socials as
+                    | { platform: string; url: string }[]
+                    | null) ?? null,
+                  location: data.settings.location,
+                  phone: data.settings.phone,
                 }}
                 username={username}
               />
@@ -966,6 +1005,44 @@ function BlogRailEntry({
       <span className="text-sm font-semibold text-foreground">Blog</span>
       <span className="ml-auto text-[13px] leading-tight text-muted-foreground">
         Write posts
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The CONTACT & SOCIALS rail entry (24-03 — D-07). A selectable row, styled
+ * identically to the Profile/Template/Blog entries, that routes the panel to the
+ * ContactSocialsForm. Carries the active brand marker when selected (parity with the
+ * other rail entries) and a leading lucide `Mail` glyph (the UI-SPEC rail icon).
+ */
+function ContactSocialsRailEntry({
+  active,
+  onSelect,
+}: {
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      className={
+        'group relative flex min-h-11 items-center gap-2 rounded-md border border-border ' +
+        'bg-surface px-3 py-2 text-left outline-none transition-colors ' +
+        'hover:border-border-strong hover:text-accent ' +
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+        'motion-reduce:transition-none'
+      }
+    >
+      {active ? (
+        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] rounded-l-md bg-brand" />
+      ) : null}
+      <Mail aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+      <span className="text-sm font-semibold text-foreground">Contact &amp; Socials</span>
+      <span className="ml-auto text-[13px] leading-tight text-muted-foreground">
+        Email · links · location
       </span>
     </button>
   );
