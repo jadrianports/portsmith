@@ -134,7 +134,16 @@ export default function MinimalTemplate({ data }: { data: PortfolioData }) {
         <Testimonials section={sectionOfType(sections, 'testimonials')} />
       </ScrollReveal>
       <ScrollReveal as="section" data-section-type="contact">
-        <Contact section={sectionOfType(sections, 'contact')} />
+        {/* Phase 25 (D-07/D-08): thread the public contact details from `settings`
+            (the single source of truth) into the Contact section via the scoped
+            `ContactExtraProps` — NOT the killed seed-copied `content.email_public`.
+            All three are nullable view columns; the section omits any absent one. */}
+        <Contact
+          section={sectionOfType(sections, 'contact')}
+          emailPublic={settings.email_public}
+          location={settings.location}
+          phone={settings.phone}
+        />
       </ScrollReveal>
 
       <Footer data={data} />

@@ -15,15 +15,16 @@
  * never a dead form. The 03 design is untouched: the island reuses the SAME
  * `.tmpl-contact-field` / field + label styles, so the live form is pixel-identical.
  *
- * PUBLIC EMAIL via the content (Option A — additive field, NOT a contract change):
- * the FROZEN `SectionProps` passes this section ONLY its resolved `section` row, so
- * `data.settings.email_public` is NOT reachable here. Rather than widen the frozen
- * contract (which 03-05/06/07 depend on), the public email is surfaced INTO the
- * contact CONTENT as an OPTIONAL `email_public` field (the SAME idiom the hero uses
- * for `resume_url`): the seed copies `settings.email_public` → `contact.email_public`,
- * and this section renders the `mailto:` render-if-present. No public email ⇒ no
- * mailto element (never a dead/empty mailto). The field is additive on the
- * schemaless JSONB content — no Postgres migration (CMS-08).
+ * PUBLIC CONTACT DETAILS from SETTINGS (Phase 25 — D-07/D-08): the public email,
+ * location, and phone are read from `data.settings` (the SINGLE source of truth),
+ * threaded in by `index.tsx` as the scoped `ContactExtraProps` (`emailPublic` /
+ * `location` / `phone`). This REPLACES the Phase-24-killed seed-copied
+ * `content.email_public` idiom (D-07). The frozen global `SectionProps` is NOT
+ * widened (D-08) — the extra prop is Contact-scoped. Each field is omit-if-absent:
+ * the email renders a `mailto:` link via `safeHref(...,{allowMailto:true})`; the
+ * location + phone render as plain text rows (phone is NOT a `tel:` link —
+ * RESEARCH OQ-2). Absent/empty ⇒ that row simply does not render (never a dead link
+ * or empty row).
  *
  * RENDER CONTRACT (UI-SPEC §7):
  *   - mono `07 / contact` label + the heading (`contact.heading`) + the subhead
@@ -42,25 +43,24 @@
  * hard "never white on magenta" rule, AA-safe in both modes.
  */
 import { ContactForm } from '@/components/public/contact-form';
-import type { SectionProps } from './types';
+import type { ContactExtraProps, SectionProps } from './types';
 import type { ContactContent } from '@/lib/validations';
 import { safeHref } from '@/lib/safe-url';
 
-/**
- * The contact content as it flows through the section contract: `ContactContent`
- * (validated at seed time) plus the OPTIONAL `email_public` the seed surfaces from
- * `settings.email_public` for the `mailto:` fallback (Option A). Optional ⇒ the
- * mailto simply hides when absent. The cast is local so the shape is explicit even
- * before `tsc` picks up the additive schema field.
- */
-type ContactSectionContent = ContactContent & { email_public?: string | null };
+/** The validated JSONB contact content (heading/subheading) — null-guarded below. */
+type ContactSectionContent = ContactContent;
 
 /** A string field is "present" when it is a non-empty trimmed string. */
 function present(v: string | null | undefined): v is string {
   return typeof v === 'string' && v.trim().length > 0;
 }
 
-export function Contact({ section }: SectionProps) {
+export function Contact({
+  section,
+  emailPublic: emailPublicProp,
+  location: locationProp,
+  phone: phoneProp,
+}: SectionProps & ContactExtraProps) {
   // Cast the validated JSONB content; null-guard the row + every field.
   const content = (section?.content ?? null) as ContactSectionContent | null;
   if (!content) return null;
@@ -70,13 +70,14 @@ export function Contact({ section }: SectionProps) {
   const subheading = present(content.subheading)
     ? content.subheading
     : "Have an idea in mind? Let's talk";
-  // The public-email mailto is render-if-present (Option A — sourced from
-  // settings.email_public through the seed). Absent/empty ⇒ no mailto element. The
-  // email is validated by `z.email()` (well-behaved), but the `href` is still built
-  // through the shared guard with `allowMailto` (CR-01 belt-and-suspenders). The address
-  // is interpolated literally — the `@` MUST stay literal (percent-encoding it breaks the
-  // recipient in many mail clients); z.email() + the safeHref mailto guard are the gates.
-  const emailPublic = present(content.email_public) ? content.email_public : null;
+  // Public contact details from SETTINGS (D-07) — omit-if-absent. The email mailto is
+  // built through the shared guard with `allowMailto` (CR-01 belt-and-suspenders). The
+  // address is interpolated literally — the `@` MUST stay literal (percent-encoding it
+  // breaks the recipient in many mail clients); z.email() + the safeHref mailto guard
+  // are the gates. Phone renders as plain text (NOT a tel: link — RESEARCH OQ-2).
+  const emailPublic = present(emailPublicProp) ? emailPublicProp : null;
+  const location = present(locationProp) ? locationProp : null;
+  const phone = present(phoneProp) ? phoneProp : null;
   const mailtoHref = emailPublic
     ? safeHref(`mailto:${emailPublic}`, { allowMailto: true })
     : undefined;
@@ -137,6 +138,98 @@ export function Contact({ section }: SectionProps) {
       >
         {subheading}
       </p>
+
+      {/* Contact details from SETTINGS (Phase 25 / D-07) — email (mailto:), location,
+          phone, each omit-if-absent. Mono labels in the cyan accent, values in the
+          foreground. Phone is plain text (NOT a tel: link — RESEARCH OQ-2). The row
+          renders only when at least one detail is present. */}
+      {emailPublic || location || phone ? (
+        <ul
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '24px 48px',
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+          }}
+        >
+          {emailPublic && mailtoHref ? (
+            <li style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '12px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.12em',
+                  color: 'var(--accent-cyan)',
+                }}
+              >
+                Email
+              </span>
+              <a
+                href={mailtoHref}
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '16px',
+                  color: 'var(--fg)',
+                  textDecoration: 'none',
+                }}
+              >
+                {emailPublic}
+              </a>
+            </li>
+          ) : null}
+          {location ? (
+            <li style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '12px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.12em',
+                  color: 'var(--accent-cyan)',
+                }}
+              >
+                Location
+              </span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '16px',
+                  color: 'var(--fg)',
+                }}
+              >
+                {location}
+              </span>
+            </li>
+          ) : null}
+          {phone ? (
+            <li style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '12px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.12em',
+                  color: 'var(--accent-cyan)',
+                }}
+              >
+                Phone
+              </span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '16px',
+                  color: 'var(--fg)',
+                }}
+              >
+                {phone}
+              </span>
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
 
       {/* LIVE WIRING (06-02, CONT-01/03 / D-05): the inert shell is replaced by the
           `<ContactForm>` client island when the portfolio id is present on the

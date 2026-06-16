@@ -9,9 +9,14 @@
  * and no platform link anywhere here — the URL is the ONLY attribution. The footer
  * shows the founder's name/handle + the social links that exist.
  *
- * SOCIALS (render-only-if-present — hide-if-empty): each link renders ONLY when its
- * URL is a non-empty string on `data.settings` (github_url / linkedin_url /
- * twitter_url / dribbble_url / website_url).
+ * SOCIALS (Phase 25 — icon links from `settings.socials`): the footer iterates the
+ * `settings.socials` JSONB array (`{ platform, url }[]` — the array order IS the
+ * display order, P24 D-01) and renders ONE shared `<SocialIcon>` link per entry whose
+ * `url` survives `safeHref` (CR-01). Hide-if-empty: null/empty array ⇒ NO social
+ * `<nav>` row at all. This replaces the old 5-column `*_url` text-label loop (D-05);
+ * the icon is the `_shared/social-icons` brand SVG, the `<a>` owns the `aria-label`
+ * (D-03), `target="_blank"` + `rel="noopener noreferrer me"` + ≥44px tap target are
+ * preserved (D-03a).
  *
  * ABSOLUTE URLs (PUB-03 / SHARED-B): the canonical self-link to this portfolio is
  * built from `siteUrl()` — derived from `NEXT_PUBLIC_SITE_URL`, NEVER the request
@@ -37,6 +42,7 @@ import { ReportDialog } from '@/components/public/report-dialog';
 import type { FooterProps } from './types';
 import { siteUrl } from '@/lib/url';
 import { safeHref } from '@/lib/safe-url';
+import { PLATFORM_LABELS, SocialIcon } from '../../_shared/social-icons';
 
 /** A URL field is "present" when it is a non-empty trimmed string. */
 function present(v: string | null | undefined): v is string {
@@ -55,21 +61,20 @@ export function Footer({ data }: FooterProps) {
   // affordance rather than render a dead button (never a report path to nowhere).
   const portfolioId = present(settings.portfolio_id) ? settings.portfolio_id : null;
 
-  // The social links that exist, in a stable order. NO platform link. CR-01: each
-  // URL passes through `safeHref` (http(s) only) — a dangerous/unparseable scheme
-  // drops that social entirely rather than rendering a live `javascript:` link.
-  const socialSources: { label: string; raw: string | null | undefined }[] = [
-    { label: 'GitHub', raw: settings.github_url },
-    { label: 'LinkedIn', raw: settings.linkedin_url },
-    { label: 'X', raw: settings.twitter_url },
-    { label: 'Dribbble', raw: settings.dribbble_url },
-    { label: 'Website', raw: settings.website_url },
-  ];
-  const socials: { label: string; href: string }[] = [];
-  for (const { label, raw } of socialSources) {
-    const href = safeHref(raw);
-    if (href) socials.push({ label, href });
-  }
+  // The social links that exist, in array order (P24 D-01 — array order = display
+  // order). NO platform link. T-25-03: `settings.socials` is `Json | null` — guard
+  // with `Array.isArray`, then per-element `String(platform)` + `safeHref(url)`
+  // (CR-01: a dangerous/unparseable scheme drops that social entirely rather than
+  // rendering a live `javascript:` link). Each kept entry needs BOTH a non-empty
+  // platform slug and a safe href.
+  const socialItems = Array.isArray(settings.socials) ? settings.socials : [];
+  const socials: { key: string; platform: string; href: string }[] = [];
+  socialItems.forEach((s, i) => {
+    const entry = s as { platform?: unknown; url?: unknown } | null;
+    const platform = String(entry?.platform ?? '').trim();
+    const href = safeHref(typeof entry?.url === 'string' ? entry.url : undefined);
+    if (platform && href) socials.push({ key: `${platform}-${i}`, platform, href });
+  });
 
   // The canonical self-link to this portfolio (PUB-03 — env-driven, host-safe).
   const canonicalHref = handle ? siteUrl(`/${handle}`) : siteUrl('/');
@@ -167,24 +172,23 @@ export function Footer({ data }: FooterProps) {
               }}
             >
               {socials.map((s) => (
-                <li key={s.label}>
+                <li key={s.key}>
                   <a
                     href={s.href}
                     target="_blank"
                     rel="noopener noreferrer me"
+                    aria-label={PLATFORM_LABELS[s.platform] ?? s.platform}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
+                      justifyContent: 'center',
+                      minWidth: '44px',
                       minHeight: '44px',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '13px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.12em',
                       color: 'var(--fg)',
                       textDecoration: 'none',
                     }}
                   >
-                    {s.label}
+                    <SocialIcon platform={s.platform} size={20} />
                   </a>
                 </li>
               ))}
