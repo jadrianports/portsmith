@@ -28,6 +28,7 @@
  */
 import type { PortfolioData } from '@/components/templates/types';
 import { siteUrl } from '@/lib/url';
+import { safeHref } from '@/lib/safe-url';
 
 /** The schema.org `Person` shape this builder emits (optional fields omitted). */
 export interface PersonLd {
@@ -48,10 +49,13 @@ export interface PersonLd {
 export function buildPersonLd(data: PortfolioData, username: string): PersonLd {
   const { profile, settings } = data;
 
-  // The configured social links, in a stable order, with null/blank entries dropped.
-  const sameAs = [settings.github_url, settings.linkedin_url, settings.twitter_url].filter(
-    (u): u is string => !!u,
-  );
+  // The configured social links, in display order (settings.socials), with each url
+  // through safeHref (CR-01: http(s)-only, drops javascript:/data:/unparseable) and
+  // null/blank entries dropped. Same gate as the rendered template links (T-25-09).
+  const socials = Array.isArray(settings.socials) ? settings.socials : [];
+  const sameAs = socials
+    .map((s) => safeHref((s as { url?: unknown } | null)?.url as string | null | undefined))
+    .filter((u): u is string => typeof u === 'string');
 
   return {
     '@context': 'https://schema.org',

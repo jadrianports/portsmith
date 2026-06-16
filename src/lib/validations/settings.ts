@@ -44,14 +44,10 @@ export const settingsSchema = z.object({
   og_image_url: urlOrEmptyOptional,
   favicon_url: urlOrEmptyOptional,
 
-  // --- social links (URL-or-empty) ---
-  github_url: urlOrEmptyOptional,
-  linkedin_url: urlOrEmptyOptional,
-  twitter_url: urlOrEmptyOptional,
-  dribbble_url: urlOrEmptyOptional,
-  website_url: urlOrEmptyOptional,
-
   // --- public contact email (email-or-empty) ---
+  // NOTE: the legacy fixed `*_url` social subset was DROPPED in P25 (migration 025 /
+  // SET-05). The active contact/socials write shape is `contactSocialsSettingsSchema`
+  // below (socials JSONB array + location + phone).
   email_public: z.email().max(320).or(z.literal('')).optional(),
 });
 

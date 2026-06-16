@@ -57,9 +57,9 @@ const PROFILE_COLUMNS = 'username, display_name, headline, avatar_url, resume_ur
  * explicit so a future added column is never silently exported.
  */
 const SETTINGS_COLUMNS =
-  'color_preset, dribbble_url, email_public, favicon_url, font_preset, ' +
-  'github_url, linkedin_url, meta_description, og_image_url, page_title, ' +
-  'theme_mode, twitter_url, visitor_theme_toggle, website_url';
+  'color_preset, email_public, favicon_url, font_preset, location, ' +
+  'meta_description, og_image_url, page_title, phone, socials, ' +
+  'theme_mode, visitor_theme_toggle';
 
 /** ALL sections incl. hidden — no `visible` filter (D-13). */
 const SECTION_COLUMNS = 'type, sort_order, visible, content';

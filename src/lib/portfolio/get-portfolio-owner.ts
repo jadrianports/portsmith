@@ -202,11 +202,6 @@ export async function getPortfolioOwnerByUsername(
     og_image_url: settings.og_image_url,
     favicon_url: settings.favicon_url,
     email_public: settings.email_public,
-    github_url: settings.github_url,
-    linkedin_url: settings.linkedin_url,
-    twitter_url: settings.twitter_url,
-    dribbble_url: settings.dribbble_url,
-    website_url: settings.website_url,
     // Phase 24 (SET-01..04, Pitfall 2): the owner read is EXPLICIT column-by-column,
     // so the editor form cannot seed socials/location/phone unless they are assembled
     // here. The anon `.select('*')` lane (get-portfolio.ts, D-22) picks them up auto.
