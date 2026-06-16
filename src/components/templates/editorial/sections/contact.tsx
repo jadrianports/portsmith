@@ -21,9 +21,13 @@
  * Newsprint palette automatically. Error/success/Turnstile copy is inherited from the
  * live Phase-6 contract — NOT re-declared here.
  *
- * PUBLIC EMAIL via the content (Option A — additive field, NOT a contract change):
- * the seed copies `settings.email_public` → `contact.email_public`; this section
- * renders the `mailto:` render-if-present (the SAME idiom minimal uses).
+ * PUBLIC CONTACT DETAILS from SETTINGS (Phase 25 — D-07/D-08): the public email,
+ * location, and phone are read from `data.settings` (the single source of truth),
+ * threaded in by `index.tsx` as the scoped `ContactExtraProps`. This REPLACES the
+ * Phase-24-killed seed-copied `content.email_public` idiom (D-07); the frozen global
+ * `SectionProps` is NOT widened (D-08). Each field is omit-if-absent — email →
+ * `mailto:` via `safeHref(...,{allowMailto:true})`, location + phone as plain text
+ * rows (phone is NOT a `tel:` link — RESEARCH OQ-2), in editorial's newsprint voice.
  *
  * LAYOUT (A.7 §7): mono `07 — CONTACT` kicker, the heading (`contact.heading`) +
  * subhead (`contact.subheading`) above an ink rule, then the live ruled form (thin ink
@@ -34,17 +38,12 @@
  * COLOR: no hardcoded hex — every value reads a scoped `var(--token)` from theme.css.
  */
 import { ContactForm } from '@/components/public/contact-form';
-import type { SectionProps } from './types';
+import type { ContactExtraProps, SectionProps } from './types';
 import type { ContactContent } from '@/lib/validations';
 import { safeHref } from '@/lib/safe-url';
 
-/**
- * The contact content as it flows through the section contract: `ContactContent`
- * (validated at seed time) plus the OPTIONAL `email_public` the seed surfaces from
- * `settings.email_public` for the `mailto:` fallback (Option A). Optional ⇒ the mailto
- * simply hides when absent.
- */
-type ContactSectionContent = ContactContent & { email_public?: string | null };
+/** The validated JSONB contact content (heading/subheading) — null-guarded below. */
+type ContactSectionContent = ContactContent;
 
 /** A string field is "present" when it is a non-empty trimmed string. */
 function present(v: string | null | undefined): v is string {
@@ -63,7 +62,12 @@ const kickerStyle: React.CSSProperties = {
   margin: 0,
 };
 
-export function Contact({ section }: SectionProps) {
+export function Contact({
+  section,
+  emailPublic: emailPublicProp,
+  location: locationProp,
+  phone: phoneProp,
+}: SectionProps & ContactExtraProps) {
   // Cast the validated JSONB content; null-guard the row + every field.
   const content = (section?.content ?? null) as ContactSectionContent | null;
   if (!content) return null;
@@ -73,11 +77,13 @@ export function Contact({ section }: SectionProps) {
   const subheading = present(content.subheading)
     ? content.subheading
     : "Have an idea in mind? Let's talk";
-  // The public-email mailto is render-if-present (Option A). Absent/empty ⇒ no mailto.
-  // The email is validated by `z.email()`, but the `href` is still built through the
-  // shared guard with `allowMailto` (CR-01). The address is interpolated literally — the
-  // `@` MUST stay literal (percent-encoding it breaks the recipient in many mail clients).
-  const emailPublic = present(content.email_public) ? content.email_public : null;
+  // Public contact details from SETTINGS (D-07) — omit-if-absent. The email mailto is
+  // built through the shared guard with `allowMailto` (CR-01). The address is
+  // interpolated literally — the `@` MUST stay literal (percent-encoding it breaks the
+  // recipient in many mail clients). Phone renders as plain text (NOT tel: — OQ-2).
+  const emailPublic = present(emailPublicProp) ? emailPublicProp : null;
+  const location = present(locationProp) ? locationProp : null;
+  const phone = present(phoneProp) ? phoneProp : null;
   const mailtoHref = emailPublic
     ? safeHref(`mailto:${emailPublic}`, { allowMailto: true })
     : undefined;
@@ -130,6 +136,68 @@ export function Contact({ section }: SectionProps) {
       >
         {subheading}
       </p>
+
+      {/* Contact details from SETTINGS (Phase 25 / D-07) — email (mailto:), location,
+          phone, each omit-if-absent, in editorial's newsprint voice (mono uppercase
+          label in --muted-fg, value in --fg). Phone is plain text (NOT tel: — OQ-2).
+          The row renders only when at least one detail is present. */}
+      {emailPublic || location || phone ? (
+        <ul
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '24px 56px',
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+          }}
+        >
+          {emailPublic && mailtoHref ? (
+            <li style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={kickerStyle}>Email</span>
+              <a
+                href={mailtoHref}
+                className="tmpl-project-link"
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '18px',
+                  color: 'var(--accent)',
+                }}
+              >
+                {emailPublic}
+              </a>
+            </li>
+          ) : null}
+          {location ? (
+            <li style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={kickerStyle}>Location</span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '18px',
+                  color: 'var(--fg)',
+                }}
+              >
+                {location}
+              </span>
+            </li>
+          ) : null}
+          {phone ? (
+            <li style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={kickerStyle}>Phone</span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-body)',
+                  fontSize: '18px',
+                  color: 'var(--fg)',
+                }}
+              >
+                {phone}
+              </span>
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
 
       {/* LIVE WIRING (Architecture Note #5 / CONT-01/02/03): the `<ContactForm>` client
           island when the portfolio id is present on the section row

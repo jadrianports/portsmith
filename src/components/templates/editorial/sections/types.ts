@@ -43,6 +43,21 @@ import type { PortfolioData, PublicSection } from '../../types';
 export type SectionProps = { section: PublicSection | undefined };
 
 /**
+ * Scoped EXTRA props for the Contact section ONLY (Phase 25 / D-07 / D-08) — mirrors
+ * `minimal/sections/types.ts`'s `ContactExtraProps`. The Contact section reads the
+ * public contact details (`email_public`/`location`/`phone`) from `data.settings`
+ * (the single source of truth), threaded in by `index.tsx`, REPLACING the killed
+ * seed-copied `content.email_public` idiom (D-07). The frozen global `SectionProps`
+ * is NOT widened (D-08). All `| null` — the section null-guards each and omits an
+ * absent field cleanly.
+ */
+export type ContactExtraProps = {
+  emailPublic?: string | null;
+  location?: string | null;
+  phone?: string | null;
+};
+
+/**
  * The prop contract for the FOOTER. The footer reads `settings` (social links) and
  * `profile` rather than a single section row, so it takes the whole `PortfolioData`.
  * Absolute footer links go through `siteUrl()` (PUB-03).
