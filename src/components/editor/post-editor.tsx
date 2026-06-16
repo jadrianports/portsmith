@@ -236,7 +236,13 @@ export function PostEditor({
     setPendingImageAlt('');
   }
 
-  /** Render the Preview tab via the SERVER pipeline (D-20 — never a client render). */
+  /**
+   * Render the Preview tab via the SERVER pipeline (D-20 — never a client render).
+   * D-05 unsaved-draft / D-07 published-prose parity: sends the LIVE `body` (the
+   * in-flight unsaved draft, not the last-saved row) to renderPostPreviewAction,
+   * which now returns context-free sanitized HTML carrying the published prose class
+   * names — rendered below in the `prose max-w-none` container. // BLOG-02 / D-04
+   */
   const runPreview = useCallback(async () => {
     setPreviewLoading(true);
     setPreviewError(null);

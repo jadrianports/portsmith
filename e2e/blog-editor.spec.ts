@@ -11,31 +11,20 @@
  *           continues on the persisted row (the Publish control, gated
  *           `disabled={!postId}`, enables once the first save promotes the postId).
  *
- *   D-15(a) [test.fixme — BLOCKED on an architectural decision, see below] — the
- *           Write/Preview tab is meant to render the IN-MEMORY draft body before the
- *           first save. EXECUTION FINDING (17-04 Task 3): `renderPostPreviewAction`
- *           is BROKEN in the real Next runtime (dev AND production), not just
- *           "before first save". It calls `renderToStaticMarkup()` on a tree that
- *           contains the `'use client'` `<CodeBridgeProvider>`/`<CodeBridge>`
- *           components; from inside a Server Action React refuses to invoke a client
- *           component synchronously, throwing:
- *             "Attempted to call CodeBridgeProvider() from the server but
- *              CodeBridgeProvider is on the client."
- *           so the action always returns `{ ok:false }` → the editor shows
- *           "Couldn't render the preview." The unit suite never caught this because
- *           `renderToStaticMarkup(await renderMarkdown(md))` runs in a plain node env
- *           where `'use client'` is inert. The plan's RESEARCH (item 21) assumed
- *           Preview "likely already correct" from a static read; it is not.
+ *   D-15(a) [PASSING — BLOG-02 / 26-01, escalation CLOSED] — the Write/Preview tab
+ *           renders the IN-MEMORY draft body before the first save. The 17-04 finding
+ *           was that `renderPostPreviewAction` was BROKEN in the real Next runtime
+ *           (dev AND production): it serialized a tree containing the client-graph
+ *           code-bridge provider, and a Server Action cannot invoke a client component
+ *           synchronously, so the action always returned `{ ok:false }` and the editor
+ *           showed "Couldn't render the preview." The unit suite never caught it
+ *           because the client directive is inert in a plain node env.
  *
- *           This is a Rule-4 ARCHITECTURAL fix (it restructures the D-20
- *           "preview is truth" serialization mechanism and touches
- *           `render-post-preview-action.ts` + the code-bridge render path — files
- *           OUTSIDE this plan's `files_modified`). Per the executor deviation rules
- *           it is ESCALATED to a human decision rather than silently re-architected
- *           in this plan. The plan's stated fallback ("disable Preview until first
- *           save") does NOT resolve it, because Preview errors regardless of save
- *           state. `test.fixme` keeps CI green while pinning the broken behavior +
- *           the intended assertion for whoever lands the preview-render fix.
+ *           BLOG-02 / 26-01 fixes the root cause: the action now renders through the
+ *           server-only, context-free `renderMarkdownToHtml` (no client-graph
+ *           component in the tree), so it no longer throws. This test is UN-SKIPPED
+ *           and is the AUTHORITATIVE BLOG-02 gate — it MUST run against a PRODUCTION
+ *           build (a node-env unit test cannot reproduce the original runtime throw).
  *
  * AUTH (model: cms-loop.spec.ts) — a CONFIRMED owner is created via the admin API and
  * bootstrapped with the real initialize_portfolio RPC, then signed into the BROWSER
@@ -147,12 +136,14 @@ test.describe('D-15 — blog editor: new-post retention + Preview-before-first-s
     await expect(postEditor.getByRole('button', { name: 'Publish', exact: true })).toBeEnabled();
   });
 
-  // ── D-15(a): Preview-before-first-save — BLOCKED on the Rule-4 architectural
-  //    decision documented in the file header (renderPostPreviewAction throws in the
-  //    real runtime because renderToStaticMarkup cannot invoke the 'use client'
-  //    CodeBridgeProvider from a Server Action). Marked fixme so CI stays green while
-  //    the intended assertion is pinned for the preview-render fix. ──
-  test.fixme(
+  // ── D-15(a): Preview-before-first-save — ESCALATION CLOSED (BLOG-02 / 26-01).
+  //    renderPostPreviewAction now renders through the server-only, context-free
+  //    renderMarkdownToHtml (no client-graph code-bridge component in the tree), so it
+  //    no longer throws in the real Next runtime. UN-SKIPPED — this is the AUTHORITATIVE
+  //    BLOG-02 gate and MUST run against a PRODUCTION build: a node-env unit test
+  //    provably CANNOT catch the original runtime throw (the client directive is inert
+  //    in node), so only this production-build e2e proves the fix. ──
+  test(
     'Preview renders the unsaved in-memory draft body before the first save (D-15a)',
     async ({ page }) => {
       test.setTimeout(150_000);
