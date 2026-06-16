@@ -51,6 +51,7 @@
  */
 import { revalidatePath } from 'next/cache';
 
+import { buildSettingsAllowlist } from '@/lib/cms/settings-allowlist';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 import { contactSocialsSettingsSchema, type ContactSocialsSettings } from '@/lib/validations';
 
@@ -85,35 +86,10 @@ export interface SaveSettingsInput {
 const NOT_SIGNED_IN = 'Not signed in.';
 const SAVE_FAILED = 'Something went wrong saving your changes. Please try again.';
 
-/** The exact shape written to `portfolio_settings` — exactly four columns. */
-export interface SettingsAllowlist {
-  email_public: string;
-  socials: NonNullable<ContactSocialsSettings['socials']>;
-  location: string | null;
-  phone: string | null;
-}
-
-/** Empty string / undefined → null (D-10 set-and-clear); any non-empty value passes through. */
-function emptyToNull(value: string | undefined): string | null {
-  return value && value !== '' ? value : null;
-}
-
-/**
- * Build the EXPLICIT `portfolio_settings` UPDATE payload BY HAND (D-12 / SET-04 —
- * the mass-assignment defense). Returns EXACTLY the four sanctioned columns; any
- * extra key on `parsed` (a smuggled portfolio_id / id / role / storage_used_bytes)
- * is dropped — it can never reach `.update()`. Pure (no I/O) so the unit test pins
- * the key set + the empty→null normalization directly.
- */
-// D-12 / SET-04
-export function buildSettingsAllowlist(parsed: ContactSocialsSettings): SettingsAllowlist {
-  return {
-    email_public: parsed.email_public ?? '',
-    socials: parsed.socials ?? [],
-    location: emptyToNull(parsed.location),
-    phone: emptyToNull(parsed.phone),
-  };
-}
+// The EXPLICIT 4-column allowlist (D-12 / SET-04, the mass-assignment defense) now
+// lives in the PLAIN `./settings-allowlist` module — a `'use server'` file may only
+// export ASYNC functions (Next 16 Turbopack), so the pure sync `buildSettingsAllowlist`
+// cannot live here. Imported above.
 
 export async function saveSettingsAction(input: SaveSettingsInput): Promise<SaveSettingsResult> {
   // 1) Verified identity (AUTH-05 — never getSession). // D-12

@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { buildSettingsAllowlist } from '@/lib/cms/save-settings-action';
+import { buildSettingsAllowlist } from '@/lib/cms/settings-allowlist';
 
 const EXACT_KEYS = ['email_public', 'socials', 'location', 'phone'] as const;
 
