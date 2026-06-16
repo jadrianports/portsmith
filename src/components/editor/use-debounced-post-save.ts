@@ -132,6 +132,15 @@ export function useDebouncedPostSave(
   const latest = useRef(params);
   latest.current = params;
 
+  // CR-01 (duplicate-CREATE guard): `latest.current.postId` only re-syncs on render,
+  // so on a BRAND-NEW post a second debounced flush firing before the first CREATE's
+  // `onSaved` → `setPostId` propagates would still read `postId === undefined` and
+  // INSERT a SECOND row (two posts for "one"). `createdIdRef` records the id the
+  // instant a CREATE resolves (no render needed); `createInFlightRef` lets a concurrent
+  // flush AWAIT the first CREATE and then UPDATE that row instead of inserting its own.
+  const createdIdRef = useRef<string | undefined>(params.postId);
+  const createInFlightRef = useRef<Promise<string | null> | null>(null);
+
   /** The content flush: seq-stamp → skip-invalid → save → drop-if-stale. */
   const flush = useCallback(async (content: unknown): Promise<SavePostResult> => {
     const { postId, portfolioId, username, onSaved } = latest.current;
@@ -145,12 +154,40 @@ export function useDebouncedPostSave(
     }
 
     setState('saving');
-    const input: SavePostInput = { postId, portfolioId, content, username };
+
+    // CR-01: resolve the effective target id. Prefer the param; else the id a CREATE
+    // already resolved this session; else, if a CREATE is in flight, AWAIT it so we
+    // UPDATE that row rather than INSERT a duplicate.
+    let effectiveId = postId ?? createdIdRef.current;
+    if (!effectiveId && createInFlightRef.current) {
+      effectiveId = (await createInFlightRef.current) ?? undefined;
+    }
+
+    // If still no id, THIS flush is the first writer for a brand-new post: publish an
+    // in-flight promise SYNCHRONOUSLY (before the first await below) so any concurrent
+    // flush serializes on it; `resolveCreate` settles it with the new id (or null).
+    let resolveCreate: ((id: string | null) => void) | null = null;
+    if (!effectiveId) {
+      createInFlightRef.current = new Promise<string | null>((res) => {
+        resolveCreate = res;
+      });
+    }
+
+    const input: SavePostInput = { postId: effectiveId, portfolioId, content, username };
     let result: SavePostResult;
     try {
       result = await savePostAction(input);
     } catch {
       result = { ok: false, error: 'Something went wrong saving your post.' };
+    }
+
+    // Settle the CREATE promise (if this flush owned it) BEFORE the stale-drop below,
+    // so a waiting concurrent flush always unblocks even when this flush is no longer
+    // the latest. Record the resolved id so later flushes UPDATE rather than INSERT.
+    if (resolveCreate) {
+      if (result.ok) createdIdRef.current = result.id;
+      (resolveCreate as (id: string | null) => void)(result.ok ? result.id : null);
+      createInFlightRef.current = null;
     }
 
     // Out-of-order stale-drop: only the LATEST flush drives the visible state.
@@ -208,6 +245,11 @@ export function useDebouncedPostSave(
   // Reset the visible state if the post being edited changes underfoot.
   useEffect(() => {
     setState('idle');
+    // CR-01: a different post is now being edited — re-anchor the create-guard refs to
+    // the new target so a prior post's resolved id / in-flight create can never make a
+    // later flush touch the wrong row.
+    createdIdRef.current = params.postId;
+    createInFlightRef.current = null;
   }, [params.postId]);
 
   return { state, scheduleSave, immediateSave, setPublished };

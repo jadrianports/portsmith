@@ -74,7 +74,7 @@ export async function publishPostAction(
     .from('blog_posts')
     .update(lifecycle)
     .eq('id', input.postId)
-    .select('id');
+    .select('id, slug');
   if (error) return { ok: false, error: PUBLISH_FAILED };
   // 0-row write = cross-tenant target hit the RLS USING clause, or the row is
   // missing. Enumeration-safe generic failure (T-13.2-08).
@@ -82,9 +82,15 @@ export async function publishPostAction(
     return { ok: false, error: PUBLISH_FAILED };
   }
 
+  // WR-02: revalidate the PERSISTED slug from the updated row, not the client-supplied
+  // `input.slug` (which is `slugify(title)` derived in the editor and can diverge from
+  // the stored slug when a content save hasn't flushed or the server normalized it).
+  // Purging the wrong `/blog/{slug}` path would leave the live post serving stale ISR.
+  const persistedSlug = (updatedRows[0] as { slug?: string }).slug ?? input.slug;
+
   // 4) THREE literal revalidates (D-18) — no second arg on any (Pitfall 1).
   revalidatePath('/' + input.username + '/blog');
-  revalidatePath('/' + input.username + '/blog/' + input.slug);
+  revalidatePath('/' + input.username + '/blog/' + persistedSlug);
   revalidatePath('/' + input.username);
 
   return { ok: true };

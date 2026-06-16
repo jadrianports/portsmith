@@ -638,12 +638,27 @@ export function PostEditor({
             ) : previewError ? (
               <Alert variant="error">{previewError}</Alert>
             ) : (
+              // WR-01: the sanitized HTML reproduces the PUBLISHED edgerunner-v2 blog
+              // prose, whose neon classes (`text-neon-cyan`, `bg-gradient-neon`, …) and
+              // CSS vars (`--fg`, `--neon-pink`, `--bg-deep`) are SCOPED to
+              // `.tmpl-edgerunner-v2` over a dark surface. Rendering it bare in the chrome
+              // dashboard left those classes/vars unresolved → an unstyled/low-contrast
+              // preview. Wrap it in the template scope + its dark surface so the preview
+              // faithfully mirrors the live post (D-04/D-07 published-prose parity). This
+              // is the template's OWN scoped theme applied to template output — not a
+              // chrome↔template token cross-reference.
               <div
-                className="prose max-w-none"
-                // D-20: server-produced, already-sanitized HTML from renderPostPreviewAction
-                // (skipHtml + urlTransform ran inside the pipeline) — NOT a client dSIH of raw input.
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
-              />
+                className="tmpl-edgerunner-v2 overflow-hidden rounded-lg"
+                data-template-theme="dark"
+                style={{ background: 'var(--bg-deep, oklch(0.10 0.04 285))' }}
+              >
+                <div
+                  className="prose max-w-none px-5 py-6"
+                  // D-20: server-produced, already-sanitized HTML from renderPostPreviewAction
+                  // (skipHtml + urlTransform ran inside the pipeline) — NOT a client dSIH of raw input.
+                  dangerouslySetInnerHTML={{ __html: previewHtml }}
+                />
+              </div>
             )}
           </div>
         )}

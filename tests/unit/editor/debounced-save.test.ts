@@ -317,3 +317,111 @@ describe('D-06 — out-of-order flush stale-drop (mock-saver seam, fast layer)',
     await slowEarlier;
   });
 });
+
+// CR-01 (26-REVIEW) — the duplicate-CREATE guard on a brand-new post.
+//
+// `latest.current.postId` only re-syncs on render, so a SECOND debounced flush firing
+// before the first CREATE's `onSaved` → `setPostId` propagates would still read
+// `postId === undefined` and INSERT a SECOND row (two posts for "one"). The hook
+// (`use-debounced-post-save.ts`) serializes the CREATE: the first writer publishes a
+// `createInFlightRef` promise (set synchronously, before its first await) and records the
+// resolved id in `createdIdRef`; any concurrent flush AWAITs that promise and then UPDATEs
+// the created row instead of inserting its own. This is the fast node sampling layer (the
+// real two-flush-through-savePostAction proof is the blog-editor Playwright e2e).
+describe('CR-01 — duplicate-CREATE guard (a burst on a NEW post INSERTs exactly once)', () => {
+  /**
+   * A mock post saver that distinguishes a CREATE (no `postId` → mint a new id) from an
+   * UPDATE (`postId` present), auto-resolving on a microtask so flush ordering is driven
+   * deterministically by the create-serialization logic — not by hand-staggered resolvers.
+   * Mirrors the `savePostAction` seam the hook awaits.
+   */
+  function makeMockPostSaver() {
+    let nextId = 1;
+    const inserts: unknown[] = [];
+    const updates: Array<{ postId: string }> = [];
+    const save = async (input: {
+      postId?: string;
+      content: unknown;
+    }): Promise<{ ok: true; id: string }> => {
+      await Promise.resolve(); // a network tick — lets a concurrent flush interleave
+      if (input.postId == null) {
+        const id = `post-${nextId++}`;
+        inserts.push(input.content);
+        return { ok: true, id };
+      }
+      updates.push({ postId: input.postId });
+      return { ok: true, id: input.postId };
+    };
+    return { save, inserts, updates };
+  }
+
+  /**
+   * A minimal re-creation of the hook's create-serialized flush slice
+   * (`use-debounced-post-save.ts`): `createdIdRef` records the id the instant a CREATE
+   * resolves; `createInFlightRef` lets a concurrent flush await the first CREATE and then
+   * UPDATE that row. `initialId` seeds the existing-post case (the param `postId`).
+   */
+  function makeCreateGuardedHarness(
+    saver: (input: { postId?: string; content: unknown }) => Promise<{ ok: true; id: string }>,
+    initialId?: string,
+  ) {
+    const createdIdRef: { current: string | undefined } = { current: initialId };
+    const createInFlightRef: { current: Promise<string | null> | null } = { current: null };
+    async function flush(content: unknown): Promise<{ ok: true; id: string }> {
+      let effectiveId = createdIdRef.current;
+      if (!effectiveId && createInFlightRef.current) {
+        effectiveId = (await createInFlightRef.current) ?? undefined;
+      }
+      let resolveCreate: ((id: string | null) => void) | null = null;
+      if (!effectiveId) {
+        createInFlightRef.current = new Promise<string | null>((res) => {
+          resolveCreate = res;
+        });
+      }
+      const result = await saver({ postId: effectiveId, content });
+      if (resolveCreate) {
+        createdIdRef.current = result.id;
+        (resolveCreate as (id: string | null) => void)(result.id);
+        createInFlightRef.current = null;
+      }
+      return result;
+    }
+    return { flush };
+  }
+
+  it('two concurrent flushes on a NEW post → exactly ONE INSERT; the 2nd UPDATEs the created row', async () => {
+    const mock = makeMockPostSaver();
+    const { flush } = makeCreateGuardedHarness(mock.save);
+
+    // The race: two debounced flushes both fire before the first CREATE resolves.
+    const [r1, r2] = await Promise.all([flush({ body_md: 'a' }), flush({ body_md: 'ab' })]);
+
+    expect(mock.inserts).toHaveLength(1); // exactly ONE INSERT — no duplicate post
+    expect(mock.updates).toEqual([{ postId: 'post-1' }]); // the 2nd flush UPDATED the created row
+    expect(r1.id).toBe('post-1');
+    expect(r2.id).toBe('post-1'); // both flushes resolve to the SAME row
+  });
+
+  it('a flush on an EXISTING post UPDATEs and never INSERTs', async () => {
+    const mock = makeMockPostSaver();
+    const { flush } = makeCreateGuardedHarness(mock.save, 'post-existing');
+
+    await flush({ body_md: 'edit' });
+
+    expect(mock.inserts).toHaveLength(0);
+    expect(mock.updates).toEqual([{ postId: 'post-existing' }]);
+  });
+
+  it('serial flushes on a new post INSERT once, then UPDATE the same row', async () => {
+    const mock = makeMockPostSaver();
+    const { flush } = makeCreateGuardedHarness(mock.save);
+
+    const first = await flush({ body_md: 'a' }); // CREATE
+    const second = await flush({ body_md: 'ab' }); // UPDATE (createdIdRef now set)
+
+    expect(mock.inserts).toHaveLength(1);
+    expect(mock.updates).toEqual([{ postId: 'post-1' }]);
+    expect(first.id).toBe('post-1');
+    expect(second.id).toBe('post-1');
+  });
+});
