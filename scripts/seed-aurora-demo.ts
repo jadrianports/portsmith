@@ -356,6 +356,12 @@ async function main(): Promise<void> {
   // (the CR-01 stored-XSS URL gate) BEFORE this service-role write — the privileged
   // path must NOT bypass the Zod gate (WR-02). Pass `undefined` (not `null`) for absent
   // URLs since the schema is URL-or-empty-or-omitted; a throw aborts the seed.
+  // P25 (SET-05): the fixed `*_url` social columns were DROPPED (migration 025); the
+  // single source is now `settings.socials` (a {platform,url}[] JSONB array, gated by
+  // `contactSocialsSettingsSchema` in the CMS + render-time `safeHref`). The seed writes
+  // the fixture's `socials`/`location`/`phone` directly; `settingsSchema.parse` still
+  // gates the non-social fields (theme/title/meta/email — the CR-01 URL gate on
+  // og_image/favicon stays in force).
   const validatedSettings = settingsSchema.parse({
     theme_mode: 'light',
     visitor_theme_toggle: true,
@@ -364,9 +370,6 @@ async function main(): Promise<void> {
     page_title: AURORA_DEMO.settings.page_title,
     meta_description: AURORA_DEMO.settings.meta_description,
     email_public: AURORA_DEMO.settings.email_public,
-    linkedin_url: AURORA_DEMO.settings.linkedin_url ?? undefined,
-    twitter_url: AURORA_DEMO.settings.twitter_url ?? undefined,
-    website_url: AURORA_DEMO.settings.website_url ?? undefined,
   });
   const { error: settingsError } = await admin.from('portfolio_settings').upsert(
     {
@@ -378,9 +381,9 @@ async function main(): Promise<void> {
       page_title: validatedSettings.page_title,
       meta_description: validatedSettings.meta_description,
       email_public: validatedSettings.email_public,
-      linkedin_url: validatedSettings.linkedin_url ?? null,
-      twitter_url: validatedSettings.twitter_url ?? null,
-      website_url: validatedSettings.website_url ?? null,
+      socials: AURORA_DEMO.settings.socials ?? [],
+      location: AURORA_DEMO.settings.location ?? null,
+      phone: AURORA_DEMO.settings.phone ?? null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'portfolio_id' },

@@ -345,6 +345,10 @@ async function main(): Promise<void> {
   // NOT bypass the Zod gate (WR-02). Pass `undefined` (not `null`) for absent URLs since
   // the schema is URL-or-empty-or-omitted; a throw aborts the seed. editorial ships only
   // the `'default'` preset (its spec), so both presets are `'default'`.
+  // P25 (SET-05): fixed `*_url` social columns DROPPED (migration 025) — single source
+  // is now `settings.socials` ({platform,url}[] JSONB). The seed writes the fixture's
+  // socials/location/phone directly; settingsSchema.parse still gates the non-social
+  // fields (theme/title/meta/email).
   const validatedSettings = settingsSchema.parse({
     theme_mode: 'light',
     visitor_theme_toggle: true,
@@ -353,9 +357,6 @@ async function main(): Promise<void> {
     page_title: EDITORIAL_DEMO.settings.page_title,
     meta_description: EDITORIAL_DEMO.settings.meta_description,
     email_public: EDITORIAL_DEMO.settings.email_public,
-    github_url: EDITORIAL_DEMO.settings.github_url ?? undefined,
-    linkedin_url: EDITORIAL_DEMO.settings.linkedin_url ?? undefined,
-    website_url: EDITORIAL_DEMO.settings.website_url ?? undefined,
   });
   const { error: settingsError } = await admin.from('portfolio_settings').upsert(
     {
@@ -367,9 +368,9 @@ async function main(): Promise<void> {
       page_title: validatedSettings.page_title,
       meta_description: validatedSettings.meta_description,
       email_public: validatedSettings.email_public,
-      github_url: validatedSettings.github_url ?? null,
-      linkedin_url: validatedSettings.linkedin_url ?? null,
-      website_url: validatedSettings.website_url ?? null,
+      socials: EDITORIAL_DEMO.settings.socials ?? [],
+      location: EDITORIAL_DEMO.settings.location ?? null,
+      phone: EDITORIAL_DEMO.settings.phone ?? null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'portfolio_id' },

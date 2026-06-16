@@ -88,9 +88,11 @@ export interface EditorialDemoContent {
     meta_description: string;
     /** Intended-public contact email (distinct from the private profiles.email). */
     email_public: string;
-    github_url?: string;
-    linkedin_url?: string;
-    website_url?: string;
+    // P25 (SET-05): social links as an ordered {platform,url} array (the fixed *_url
+    // columns were dropped in migration 025). Curated slugs only; twitter -> 'x'.
+    socials?: { platform: string; url: string }[];
+    location?: string;
+    phone?: string;
   };
 
   /** Section contents — each typed against its `*Content` Zod-inferred type (SHARED-C). */
@@ -135,9 +137,12 @@ export const EDITORIAL_DEMO: EditorialDemoContent = {
     meta_description:
       'Full-stack product engineer who turns rough ideas into shipped, well-crafted software — from the data model to the last pixel.',
     email_public: 'hello-lena@example.com',
-    github_url: 'https://github.com/lena-voss-demo',
-    linkedin_url: 'https://www.linkedin.com/in/lena-voss-demo',
-    website_url: undefined,
+    socials: [
+      { platform: 'github', url: 'https://github.com/lena-voss-demo' },
+      { platform: 'linkedin', url: 'https://www.linkedin.com/in/lena-voss-demo' },
+    ],
+    location: undefined,
+    phone: undefined,
   },
 
   sections: {

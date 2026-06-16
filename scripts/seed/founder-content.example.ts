@@ -93,11 +93,18 @@ export interface FounderContent {
     meta_description: string;
     /** Intended-public contact email (distinct from the private profiles.email). */
     email_public: string;
-    github_url?: string;
-    linkedin_url?: string;
-    twitter_url?: string;
-    dribbble_url?: string;
-    website_url?: string;
+    /**
+     * P25 (SET-05): the social links as an ordered `{platform,url}` array — the single
+     * source (the fixed `*_url` columns were dropped in migration 025). `platform` is one
+     * of the curated `SOCIAL_PLATFORMS` slugs (github/linkedin/x/instagram/youtube/tiktok/
+     * dribbble/behance/facebook/threads/website); array order = display order; each url is
+     * http(s)-gated at render (safeHref). Twitter maps to the `x` slug.
+     */
+    socials?: { platform: string; url: string }[];
+    /** Free-form location ("Brooklyn, NY", "Remote · GMT+1") — optional. */
+    location?: string;
+    /** Free-form phone (international formats + extensions) — optional. */
+    phone?: string;
   };
 
   /** Section contents — each typed against its `*Content` Zod-inferred type (SHARED-C). */
@@ -161,11 +168,14 @@ export const FOUNDER: FounderContent = {
     page_title: 'REPLACE: James Adrian Porter — Portfolio',
     meta_description: 'REPLACE: A short SEO description of James and what he builds.',
     email_public: 'replace-hello@example.com', // intended-public contact email (shape-valid)
-    github_url: 'https://github.com/REPLACE',
-    linkedin_url: 'https://www.linkedin.com/in/REPLACE',
-    twitter_url: undefined, // optional — set a https URL or leave undefined
-    dribbble_url: undefined, // optional
-    website_url: undefined, // optional
+    // P25: ordered social links ({platform,url}); array order = display order. Add/remove
+    // entries freely (curated slugs only). twitter -> 'x'. Each url must be shape-valid https.
+    socials: [
+      { platform: 'github', url: 'https://github.com/REPLACE' },
+      { platform: 'linkedin', url: 'https://www.linkedin.com/in/REPLACE' },
+    ],
+    location: undefined, // optional — e.g. 'Remote' or a city
+    phone: undefined, // optional
   },
 
   sections: {

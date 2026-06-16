@@ -83,18 +83,12 @@ function isLocalTarget(url: string): boolean {
  */
 function buildSections(): { type: string; content: unknown; visible: boolean }[] {
   const s = FOUNDER.sections;
-  // OPTION A (03-08): surface the intended-public contact email INTO the contact
-  // section content as the additive, OPTIONAL `email_public` field so the Contact
-  // section can render a `mailto:` fallback under the FROZEN `{ section }`
-  // SectionProps contract (the section never receives `data.settings`). The source
-  // of truth stays `settings.email_public`; we copy it here (the same idiom the
-  // hero uses for `resume_url`). This is additive JSONB content — no migration
-  // (CMS-08) — and is validated by the SAME Zod gate (`contactContentSchema` now
-  // carries the optional `email_public`).
-  const contactContent = {
-    ...s.contact,
-    email_public: FOUNDER.settings.email_public,
-  };
+  // P25 (SET-05 / D-07): the Contact section now reads `settings.email_public` directly
+  // (via the per-template ContactExtraProps plumbing, Plans 25-01/25-02) — the single
+  // source of truth. The old 03-08 idiom of COPYING email_public into the contact
+  // section content (the stale-copy class) is removed; the section content is just the
+  // authored contact fixture.
+  const contactContent = { ...s.contact };
   // WR-01 (03-REVIEW): surface profile.resume_url INTO the hero content so the
   // "Download résumé" button (D-14) actually renders. `heroContentSchema` now carries
   // an OPTIONAL `resume_url`, so the field survives the Zod gate (without the schema
@@ -416,11 +410,11 @@ async function main(): Promise<void> {
       page_title: FOUNDER.settings.page_title,
       meta_description: FOUNDER.settings.meta_description,
       email_public: FOUNDER.settings.email_public,
-      github_url: FOUNDER.settings.github_url ?? null,
-      linkedin_url: FOUNDER.settings.linkedin_url ?? null,
-      twitter_url: FOUNDER.settings.twitter_url ?? null,
-      dribbble_url: FOUNDER.settings.dribbble_url ?? null,
-      website_url: FOUNDER.settings.website_url ?? null,
+      // P25 (SET-05): the fixed `*_url` social columns were DROPPED (migration 025); the
+      // single source is now `settings.socials` ({platform,url}[] JSONB, twitter -> 'x').
+      socials: FOUNDER.settings.socials ?? [],
+      location: FOUNDER.settings.location ?? null,
+      phone: FOUNDER.settings.phone ?? null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'portfolio_id' },

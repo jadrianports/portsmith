@@ -97,9 +97,11 @@ export interface AuroraDemoContent {
     meta_description: string;
     /** Intended-public contact email (distinct from the private profiles.email). */
     email_public: string;
-    linkedin_url?: string;
-    twitter_url?: string;
-    website_url?: string;
+    // P25 (SET-05): social links as an ordered {platform,url} array (the fixed *_url
+    // columns were dropped in migration 025). Curated slugs only; twitter -> 'x'.
+    socials?: { platform: string; url: string }[];
+    location?: string;
+    phone?: string;
   };
 
   /** Section contents — each typed against its `*Content` Zod-inferred type (SHARED-C). */
@@ -144,9 +146,13 @@ export const AURORA_DEMO: AuroraDemoContent = {
     meta_description:
       'Freelance marketing consultant helping founders launch brands, grow audiences, and turn attention into revenue.',
     email_public: 'replace-hello-aurora-demo@example.com', // intended-public contact email (shape-valid)
-    linkedin_url: 'https://www.linkedin.com/in/replace-aurora-demo',
-    twitter_url: 'https://x.com/replace-aurora-demo',
-    website_url: 'https://example.com/replace-aurora-demo',
+    socials: [
+      { platform: 'linkedin', url: 'https://www.linkedin.com/in/replace-aurora-demo' },
+      { platform: 'x', url: 'https://x.com/replace-aurora-demo' },
+      { platform: 'website', url: 'https://example.com/replace-aurora-demo' },
+    ],
+    location: undefined,
+    phone: undefined,
   },
 
   sections: {
