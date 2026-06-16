@@ -8,9 +8,10 @@
  * NO PLATFORM BRANDING (TMPL-07 / D-23): no platform tagline, logo, or link anywhere —
  * the URL is the ONLY attribution. The source's "Made with ❤" + nav are dropped.
  *
- * SOCIALS (render-only-if-present): each link renders ONLY when its URL is a non-empty
- * string on `data.settings` (github/linkedin/twitter/dribbble/website). CR-01: each
- * passes through `safeHref`.
+ * NO SOCIAL ROW (Phase 25 — D-05): the aurora footer carries NO social links. The
+ * marketing-girl original footer had NONE; socials live in the Contact section's
+ * "Follow Me" block (restored 1:1). The old 5-column `*_url` loop is REMOVED — the footer
+ * keeps name/handle + the `siteUrl()` self-link + the report affordance only.
  *
  * ABSOLUTE URLs (PUB-03 / D-22): the canonical self-link is built from `siteUrl()`
  * (NEXT_PUBLIC_SITE_URL), NEVER the request host. External social URLs are used as-is.
@@ -26,7 +27,6 @@ import { ReportDialog } from '@/components/public/report-dialog';
 
 import type { FooterProps } from './types';
 import { siteUrl } from '@/lib/url';
-import { safeHref } from '@/lib/safe-url';
 import { present } from './shared';
 
 export function Footer({ data }: FooterProps) {
@@ -36,19 +36,6 @@ export function Footer({ data }: FooterProps) {
   const handle = present(profile.username) ? profile.username : null;
 
   const portfolioId = present(settings.portfolio_id) ? settings.portfolio_id : null;
-
-  const socialSources: { label: string; raw: string | null | undefined }[] = [
-    { label: 'GitHub', raw: settings.github_url },
-    { label: 'LinkedIn', raw: settings.linkedin_url },
-    { label: 'X', raw: settings.twitter_url },
-    { label: 'Dribbble', raw: settings.dribbble_url },
-    { label: 'Website', raw: settings.website_url },
-  ];
-  const socials: { label: string; href: string }[] = [];
-  for (const { label, raw } of socialSources) {
-    const href = safeHref(raw);
-    if (href) socials.push({ label, href });
-  }
 
   const canonicalHref = handle ? siteUrl(`/${handle}`) : siteUrl('/');
   const canonicalLabel = handle ? siteUrl(`/${handle}`).replace(/^https?:\/\//, '') : null;
@@ -102,44 +89,6 @@ export function Footer({ data }: FooterProps) {
             </a>
           ) : null}
         </div>
-
-        {socials.length > 0 ? (
-          <nav aria-label="Social links">
-            <ul
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                gap: '24px',
-                listStyle: 'none',
-                margin: 0,
-                padding: 0,
-              }}
-            >
-              {socials.map((s) => (
-                <li key={s.label}>
-                  <a
-                    href={s.href}
-                    target="_blank"
-                    rel="noopener noreferrer me"
-                    className="tmpl-project-link"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      minHeight: '44px',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '13px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.1em',
-                    }}
-                  >
-                    {s.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        ) : null}
       </div>
 
       <div

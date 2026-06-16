@@ -24,7 +24,7 @@
  * passed `validateSectionContent` at seed/write time, so the cast is sound, but the
  * section still null-guards `content` itself and every field it reads.
  */
-import type { PortfolioData, PublicSection } from '../../types';
+import type { PortfolioData, PublicSection, PublicSettings } from '../../types';
 
 /**
  * The prop contract for the 12 BY-TYPE sections. Each section receives the single
@@ -35,6 +35,21 @@ import type { PortfolioData, PublicSection } from '../../types';
  * FROZEN — the engine contract, identical to minimal's / editorial's.
  */
 export type SectionProps = { section: PublicSection | undefined };
+
+/**
+ * Contact-SCOPED additive props (Phase 25 — D-07/D-08). The public email, location,
+ * phone, and socials are read from `data.settings` (the SINGLE source of truth) and
+ * threaded into the Contact section by `index.tsx`. This REPLACES the Phase-24-killed
+ * seed-copied `content.email_public` idiom (D-07). The frozen global `SectionProps` is
+ * NOT widened (D-08) — these are Contact-scoped only. `socials` is the `settings.socials`
+ * JSONB value (`Json | null` on the view Row — consumers `Array.isArray`-guard it).
+ */
+export interface ContactExtraProps {
+  emailPublic?: string | null;
+  location?: string | null;
+  phone?: string | null;
+  socials?: PublicSettings['socials'];
+}
 
 /**
  * The prop contract for the FOOTER. The footer reads `settings` (social links) and

@@ -143,7 +143,13 @@ export default function AuroraTemplate({ data }: { data: PortfolioData }) {
         <Certifications section={sectionOfType(sections, 'certifications')} />
       </ScrollReveal>
       <ScrollReveal as="section" data-section-type="contact">
-        <Contact section={sectionOfType(sections, 'contact')} />
+        <Contact
+          section={sectionOfType(sections, 'contact')}
+          emailPublic={data.settings.email_public}
+          location={data.settings.location}
+          phone={data.settings.phone}
+          socials={data.settings.socials}
+        />
       </ScrollReveal>
 
       <Footer data={data} />

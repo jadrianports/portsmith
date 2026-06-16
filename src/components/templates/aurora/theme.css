@@ -292,6 +292,45 @@
 }
 
 /* ============================================================================
+ * Contact — pure-CSS hovers for the restored "Get in Touch" + "Follow Me" block
+ * (Phase 25 / D-13). These are CSS-only approximations of the marketing-girl
+ * framer-motion micro-interactions (no `motion` import — keeps `/[username]` ● SSG
+ * and the bundle budget held, T-25-05). Zeroed under reduced-motion by the blanket
+ * reset elsewhere in this file.
+ * ========================================================================== */
+/* Get-in-Touch detail row — the gradient icon disc lifts on row hover. */
+.tmpl-aurora .tmpl-contact-detail-row {
+  transition: transform 300ms ease;
+}
+.tmpl-aurora .tmpl-contact-detail-row:hover {
+  transform: translateX(4px);
+}
+.tmpl-aurora .tmpl-contact-detail-icon {
+  transition: transform 300ms ease;
+}
+.tmpl-aurora .tmpl-contact-detail-row:hover .tmpl-contact-detail-icon {
+  transform: scale(1.1);
+}
+.tmpl-aurora .tmpl-contact-detail-link {
+  transition: color 160ms ease;
+}
+.tmpl-aurora .tmpl-contact-detail-link:hover {
+  color: var(--accent);
+}
+/* Follow-Me social icon buttons — outline disc that fills toward the accent on hover. */
+.tmpl-aurora .tmpl-social-icon-btn {
+  transition:
+    transform 300ms ease,
+    color 160ms ease,
+    border-color 160ms ease;
+}
+.tmpl-aurora .tmpl-social-icon-btn:hover {
+  transform: scale(1.1);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ============================================================================
  * Contact — form-field focus ring + the live-submit spinner/success classes. The
  * Contact section hosts the LIVE `<ContactForm>` island (Phase-6 complete,
  * template-agnostic). That island reads scoped `var(--token)` + the SHARED class hooks
