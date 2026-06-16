@@ -201,9 +201,24 @@ export async function savePostAction(input: SavePostInput): Promise<SavePostResu
   const oldSlug = (priorRow as { slug?: string } | null)?.slug;
   const priorBody = (priorRow as { body_md?: string } | null)?.body_md ?? '';
 
+  // BLOG-03 / D-11 never-overwrite-with-empty (defense-in-depth past the client probe):
+  // if a non-empty body is ALREADY stored and this save carries a blank `body_md`, do
+  // NOT blank the stored body — drop `body_md` from the write columns so the OTHER meta
+  // edits still persist (a legitimate meta-only edit isn't blocked) while the saved body
+  // is preserved. The client `isSaveablePostSnapshot` probe already skips an all-empty
+  // draft; this server guard is the authoritative gate (mirrors the Zod re-parse
+  // principle — the client check is UX, the server check is the boundary).
+  const updateColumns =
+    priorBody.trim().length > 0 && parsed.body_md.trim().length === 0
+      ? (() => {
+          const { body_md: _omit, ...rest } = writeColumns;
+          return rest;
+        })()
+      : writeColumns;
+
   const { data: updatedRows, error } = await supabase
     .from('blog_posts')
-    .update(writeColumns)
+    .update(updateColumns)
     .eq('id', input.postId)
     .select('id');
   if (error) return { ok: false, error: SAVE_FAILED };
