@@ -207,6 +207,12 @@ export async function getPortfolioOwnerByUsername(
     twitter_url: settings.twitter_url,
     dribbble_url: settings.dribbble_url,
     website_url: settings.website_url,
+    // Phase 24 (SET-01..04, Pitfall 2): the owner read is EXPLICIT column-by-column,
+    // so the editor form cannot seed socials/location/phone unless they are assembled
+    // here. The anon `.select('*')` lane (get-portfolio.ts, D-22) picks them up auto.
+    socials: settings.socials,
+    location: settings.location,
+    phone: settings.phone,
   };
 
   // Resolve the slug from the owner's persisted `portfolios.template_id` via the
