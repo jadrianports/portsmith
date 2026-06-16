@@ -58,6 +58,27 @@ const POST_LIST_COLUMNS =
   'id, slug, title, published, published_at, display_date, updated_at';
 
 /**
+ * The FULL editable post as the editor opens it (BLOG-01 / D-01) — the meta subset
+ * PLUS the heavy `body_md` Markdown body + `excerpt` + `tags`. Deliberately SEPARATE
+ * from `POST_LIST_COLUMNS`: per D-01 the list stays body-less (small payload), and
+ * the body is fetched lazily, only when the editor actually opens a post.
+ */
+export interface OwnerPostFull {
+  id: string;
+  title: string;
+  slug: string;
+  body_md: string;
+  excerpt: string | null;
+  display_date: string | null;
+  tags: string[] | null;
+  published: boolean;
+}
+
+/** The single-post EDIT columns — the meta subset PLUS body_md, excerpt, tags. */
+const POST_EDIT_COLUMNS =
+  'id, title, slug, body_md, excerpt, display_date, tags, published';
+
+/**
  * Every post (draft + published) for the owner's portfolio, most-recently-edited
  * first (by `updated_at`). Reads the BASE `blog_posts` table under RLS so drafts
  * are included (unlike the published-only public view). Returns [] for an
@@ -92,4 +113,48 @@ export async function getOwnerPosts(
     display_date: row.display_date,
     updated_at: row.updated_at,
   }));
+}
+
+/**
+ * The LAZY single-post owner read (BLOG-01 / D-01) — the full editable post (incl.
+ * `body_md`) for ONE post id, fetched only when the editor opens that post. Mirrors
+ * `getOwnerPosts`: the AUTHENTICATED cookie/RLS client + a verified-identity guard +
+ * the BASE `blog_posts` table (NOT `public_blog_posts` — a draft must be editable).
+ *
+ * SECURITY (T-26-04 — cross-tenant body leak): the `blog_posts.own_all` RLS policy
+ * scopes the read to the caller's own rows, so `.eq('id', postId)` on a FOREIGN id
+ * reads 0 rows under RLS → `maybeSingle()` returns null → this returns null (no body
+ * leak). A null/`sub`-less claim returns null before any DB round-trip.
+ */
+export async function getOwnerPostById(
+  postId: string,
+): Promise<OwnerPostFull | null> {
+  const db = await createClient();
+
+  // Verified identity (AUTH-05 — getClaims, never getSession). No verified sub →
+  // no row (RLS would also block, but bail early without a DB round-trip).
+  const { data: claimsData, error: claimsError } = await db.auth.getClaims();
+  if (claimsError || !claimsData?.claims?.sub) return null;
+
+  const { data, error } = await db
+    .from('blog_posts')
+    .select(POST_EDIT_COLUMNS)
+    .eq('id', postId) // RLS own_all scopes to the owner; a foreign id → 0 rows → null.
+    .maybeSingle();
+  if (error) {
+    throw new Error(`blog_posts (owner, single) read failed: ${error.message}`);
+  }
+  if (!data) return null;
+
+  const row = data as unknown as OwnerPostFull;
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    body_md: row.body_md,
+    excerpt: row.excerpt,
+    display_date: row.display_date,
+    tags: row.tags,
+    published: row.published,
+  };
 }
