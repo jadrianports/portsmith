@@ -132,6 +132,20 @@ export async function createConfirmedOwner(prefix: string): Promise<TestOwner> {
     );
   }
 
+  // Stamp `onboarded_at` so the owner clears the v2.5 first-run gate (phase 18, D-02):
+  // a fresh owner has `onboarded_at IS NULL`, which the `/dashboard` RSC redirects into
+  // `/onboarding` — so the editor the CMS specs drive never mounts. These owners model
+  // an ESTABLISHED account opening the editor, so we mark them onboarded. `onboarded_at`
+  // is a protected column; the service-role admin client bypasses the protected-columns
+  // trigger the same way `setOwnerPublished`/`promoteToAdmin` do for `published`/`role`.
+  const { error: onboardErr } = await admin
+    .from('profiles')
+    .update({ onboarded_at: new Date().toISOString() })
+    .eq('id', data.user.id);
+  if (onboardErr) {
+    throw new Error(`[e2e] stamping onboarded_at failed for ${username}: ${onboardErr.message}`);
+  }
+
   return {
     id: data.user.id,
     email,

@@ -234,23 +234,54 @@ export function PostEditor({
     setDirty(state === 'pending' || state === 'saving');
   }, [state, setDirty]);
 
-  /** Build the WHOLE post content payload for the auto-save hook (the swappable seam). */
-  const buildContent = useCallback(() => {
-    const effectiveSlug = slugTouched ? slug : slugify(title);
-    return {
-      title,
-      slug: effectiveSlug,
-      body_md: body,
-      excerpt: excerpt.trim() ? excerpt : undefined,
-      display_date: displayDate.trim() ? displayDate : undefined,
-      tags: parseTags(tagsRaw),
-    };
-  }, [title, slug, slugTouched, body, excerpt, displayDate, tagsRaw]);
+  /**
+   * Build the WHOLE post content payload for the auto-save hook (the swappable seam).
+   *
+   * STALE-CLOSURE GUARD (BLOG-03 / 26): a field's `onChange` calls `setX(next)` then
+   * schedules a save in the SAME tick — but a `setState` does not update this render's
+   * closed-over `title`/`body`/… until the next render, so a bare `buildContent()` reads
+   * the value from BEFORE the keystroke. With debounced saves coalescing to the last
+   * scheduled snapshot (and no keystroke after the final one to correct it), that
+   * silently dropped the last character typed in every field. Callers pass the freshly
+   * typed value(s) via `next` so the persisted snapshot always reflects the live input.
+   */
+  const buildContent = useCallback(
+    (next?: {
+      title?: string;
+      slug?: string;
+      slugTouched?: boolean;
+      body?: string;
+      excerpt?: string;
+      displayDate?: string;
+      tagsRaw?: string;
+    }) => {
+      const t = next?.title ?? title;
+      const s = next?.slug ?? slug;
+      const touched = next?.slugTouched ?? slugTouched;
+      const b = next?.body ?? body;
+      const ex = next?.excerpt ?? excerpt;
+      const dd = next?.displayDate ?? displayDate;
+      const tr = next?.tagsRaw ?? tagsRaw;
+      const effectiveSlug = touched ? s : slugify(t);
+      return {
+        title: t,
+        slug: effectiveSlug,
+        body_md: b,
+        excerpt: ex.trim() ? ex : undefined,
+        display_date: dd.trim() ? dd : undefined,
+        tags: parseTags(tr),
+      };
+    },
+    [title, slug, slugTouched, body, excerpt, displayDate, tagsRaw],
+  );
 
-  /** Schedule a debounced content save after any field/body edit. */
-  const queueSave = useCallback(() => {
-    scheduleSave(buildContent());
-  }, [scheduleSave, buildContent]);
+  /** Schedule a debounced content save after any field/body edit (pass the fresh value). */
+  const queueSave = useCallback(
+    (next?: Parameters<typeof buildContent>[0]) => {
+      scheduleSave(buildContent(next));
+    },
+    [scheduleSave, buildContent],
+  );
 
   // BLOG-03 / D-08: register the post's content save with the dirty guard so the
   // "Save and continue" path FLUSHES the post (not a silent discard). `immediateSave`
@@ -274,7 +305,7 @@ export function PostEditor({
   function onTitleChange(next: string) {
     setTitle(next);
     if (!slugTouched) setSlug(slugify(next));
-    queueSave();
+    queueSave({ title: next });
   }
 
   /** Insert `![alt](url)` at the textarea cursor (D-20 upload-and-insert). */
@@ -458,7 +489,7 @@ export function PostEditor({
         onChange={(e) => {
           setSlugTouched(true);
           setSlug(e.target.value);
-          queueSave();
+          queueSave({ slug: e.target.value, slugTouched: true });
         }}
       />
       <Input
@@ -470,7 +501,7 @@ export function PostEditor({
         helper="The date shown on the post (e.g. 2026-06-10)."
         onChange={(e) => {
           setDisplayDate(e.target.value);
-          queueSave();
+          queueSave({ displayDate: e.target.value });
         }}
       />
       <Input
@@ -482,7 +513,7 @@ export function PostEditor({
         helper="A short teaser shown in the blog list."
         onChange={(e) => {
           setExcerpt(e.target.value);
-          queueSave();
+          queueSave({ excerpt: e.target.value });
         }}
       />
       <Input
@@ -493,7 +524,7 @@ export function PostEditor({
         helper="Up to 6 tags, separated by commas."
         onChange={(e) => {
           setTagsRaw(e.target.value);
-          queueSave();
+          queueSave({ tagsRaw: e.target.value });
         }}
       />
 
@@ -558,7 +589,7 @@ export function PostEditor({
               disabled={inputsDisabled}
               onChange={(e) => {
                 setBody(e.target.value);
-                queueSave();
+                queueSave({ body: e.target.value });
               }}
               rows={18}
               spellCheck
