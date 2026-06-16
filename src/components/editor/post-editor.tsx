@@ -45,13 +45,16 @@
  * hook from `use-debounced-post-save.ts`; the preview action from
  * `render-post-preview-action.ts`.
  */
+import { useQuery } from '@tanstack/react-query';
 import { LoaderCircle } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { getPostForEditAction } from '@/lib/cms/get-post-for-edit-action';
 import { renderPostPreviewAction } from '@/lib/cms/render-post-preview-action';
+import { cmsKeys } from '@/lib/query/cms-keys';
 import { useUIStore } from '@/lib/stores/uiStore';
 
 import { ImageUploader } from './image-uploader';
@@ -65,6 +68,7 @@ const DATE_MAX = 40;
 const TAGS_MAX = 6;
 
 const PREVIEW_FAILED = 'Couldn’t render the preview. Please try again.';
+const LOAD_FAILED = 'We couldn’t load this post. Please try again.';
 
 /** The initial post the editor opens with (the META fields + body, from the list/row). */
 export interface PostEditorInitial {
@@ -140,6 +144,48 @@ export function PostEditor({
   const [excerpt, setExcerpt] = useState(initial.excerpt ?? '');
   const [displayDate, setDisplayDate] = useState(initial.display_date ?? '');
   const [tagsRaw, setTagsRaw] = useState((initial.tags ?? []).join(', '));
+
+  // ── BLOG-01 / D-01/D-02/D-03: lazily fetch the full post on OPEN to hydrate the
+  //    body the LIST read omits. A brand-new post (no initial.id) skips the query and
+  //    is immediately editable. The editor is keyed on the post id by blog-panel, so
+  //    this query resolves once per open into a fresh instance — we still guard with a
+  //    `hydratedRef` so a later background refetch can never clobber the user's typed
+  //    edits (Pitfall 4: hydrate via state, never a remount/re-key). ──
+  const isExisting = Boolean(initial.id);
+  const {
+    data: loadedPost,
+    isLoading: postLoading,
+    isError: postLoadError,
+    refetch: refetchPost,
+  } = useQuery({
+    queryKey: [...cmsKeys.all, 'post', initial.id] as const,
+    queryFn: () => getPostForEditAction(initial.id!),
+    enabled: isExisting,
+    staleTime: 30_000,
+  });
+
+  // D-03: a resolved-but-null fetch for an existing id (RLS 0-row / deleted) is a load
+  // FAILURE too — never present an empty editable body a save could overwrite.
+  const loadFailed = isExisting && (postLoadError || (!postLoading && loadedPost === null));
+  // D-02: the body + meta inputs stay DISABLED while the open-time fetch is in flight
+  // OR the fetch failed (editing blocked until a successful hydrate).
+  const inputsDisabled = isExisting && (postLoading || Boolean(loadFailed));
+
+  // Hydrate the controlled fields from the fetched row ONCE (guarded), so the editor
+  // shows the saved body/excerpt/tags/date — not the body-less list `initial`.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (!loadedPost || hydratedRef.current) return;
+    hydratedRef.current = true;
+    setTitle(loadedPost.title ?? '');
+    setSlug(loadedPost.slug ?? '');
+    setSlugTouched(Boolean(loadedPost.slug));
+    setBody(loadedPost.body_md ?? '');
+    setExcerpt(loadedPost.excerpt ?? '');
+    setDisplayDate(loadedPost.display_date ?? '');
+    setTagsRaw((loadedPost.tags ?? []).join(', '));
+    setPublishedState(loadedPost.published ?? false);
+  }, [loadedPost]);
 
   const [tab, setTab] = useState<Tab>('write');
   const [previewHtml, setPreviewHtml] = useState<string>('');
@@ -340,12 +386,35 @@ export function PostEditor({
 
       {publishError ? <Alert variant="error">{publishError}</Alert> : null}
 
-      {/* Meta fields. */}
+      {/* BLOG-01 / D-03: a failed open-time fetch shows an inline error + Retry and
+          keeps editing BLOCKED (the inputs below stay disabled) — never a blank,
+          overwritable body. */}
+      {loadFailed ? (
+        <Alert variant="error">
+          <span className="flex flex-wrap items-center gap-3">
+            <span>{LOAD_FAILED}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                hydratedRef.current = false; // allow the next successful fetch to hydrate
+                void refetchPost();
+              }}
+              className="w-auto"
+            >
+              Retry
+            </Button>
+          </span>
+        </Alert>
+      ) : null}
+
+      {/* Meta fields. D-02: disabled while the open-time fetch is in flight / failed. */}
       <Input
         id={titleId}
         label="Title"
         value={title}
         maxLength={TITLE_MAX}
+        disabled={inputsDisabled}
         onChange={(e) => onTitleChange(e.target.value)}
       />
       <Input
@@ -353,6 +422,7 @@ export function PostEditor({
         label="URL slug"
         value={slug}
         maxLength={SLUG_MAX}
+        disabled={inputsDisabled}
         helper="Auto-filled from the title. Lowercase letters, digits and hyphens."
         onChange={(e) => {
           setSlugTouched(true);
@@ -365,6 +435,7 @@ export function PostEditor({
         label="Display date"
         value={displayDate}
         maxLength={DATE_MAX}
+        disabled={inputsDisabled}
         helper="The date shown on the post (e.g. 2026-06-10)."
         onChange={(e) => {
           setDisplayDate(e.target.value);
@@ -376,6 +447,7 @@ export function PostEditor({
         label="Excerpt (optional)"
         value={excerpt}
         maxLength={EXCERPT_MAX}
+        disabled={inputsDisabled}
         helper="A short teaser shown in the blog list."
         onChange={(e) => {
           setExcerpt(e.target.value);
@@ -386,6 +458,7 @@ export function PostEditor({
         id={tagsId}
         label="Tags (optional)"
         value={tagsRaw}
+        disabled={inputsDisabled}
         helper="Up to 6 tags, separated by commas."
         onChange={(e) => {
           setTagsRaw(e.target.value);
@@ -438,10 +511,20 @@ export function PostEditor({
             <label htmlFor={bodyId} className="sr-only">
               Post body (Markdown)
             </label>
+            {/* D-02: while the open-time fetch is in flight, show a skeleton in the body
+                area and DISABLE the textarea — never let the author type into a blank
+                field that is about to be replaced by the fetched body. */}
+            {isExisting && postLoading ? (
+              <div
+                aria-hidden="true"
+                className="min-h-[24rem] w-full animate-pulse rounded-sm border border-border bg-surface-muted motion-reduce:animate-none"
+              />
+            ) : null}
             <textarea
               id={bodyId}
               ref={bodyRef}
               value={body}
+              disabled={inputsDisabled}
               onChange={(e) => {
                 setBody(e.target.value);
                 queueSave();
@@ -453,7 +536,9 @@ export function PostEditor({
                 'min-h-[24rem] w-full resize-y rounded-sm border border-border bg-surface px-3 py-2 ' +
                 'font-mono text-sm leading-relaxed text-foreground placeholder:text-muted-foreground ' +
                 'outline-none transition-colors focus-visible:border-border-strong ' +
-                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+                'disabled:bg-surface-muted disabled:text-muted-foreground ' +
+                (isExisting && postLoading ? 'hidden' : '')
               }
             />
 

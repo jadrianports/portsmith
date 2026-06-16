@@ -170,4 +170,56 @@ test.describe('D-15 — blog editor: new-post retention + Preview-before-first-s
       });
     },
   );
+
+  // ── BLOG-01 / D-01: reopening an existing post HYDRATES the editor body ──────────
+  //    The owner LIST read omits body_md (D-01), and blog-panel builds the editor
+  //    `initial` from the list row (NO body). Without the lazy single-post fetch the
+  //    reopened editor would show a BLANK body (`initial.body_md ?? ''`, post-editor
+  //    :139) that the next save could silently overwrite. This case proves the fetch:
+  //    save a post with a known unique body, return to the list, reopen it, and assert
+  //    the body textarea value equals the SAVED body (not blank). Runs against the
+  //    production build (the authoritative gate).
+  test('reopening an existing post hydrates the editor with its saved body (BLOG-01)', async ({
+    page,
+  }) => {
+    test.setTimeout(150_000);
+
+    const stamp = Date.now().toString(36);
+    const postTitle = `Reopen Post ${stamp}`;
+    const savedBody = `Saved body ${stamp} — reopening must hydrate this, never blank it.`;
+
+    await signInAsOwner(page, owner);
+    await page.getByRole('button', { name: /Write posts/ }).click();
+
+    // 1) Create a brand-new post with a known title + body and let it auto-save.
+    await page.getByRole('button', { name: 'New post' }).click();
+    const postEditor = page.getByLabel('Section editor');
+    const titleField = postEditor.getByLabel('Title', { exact: true });
+    const bodyField = postEditor.getByLabel('Post body (Markdown)');
+    await expect(titleField).toBeVisible();
+
+    await titleField.fill(postTitle);
+    await bodyField.click();
+    // Type the body with pressSequentially so a later keystroke fires a queueSave
+    // against the committed title+body and the CREATE flush actually dispatches.
+    await bodyField.pressSequentially(savedBody, { delay: 12 });
+
+    // The durable signal the CREATE persisted (onSaved → postId set) is the post's
+    // Publish control flipping from disabled to ENABLED.
+    await expect(postEditor.getByRole('button', { name: 'Publish', exact: true })).toBeEnabled({
+      timeout: 30_000,
+    });
+
+    // 2) Go back to the list, then REOPEN the just-saved post from it. The list row
+    //    carries NO body — the editor must lazily fetch the full post to hydrate.
+    await postEditor.getByRole('button', { name: '← Posts' }).click();
+    await page.getByRole('button', { name: postTitle }).click();
+
+    // 3) BLOG-01 CORE: the reopened editor's body textarea equals the SAVED body
+    //    (it was fetched + hydrated, not left blank). The in-flight skeleton disables
+    //    the body, so wait for it to be enabled (load resolved) before asserting.
+    const reopenedBody = page.getByLabel('Section editor').getByLabel('Post body (Markdown)');
+    await expect(reopenedBody).toBeEnabled({ timeout: 30_000 });
+    await expect(reopenedBody).toHaveValue(savedBody);
+  });
 });
