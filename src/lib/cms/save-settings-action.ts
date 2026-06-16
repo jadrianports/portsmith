@@ -114,8 +114,13 @@ export async function saveSettingsAction(input: SaveSettingsInput): Promise<Save
   if (!parsed.success) {
     const fieldErrors: SaveSettingsFieldErrors = {};
     for (const issue of parsed.error.issues) {
-      const key = issue.path[0];
-      if (typeof key === 'string' && !(key in fieldErrors)) {
+      // WR-02 — key by the FULL dotted path (e.g. `socials.1.url`), not just
+      // `issue.path[0]` (which collapsed every bad social URL onto `socials`).
+      // The contact-socials form looks up per-row keys by index
+      // (`fieldErrors['socials.${index}.url']`, contact-socials-form.tsx:439), so the
+      // join must match that index-based dotted format EXACTLY.
+      const key = issue.path.join('.');
+      if (key && !(key in fieldErrors)) {
         fieldErrors[key] = issue.message;
       }
     }
@@ -160,7 +165,12 @@ export async function saveSettingsAction(input: SaveSettingsInput): Promise<Save
   const dbUsername = Array.isArray(embeddedProfiles)
     ? embeddedProfiles[0]?.username
     : embeddedProfiles?.username;
-  const username = input.username ?? dbUsername ?? undefined;
+  // WR-01 — only purge the owner page when we have a NON-EMPTY username. A
+  // missing/blank value must NOT fall through to `revalidatePath('/')` (which would
+  // purge the landing page); we skip the owner-page purge silently (matching the
+  // sibling actions, which do not log) and still return { ok: true } — the DB write
+  // already succeeded.
+  const username = (input.username ?? dbUsername ?? '').trim();
   if (username) {
     // LITERAL path, NO second arg (the one CLAUDE.md correction — Pitfall 1).
     revalidatePath('/' + username);
