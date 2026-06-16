@@ -57,15 +57,19 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
   const heroSection = sectionOfType(sections, 'hero');
   const heroEmail = data.settings.email_public ?? null;
 
+  // Social links from `settings.socials` (P24 D-01 — array order = display order).
+  // T-25-04/06: `settings.socials` is `Json | null` → `Array.isArray`-guard, then
+  // per-element `String(platform)` + `safeHref(url)` (CR-01 drops a dangerous scheme).
+  // Feeds BOTH the Hero social row + the command palette (cmdSocials below).
   const heroSocials: HeroSocialLink[] = (
-    [
-      { label: 'GitHub',   href: safeHref(data.settings.github_url)   },
-      { label: 'LinkedIn', href: safeHref(data.settings.linkedin_url) },
-      { label: 'X',        href: safeHref(data.settings.twitter_url)  },
-      { label: 'Dribbble', href: safeHref(data.settings.dribbble_url) },
-      { label: 'Website',  href: safeHref(data.settings.website_url)  },
-    ] as Array<{ label: string; href: string | undefined }>
-  ).filter((s): s is HeroSocialLink => typeof s.href === 'string');
+    Array.isArray(data.settings.socials) ? data.settings.socials : []
+  ).reduce<HeroSocialLink[]>((acc, s) => {
+    const entry = s as { platform?: unknown; url?: unknown } | null;
+    const platform = String(entry?.platform ?? '').trim();
+    const href = safeHref(typeof entry?.url === 'string' ? entry.url : undefined);
+    if (platform && href) acc.push({ platform, href });
+    return acc;
+  }, []);
 
   // Terminal lines — built here (has access to skills data)
   const handle = (profile.display_name ?? profile.username ?? '')
@@ -142,7 +146,7 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
   ];
 
   // Social links for the palette (reuse heroSocials which are already safeHref-validated)
-  const cmdSocials = heroSocials.map(({ label, href }) => ({ label, href }));
+  const cmdSocials = heroSocials.map(({ platform, href }) => ({ platform, href }));
 
   // Resume URL for the palette
   const cmdResumeUrl = safeHref(
@@ -268,6 +272,8 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
             <Contact
               section={sectionOfType(sections, 'contact')}
               emailPublic={emailPublic}
+              location={data.settings.location}
+              phone={data.settings.phone}
             />
           </div>
         </ScrollReveal>

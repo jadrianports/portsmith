@@ -27,10 +27,9 @@
  *   9. NO platform branding (D-23 / TMPL-07).
  */
 import { ReportDialog } from '@/components/public/report-dialog';
-import { SocialIcon } from './ui/social-icon';
+import { PLATFORM_LABELS, SocialIcon } from '../../_shared/social-icons';
 
 import type { FooterProps } from './types';
-import type { PublicSettings } from '../../types';
 import { safeHref } from '@/lib/safe-url';
 import { present } from './shared';
 
@@ -39,14 +38,6 @@ const quickLinks = [
   { id: 'projects', label: 'Projects' },
   { id: 'services', label: 'Services' },
   { id: 'contact', label: 'Contact' },
-];
-
-const SOCIAL_KEYS: { label: string; key: keyof PublicSettings }[] = [
-  { label: 'GitHub', key: 'github_url' },
-  { label: 'LinkedIn', key: 'linkedin_url' },
-  { label: 'X', key: 'twitter_url' },
-  { label: 'Dribbble', key: 'dribbble_url' },
-  { label: 'Website', key: 'website_url' },
 ];
 
 export function Footer({ data }: FooterProps) {
@@ -78,13 +69,18 @@ export function Footer({ data }: FooterProps) {
     ? nameParts[nameParts.length - 1].toUpperCase()
     : 'PORTFOLIO';
 
-  // Build social links
-  const socials: { label: string; href: string }[] = [];
-  for (const { label, key } of SOCIAL_KEYS) {
-    const raw = settings[key] as string | null | undefined;
-    const href = safeHref(raw);
-    if (href) socials.push({ label, href });
-  }
+  // Build social links from `settings.socials` (P24 D-01 — array order = display order).
+  // T-25-04/06: `settings.socials` is `Json | null` → `Array.isArray`-guard, then
+  // per-element `String(platform)` + `safeHref(url)` (CR-01: a dangerous scheme drops the
+  // entry rather than rendering a live `javascript:` link).
+  const socialItems = Array.isArray(settings.socials) ? settings.socials : [];
+  const socials: { key: string; platform: string; href: string }[] = [];
+  socialItems.forEach((s, i) => {
+    const entry = s as { platform?: unknown; url?: unknown } | null;
+    const platform = String(entry?.platform ?? '').trim();
+    const href = safeHref(typeof entry?.url === 'string' ? entry.url : undefined);
+    if (platform && href) socials.push({ key: `${platform}-${i}`, platform, href });
+  });
 
   const year = new Date().getFullYear();
 
@@ -153,13 +149,13 @@ export function Footer({ data }: FooterProps) {
             Channels
           </div>
           <div className="mt-3 flex gap-2.5">
-            {socials.map(({ label, href }) => (
+            {socials.map(({ key, platform, href }) => (
               <a
-                key={label}
+                key={key}
                 href={href}
                 target="_blank"
-                rel="noreferrer"
-                aria-label={label}
+                rel="noopener noreferrer me"
+                aria-label={PLATFORM_LABELS[platform] ?? platform}
                 className="grid h-10 w-10 place-items-center rounded-full transition-all tmpl-social-icon-btn"
                 style={{
                   border: '1px solid color-mix(in oklab, var(--neon-cyan) 30%, transparent)',
@@ -167,7 +163,7 @@ export function Footer({ data }: FooterProps) {
                   textDecoration: 'none',
                 }}
               >
-                <SocialIcon label={label} size={16} />
+                <SocialIcon platform={platform} size={16} />
               </a>
             ))}
           </div>

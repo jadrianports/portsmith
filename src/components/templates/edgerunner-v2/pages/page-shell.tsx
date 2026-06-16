@@ -77,15 +77,18 @@ export function EdgerunnerV2PageShell({
     ...(has('contact')      ? [{ label: 'Contact',    anchor: 'contact'    }] : []),
   ];
 
-  // Social links for the palette
+  // Social links for the palette — from `settings.socials` (P24 D-01 — array order =
+  // display order). T-25-04/06: `Json | null` → `Array.isArray`-guard + per-element
+  // `String(platform)` + `safeHref(url)` (CR-01 drops a dangerous scheme).
   const cmdSocials = (
-    [
-      { label: 'GitHub',   href: safeHref(data.settings.github_url)   },
-      { label: 'LinkedIn', href: safeHref(data.settings.linkedin_url) },
-      { label: 'X',        href: safeHref(data.settings.twitter_url)  },
-      { label: 'Dribbble', href: safeHref(data.settings.dribbble_url) },
-    ] as Array<{ label: string; href: string | undefined }>
-  ).filter((s): s is { label: string; href: string } => typeof s.href === 'string');
+    Array.isArray(data.settings.socials) ? data.settings.socials : []
+  ).reduce<{ platform: string; href: string }[]>((acc, s) => {
+    const entry = s as { platform?: unknown; url?: unknown } | null;
+    const platform = String(entry?.platform ?? '').trim();
+    const href = safeHref(typeof entry?.url === 'string' ? entry.url : undefined);
+    if (platform && href) acc.push({ platform, href });
+    return acc;
+  }, []);
 
   // Resume URL and email for the palette
   const cmdResumeUrl = safeHref(

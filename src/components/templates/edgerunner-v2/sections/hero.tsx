@@ -41,7 +41,7 @@ import { CityScene } from './city-scene';
 import { TerminalCard } from './terminal-card';
 import { Magnetic } from './ui/magnetic';
 import { NeonLink } from './ui/neon-button';
-import { SocialIcon } from './ui/social-icon';
+import { PLATFORM_LABELS, SocialIcon } from '../../_shared/social-icons';
 import { safeHref } from '@/lib/safe-url';
 import { present } from './shared';
 import type { SectionProps } from './types';
@@ -50,9 +50,10 @@ import type { HeroContent } from '@/lib/validations';
 /** Hero content — resume_url is on HeroContent */
 type HeroSectionContent = HeroContent & { resume_url?: string | null };
 
-/** A social link with label + href (pre-validated by safeHref in index.tsx) */
+/** A social link: platform slug + href (pre-validated by safeHref in index.tsx). The
+ * `platform` keys the shared `<SocialIcon>` brand glyph + the `PLATFORM_LABELS` aria-label. */
 export interface HeroSocialLink {
-  label: string;
+  platform: string;
   href: string;
 }
 
@@ -212,13 +213,13 @@ export function Hero({ section, email, socials, terminalLines }: SectionProps & 
             {/* Social icon row — VERBATIM from export (hover classes → .tmpl-social-icon-btn) */}
             {socialLinks.length > 0 ? (
               <div className="ml-1 flex items-center gap-3">
-                {socialLinks.map(({ label, href }) => (
+                {socialLinks.map(({ platform, href }) => (
                   <a
-                    key={label}
+                    key={platform}
                     href={href}
                     target="_blank"
-                    rel="noreferrer"
-                    aria-label={label}
+                    rel="noopener noreferrer me"
+                    aria-label={PLATFORM_LABELS[platform] ?? platform}
                     className="grid h-10 w-10 place-items-center rounded-full tmpl-social-icon-btn"
                     style={{
                       border: '1px solid color-mix(in oklab, var(--neon-cyan) 30%, transparent)',
@@ -226,7 +227,7 @@ export function Hero({ section, email, socials, terminalLines }: SectionProps & 
                       transition: 'all 0.15s ease',
                     }}
                   >
-                    <SocialIcon label={label} />
+                    <SocialIcon platform={platform} />
                   </a>
                 ))}
               </div>

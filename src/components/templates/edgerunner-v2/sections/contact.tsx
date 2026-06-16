@@ -16,7 +16,11 @@
  *      font-display, text-neon-pink, text-neon-cyan) KEPT AS-IS.
  *   4. FAKE FORM REPLACED: spinning-border wrapper kept; inner replaced by
  *      <ContactForm portfolioId emailPublic /> (same wiring as edgerunner/contact.tsx).
- *   5. Direct Lines: email only (no phone/location — not in data schema).
+ *   5. Direct Lines: email + phone + location rows (Phase 25 — restored 1:1 from the
+ *      export's per-detail accent map Mail→pink / Phone→cyan / MapPin→purple). Each row
+ *      reads settings.{email_public,phone,location} via the scoped ContactExtraProps and
+ *      renders only when present (D-07/D-08). The seed-copied content.email_public
+ *      fallback is REMOVED (D-07). Phone + location are plain text (no link — RESEARCH OQ-2).
  *   6. SERVER COMPONENT — no 'use client', no motion (bundle-budget; D-25 / TMPL-04).
  *      The export's panel motion was `initial={false}` + `animate` = panels render AT REST
  *      (no visible entrance); the shared `ScrollReveal` kit wrapper already reveals the
@@ -24,7 +28,7 @@
  *      `motion/react` from First Load JS with ZERO static-render change. The real form
  *      interactivity lives in `<ContactForm>` (its own client island), preserved as-is.
  */
-import { Mail } from 'lucide-react';
+import { Mail, MapPin, Phone } from 'lucide-react';
 
 import { ContactForm } from '@/components/public/contact-form';
 import type { SectionProps } from './types';
@@ -33,14 +37,26 @@ import { safeHref } from '@/lib/safe-url';
 import { present } from './shared';
 import { SectionHeading } from './ui/section-heading';
 
-type ContactSectionContent = ContactContent & { email_public?: string | null };
+/** The validated JSONB contact content (heading/subheading) — null-guarded below. */
+type ContactSectionContent = ContactContent;
 
-/** Additive prop from index.tsx. */
+/**
+ * Contact-SCOPED additive props from index.tsx (Phase 25 — D-07/D-08). email/phone/location
+ * are read from `data.settings` (the SINGLE source of truth); the frozen global `SectionProps`
+ * is NOT widened. Socials stay in the footer for edgerunner (the export's Contact has none).
+ */
 export interface ContactExtraProps {
   emailPublic?: string | null;
+  location?: string | null;
+  phone?: string | null;
 }
 
-export function Contact({ section, emailPublic: emailPublicProp }: SectionProps & ContactExtraProps) {
+export function Contact({
+  section,
+  emailPublic: emailPublicProp,
+  location: locationProp,
+  phone: phoneProp,
+}: SectionProps & ContactExtraProps) {
   const content = (section?.content ?? null) as ContactSectionContent | null;
   if (!content) return null;
 
@@ -49,10 +65,12 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
     ? content.subheading
     : "Got a project, a problem, or just want to talk shaders? Drop a transmission.";
 
-  // Email: prefer prop (from settings.email_public), fallback to content field
-  const emailPublic =
-    (present(emailPublicProp) ? emailPublicProp : null) ??
-    (present(content.email_public) ? content.email_public : null);
+  // Public contact details from SETTINGS (D-07) — omit-if-absent. The seed-copied
+  // content.email_public fallback is REMOVED (D-07). Phone + location are plain text
+  // (NOT tel: links — RESEARCH OQ-2).
+  const emailPublic = present(emailPublicProp) ? emailPublicProp : null;
+  const phone = present(phoneProp) ? phoneProp : null;
+  const location = present(locationProp) ? locationProp : null;
 
   const mailtoHref = emailPublic
     ? safeHref(`mailto:${emailPublic}`, { allowMailto: true })
@@ -77,7 +95,7 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
               Direct Lines
             </h3>
             <div className="mt-5 space-y-4">
-              {/* Email row — only when present */}
+              {/* Email row — only when present. Per-detail neon accent: Mail→pink (export). */}
               {emailPublic && mailtoHref ? (
                 <div className="flex items-center gap-3">
                   <span
@@ -98,6 +116,47 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
                   >
                     {emailPublic}
                   </a>
+                </div>
+              ) : null}
+
+              {/* Phone row — only when present. Per-detail neon accent: Phone→cyan (export).
+                  Plain text (NOT a tel: link — RESEARCH OQ-2). */}
+              {phone ? (
+                <div className="flex items-center gap-3">
+                  <span
+                    className="grid h-10 w-10 place-items-center rounded-lg text-neon-cyan"
+                    style={{
+                      border: '1px solid color-mix(in oklab, var(--neon-cyan) 40%, transparent)',
+                    }}
+                  >
+                    <Phone className="h-4 w-4" />
+                  </span>
+                  <span
+                    className="font-mono-retro text-base"
+                    style={{ color: 'color-mix(in oklab, var(--fg) 90%, transparent)' }}
+                  >
+                    {phone}
+                  </span>
+                </div>
+              ) : null}
+
+              {/* Location row — only when present. Per-detail neon accent: MapPin→purple (export). */}
+              {location ? (
+                <div className="flex items-center gap-3">
+                  <span
+                    className="grid h-10 w-10 place-items-center rounded-lg text-neon-purple"
+                    style={{
+                      border: '1px solid color-mix(in oklab, var(--neon-purple) 40%, transparent)',
+                    }}
+                  >
+                    <MapPin className="h-4 w-4" />
+                  </span>
+                  <span
+                    className="font-mono-retro text-base"
+                    style={{ color: 'color-mix(in oklab, var(--fg) 90%, transparent)' }}
+                  >
+                    {location}
+                  </span>
                 </div>
               ) : null}
             </div>

@@ -39,7 +39,7 @@ import {
   Search,
   Globe,
 } from 'lucide-react';
-import { SocialIcon } from './ui/social-icon';
+import { PLATFORM_LABELS, SocialIcon } from '../../_shared/social-icons';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ export interface CommandPaletteProps {
   items: CommandItem[];
   resumeUrl?: string | null;
   email?: string | null;
-  socials?: { label: string; href: string }[];
+  socials?: { platform: string; href: string }[];
   /**
    * Start in the OPEN state on mount. Used by the lazy wrapper
    * (`command-palette-lazy.tsx`): when the visitor's first ⌘K loads this chunk, the
@@ -289,8 +289,8 @@ export function CommandPalette({
   // Social group
   const socialGroup: Array<{ label: string; icon: React.ReactNode; run: () => void }> =
     (socials ?? []).map((s) => ({
-      label: s.label,
-      icon: <SocialIcon label={s.label} size={16} />,
+      label: PLATFORM_LABELS[s.platform] ?? s.platform,
+      icon: <SocialIcon platform={s.platform} size={16} />,
       run: () => { close(); setTimeout(() => window.open(s.href, '_blank'), 50); },
     }));
 
