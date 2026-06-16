@@ -1392,10 +1392,13 @@ export type Database = {
           github_url: string | null
           id: string
           linkedin_url: string | null
+          location: string | null
           meta_description: string | null
           og_image_url: string | null
           page_title: string | null
+          phone: string | null
           portfolio_id: string
+          socials: Json
           theme_mode: string
           twitter_url: string | null
           updated_at: string
@@ -1411,10 +1414,13 @@ export type Database = {
           github_url?: string | null
           id?: string
           linkedin_url?: string | null
+          location?: string | null
           meta_description?: string | null
           og_image_url?: string | null
           page_title?: string | null
+          phone?: string | null
           portfolio_id: string
+          socials?: Json
           theme_mode?: string
           twitter_url?: string | null
           updated_at?: string
@@ -1430,10 +1436,13 @@ export type Database = {
           github_url?: string | null
           id?: string
           linkedin_url?: string | null
+          location?: string | null
           meta_description?: string | null
           og_image_url?: string | null
           page_title?: string | null
+          phone?: string | null
           portfolio_id?: string
+          socials?: Json
           theme_mode?: string
           twitter_url?: string | null
           updated_at?: string
@@ -1903,10 +1912,13 @@ export type Database = {
           font_preset: string | null
           github_url: string | null
           linkedin_url: string | null
+          location: string | null
           meta_description: string | null
           og_image_url: string | null
           page_title: string | null
+          phone: string | null
           portfolio_id: string | null
+          socials: Json | null
           theme_mode: string | null
           twitter_url: string | null
           visitor_theme_toggle: boolean | null
@@ -1920,10 +1932,13 @@ export type Database = {
           font_preset?: string | null
           github_url?: string | null
           linkedin_url?: string | null
+          location?: string | null
           meta_description?: string | null
           og_image_url?: string | null
           page_title?: string | null
+          phone?: string | null
           portfolio_id?: string | null
+          socials?: Json | null
           theme_mode?: string | null
           twitter_url?: string | null
           visitor_theme_toggle?: boolean | null
@@ -1937,10 +1952,13 @@ export type Database = {
           font_preset?: string | null
           github_url?: string | null
           linkedin_url?: string | null
+          location?: string | null
           meta_description?: string | null
           og_image_url?: string | null
           page_title?: string | null
+          phone?: string | null
           portfolio_id?: string | null
+          socials?: Json | null
           theme_mode?: string | null
           twitter_url?: string | null
           visitor_theme_toggle?: boolean | null
