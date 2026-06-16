@@ -47,9 +47,9 @@ const PROFILE_COLUMNS = 'username, display_name, headline, avatar_url, resume_ur
  * updated_at. Mirrors the route's SETTINGS_COLUMNS.
  */
 const SETTINGS_COLUMNS =
-  'color_preset, dribbble_url, email_public, favicon_url, font_preset, ' +
-  'github_url, linkedin_url, meta_description, og_image_url, page_title, ' +
-  'theme_mode, twitter_url, visitor_theme_toggle, website_url';
+  'color_preset, email_public, favicon_url, font_preset, location, ' +
+  'meta_description, og_image_url, page_title, phone, socials, ' +
+  'theme_mode, visitor_theme_toggle';
 
 /** Authored blog-post fields (the markdown column is `body_md`, not `body`). */
 const BLOG_POST_COLUMNS =
