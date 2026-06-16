@@ -76,6 +76,12 @@ export default defineConfig({
           include: [
             'tests/unit/**/*.test.ts',
             'tests/unit/**/*.test.tsx',
+            // 25-01: colocated pure-render template helper specs (the shared
+            // SocialIcon module lives beside the components it serves). Same fast
+            // `node` env + @/* alias; exercised render-free via react-dom/server
+            // `renderToStaticMarkup` (NO jsdom/testing-library — the project
+            // convention). esbuild transpiles the `.tsx`.
+            'src/components/templates/**/*.test.tsx',
             'tests/build/**/*.test.ts',
             // 20-01: the dynamic-share-image unit tests (pure accent map + D-06 URL
             // builder) — same fast node env + @/* alias as tests/unit (no I/O, no DOM).
