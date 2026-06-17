@@ -40,15 +40,21 @@
  */
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ExternalLink, Eye, Mail, Settings, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { ArrowLeft, ExternalLink, Eye, EyeOff, Mail, Settings, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { cmsKeys } from '@/lib/query/cms-keys';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { usePreviewSaveSignal } from '@/lib/stores/preview-save-signal';
 import { deriveCompleteness } from '@/lib/cms/completeness';
 import { clearTemplateFallbackNotice } from '@/lib/cms/clear-template-fallback-action';
-import { siteUrl } from '@/lib/url';
+import { siteUrl, siteOrigin } from '@/lib/url';
+import {
+  PREVIEW_BRIDGE_NAMESPACE,
+  type PreviewBridgeMessage,
+} from '@/lib/preview/bridge-messages';
+import { resolvePreviewTarget, CONTACT_PANEL_ID as PREVIEW_CONTACT_REGION } from '@/lib/preview/resolve-section-id';
 import { isSupported } from '@/lib/templates/rail-grouping';
 import type { OwnerPortfolioData } from '@/lib/portfolio/get-portfolio-owner';
 import type { AllowedTemplate } from '@/lib/templates/available-templates';
@@ -229,6 +235,85 @@ export function EditorShell({
   const setActiveSectionId = useUIStore((s) => s.setActiveSectionId);
   const dirty = useUIStore((s) => s.dirty);
   const guardedNavigate = useGuardedNavigate();
+
+  // ── Phase 27 (EDIT-01/02/03): the live-preview pane state ──────────────────
+  // The iframe over the owner's draft render (`/<username>?edit=1`), keyed on a
+  // reload nonce (D-04 reflect-on-save). All of this is editor-LOCAL UI state +
+  // a tiny localStorage effect — NOT uiStore (its header forbids extra/persisted
+  // state) and NOT TanStack/server data (the iframe's draft route owns the render).
+  const PREVIEW_OPEN_KEY = 'portsmith:editor:preview-open';
+  // OPEN by default at xl+ (D-16); the persisted choice is read in an effect AFTER
+  // mount (localStorage is browser-only — reading it during render would desync SSR).
+  const [previewOpen, setPreviewOpen] = useState(true);
+  // `< xl` Edit|Preview toggle (D-17): which pane the narrow layout shows. The
+  // small-screen preview is VIEW-ONLY (no click-to-edit).
+  const [mobilePane, setMobilePane] = useState<'edit' | 'preview'>('edit');
+  // The iframe remount key (D-04): bumping it re-fetches the freshly-revalidated draft.
+  const [reloadNonce, setReloadNonce] = useState(0);
+  // Iframe lifecycle: 'loading' until the document loads / on each reload bump;
+  // 'loaded' once it fires onLoad; 'failed' if it errors (the load-failure state).
+  const [previewStatus, setPreviewStatus] = useState<'loading' | 'loaded' | 'failed'>(
+    'loading',
+  );
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // The form pane, scrolled into view on a preview click (D-12 surface-the-panel).
+  const formPaneRef = useRef<HTMLElement | null>(null);
+  // The pending D-14 post-save scroll target, sent on the bridge-ready handshake
+  // (Pitfall 4 — the new iframe document must attach its listener before we post).
+  const pendingScrollType = useRef<string | null>(null);
+
+  // Read the persisted open/collapsed choice once on mount (browser-only).
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(PREVIEW_OPEN_KEY);
+      if (stored === 'closed') setPreviewOpen(false);
+      else if (stored === 'open') setPreviewOpen(true);
+    } catch {
+      // localStorage unavailable (private mode / blocked) — keep the default-open.
+    }
+  }, []);
+
+  // Persist the open/collapsed choice (UI-only; D-16).
+  function togglePreviewOpen() {
+    setPreviewOpen((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(PREVIEW_OPEN_KEY, next ? 'open' : 'closed');
+      } catch {
+        // ignore — a failed persist just means the choice isn't remembered next session.
+      }
+      return next;
+    });
+  }
+
+  // D-15: enable draft mode ONCE on mount via fetch (NEVER a prefetchable Link —
+  // Pitfall 3) so the iframe's `/<username>?edit=1` request carries the draft cookie.
+  // Do NOTHING on unmount (never disable — the cookie is browser-wide, D-15).
+  useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/preview/enable-edit', { credentials: 'same-origin' })
+      .then(() => {
+        if (cancelled) return;
+        // Re-key the iframe so it (re)loads AFTER the draft cookie is set, avoiding a
+        // first paint of the public/not-found branch before draft mode is armed.
+        setReloadNonce((n) => n + 1);
+      })
+      .catch(() => {
+        // A failed enable leaves the iframe to render whatever the cookie state allows;
+        // the load-failure / empty states cover a non-rendering draft.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Reset the loading state whenever the iframe remounts (mount + each reload bump).
+  useEffect(() => {
+    setPreviewStatus('loading');
+  }, [reloadNonce]);
+
+  /** Manually re-fetch the preview (the load-failure "Reload preview" retry control). */
+  const reloadPreview = useCallback(() => setReloadNonce((n) => n + 1), []);
 
   // D-18/D-21 + D-03: optimistic lifecycle overlay on top of the RSC-loaded rows.
   // `addSectionAction` / `removeSectionAction` already `revalidatePath` server-side,
@@ -452,6 +537,91 @@ export function EditorShell({
     guardedNavigate(() => setActiveSectionId(null));
   }
 
+  // ── Phase 27 (EDIT-02 / D-10 / D-13 / D-14): the postMessage bridge listener ──
+  // Receives origin-locked, namespace-tagged messages from the (portfolio) bridge
+  // running inside the iframe. On a `section-click` it focuses the matching editor
+  // panel THROUGH the dirty guard (never a direct set — D-13). On `bridge-ready`
+  // (a fresh/reloaded iframe document) it flushes any pending D-14 post-save scroll.
+  useEffect(() => {
+    const origin = siteOrigin();
+    function onMessage(ev: MessageEvent) {
+      // T-27-10: origin-lock FIRST, then the namespace tag — reject unrelated traffic.
+      if (ev.origin !== origin) return;
+      const data = ev.data as PreviewBridgeMessage | undefined;
+      if (!data || data.ns !== PREVIEW_BRIDGE_NAMESPACE) return;
+
+      if (data.type === 'section-click') {
+        // The bridge sends a soft-enum type OR the contact region tag; the EDITOR
+        // owns UUID resolution via its existing resolveSectionId (no UUID crosses the
+        // boundary). An absent section resolves to null → no-op (matches the checklist).
+        const target = resolvePreviewTarget(data.sectionType, resolveSectionId);
+        if (!target) return;
+        // D-13: route through the dirty guard — a dirty panel raises the unsaved-changes
+        // dialog (no silent data loss); never set activeSectionId directly.
+        guardedNavigate(() => {
+          setActiveSectionId(target);
+          // D-12: surface the panel — scroll the form pane into view. The rail's
+          // existing bg-brand active marker (section-list-row.tsx) is the highlight;
+          // no new accent/flash/token is added.
+          requestAnimationFrame(() => {
+            formPaneRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          });
+        });
+      } else if (data.type === 'bridge-ready') {
+        // Pitfall 4: the (re)loaded iframe's listener is now attached — flush a pending
+        // D-14 post-save scroll target (if any) into it.
+        const pending = pendingScrollType.current;
+        if (pending) {
+          iframeRef.current?.contentWindow?.postMessage(
+            { ns: PREVIEW_BRIDGE_NAMESPACE, type: 'scroll-to-section', sectionType: pending },
+            origin,
+          );
+          pendingScrollType.current = null;
+        }
+      }
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [guardedNavigate, setActiveSectionId, resolveSectionId]);
+
+  // ── Phase 27 (EDIT-03 / D-04 / D-14): reflect-on-save ───────────────────────
+  // Subscribe to the dedicated preview-save signal (NOT uiStore). When a structured
+  // save resolves `{ ok: true }`, a form fires `notifySaved(type)` → the `nonce`
+  // bumps here → we remount the iframe (it re-fetches the revalidated draft) and
+  // record the just-edited section type so the bridge-ready handshake re-scrolls to it.
+  const saveSignalNonce = usePreviewSaveSignal((s) => s.nonce);
+  const saveSignalType = usePreviewSaveSignal((s) => s.sectionType);
+  // Skip the initial mount (nonce starts at 0) — only react to genuine save bumps.
+  const lastHandledSaveNonce = useRef(0);
+  useEffect(() => {
+    if (saveSignalNonce === lastHandledSaveNonce.current) return;
+    lastHandledSaveNonce.current = saveSignalNonce;
+    if (saveSignalNonce === 0) return;
+    // Record the D-14 scroll target (the just-saved section's type), then bump the
+    // iframe key so React remounts it → re-fetch of the freshly revalidated draft.
+    pendingScrollType.current = saveSignalType;
+    setReloadNonce((n) => n + 1);
+  }, [saveSignalNonce, saveSignalType]);
+
+  // ── Phase 27 (D-10): reverse-sync — rail selection → preview scroll ─────────
+  // When the active section changes via the rail (or any selection), scroll the
+  // preview to the matching section. Resolve the active id back to its section type
+  // via the loaded rows; sentinel panels (Profile/Template/Blog) have no rendered
+  // section → no type → the bridge no-ops. Skipped while the preview is reloading
+  // (the bridge-ready handshake covers the post-reload scroll).
+  const activeSectionType = useMemo(() => {
+    if (!activeSectionId) return null;
+    if (activeSectionId === CONTACT_PANEL_ID) return PREVIEW_CONTACT_REGION;
+    return rawSections.find((s) => s.id === activeSectionId)?.type ?? null;
+  }, [activeSectionId, rawSections]);
+  useEffect(() => {
+    if (!activeSectionType) return;
+    iframeRef.current?.contentWindow?.postMessage(
+      { ns: PREVIEW_BRIDGE_NAMESPACE, type: 'scroll-to-section', sectionType: activeSectionType },
+      siteOrigin(),
+    );
+  }, [activeSectionType]);
+
   return (
     <div className="flex min-h-dvh flex-col bg-background font-sans text-foreground">
       {/* The CMS-07 dirty guard: arms beforeunload while dirty + renders the
@@ -480,6 +650,71 @@ export function EditorShell({
         </h1>
 
         <div className="ml-auto flex flex-wrap items-center gap-3">
+          {/* Phase 27 (D-17): the `< xl` Edit | Preview segmented toggle — swaps the
+              visible pane on narrow screens where three columns don't fit. The
+              small-screen preview is VIEW-ONLY (no click-to-edit). Hidden at xl+ where
+              the 3rd preview pane renders alongside the form. Selection is conveyed by
+              the brand marker + text (not color alone) — a11y, mirrors the rail marker. */}
+          <div
+            role="tablist"
+            aria-label="Edit or preview"
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface p-1 xl:hidden"
+          >
+            {(['edit', 'preview'] as const).map((pane) => {
+              const selected = mobilePane === pane;
+              return (
+                <button
+                  key={pane}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setMobilePane(pane)}
+                  className={
+                    'relative inline-flex min-h-11 items-center rounded-md px-3 text-sm font-semibold ' +
+                    'outline-none transition-colors ' +
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+                    'motion-reduce:transition-none ' +
+                    (selected
+                      ? 'text-brand'
+                      : 'text-muted-foreground hover:text-accent')
+                  }
+                >
+                  {selected ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-y-1 left-0 w-[3px] rounded-l-md bg-brand"
+                    />
+                  ) : null}
+                  {pane === 'edit' ? 'Edit' : 'Preview'}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Phase 27 (D-16): the xl+ Hide/Show preview collapse control — the chrome
+              header-control idiom verbatim. When collapsed, the label flips to "Show
+              preview" so the pane is always re-openable; the icon is aria-hidden (the
+              text is the accessible name). State persists to localStorage (UI-only). */}
+          <button
+            type="button"
+            onClick={togglePreviewOpen}
+            aria-pressed={previewOpen}
+            className={
+              'hidden min-h-11 items-center gap-1.5 rounded-md border border-border px-4 ' +
+              'text-sm font-semibold text-foreground outline-none transition-colors ' +
+              'hover:border-border-strong hover:text-accent ' +
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+              'motion-reduce:transition-none xl:inline-flex'
+            }
+          >
+            {previewOpen ? (
+              <EyeOff aria-hidden="true" className="size-3.5" />
+            ) : (
+              <Eye aria-hidden="true" className="size-3.5" />
+            )}
+            <span>{previewOpen ? 'Hide preview' : 'Show preview'}</span>
+          </button>
+
           {/* Messages → the /dashboard/inbox surface (06-05 / CONT-02), carrying
               the scarce-accent unread badge (the one sanctioned "new" nav signal,
               UI-SPEC Surface 3). The count + an accessible suffix keep the badge
@@ -603,14 +838,21 @@ export function EditorShell({
         </div>
       ) : null}
 
-      {/* ── Body: rail + panel (desktop) / master-detail (tablet+mobile) ── */}
+      {/* ── Body: rail + form + preview (xl) / master-detail + Edit|Preview swap
+          (< xl) ─────────────────────────────────────────────────────────────
+          Phase 27: at xl+ the rail + form + (optional) preview are three columns;
+          below xl the `mobilePane` toggle swaps the edit cluster (rail+form
+          master-detail) for the view-only preview. `previewHiddenBelowXl` hides the
+          rail/form when the narrow layout is showing the preview, and vice-versa. */}
       <div className="flex flex-1 flex-col lg:flex-row">
         {/* SECTION-LIST RAIL. On mobile/tablet it hides once a section is picked
-            (master-detail); on desktop it is always the 288px left column. */}
+            (master-detail); on desktop it is always the 288px left column. Below xl
+            it is also hidden when the Edit|Preview toggle is showing the preview. */}
         <aside
           className={
             'shrink-0 border-b border-border bg-surface-muted p-4 ' +
             'lg:w-72 lg:border-b-0 lg:border-r ' +
+            (mobilePane === 'preview' ? 'hidden xl:block ' : '') +
             (activeSectionId ? 'hidden lg:block' : 'block')
           }
           aria-label="Sections"
@@ -671,10 +913,14 @@ export function EditorShell({
           </div>
         </aside>
 
-        {/* FORM PANEL. On mobile/tablet it shows only once a section is picked. */}
+        {/* FORM PANEL. On mobile/tablet it shows only once a section is picked.
+            Below xl it is also hidden when the Edit|Preview toggle shows the preview. */}
         <section
+          ref={formPaneRef}
           className={
-            'flex-1 p-4 sm:p-6 lg:p-8 ' + (activeSectionId ? 'block' : 'hidden lg:block')
+            'flex-1 p-4 sm:p-6 lg:p-8 ' +
+            (mobilePane === 'preview' ? 'hidden xl:block ' : '') +
+            (activeSectionId ? 'block' : 'hidden lg:block')
           }
           aria-label="Section editor"
         >
@@ -759,8 +1005,150 @@ export function EditorShell({
             )}
           </div>
         </section>
+
+        {/* ── Phase 27: the LIVE PREVIEW PANE (3rd column) ──────────────────────
+            An <iframe> over the owner's draft render (`/<username>?edit=1`), keyed on
+            `reloadNonce` (D-04 reflect-on-save). VISIBILITY:
+              • xl+  → a fixed-but-flexible 3rd column, shown iff `previewOpen` (D-16,
+                       collapse persists to localStorage). The `xl:w-[480px]` floor +
+                       the form's `flex-1` keep the form usable (never crushed).
+              • < xl → shown ONLY when the Edit|Preview toggle is on 'preview' (D-17),
+                       full-width and VIEW-ONLY (the bridge's click-to-edit is desktop-
+                       only; the rail stays the keyboard/edit path).
+            TEMPLATE-DECOUPLED (D-01): this imports NO template — the template renders
+            inside the (portfolio) iframe; the editor only points an <iframe> at it. */}
+        <PreviewPane
+          username={username}
+          reloadNonce={reloadNonce}
+          status={previewStatus}
+          onStatusChange={setPreviewStatus}
+          onReload={reloadPreview}
+          iframeRef={iframeRef}
+          showAtXl={previewOpen}
+          showBelowXl={mobilePane === 'preview'}
+        />
       </div>
     </div>
+  );
+}
+
+/**
+ * The live-preview pane (Phase 27 — EDIT-01). An `<iframe>` over the owner's draft
+ * render plus the loading / empty / load-failure states. Stateless beyond the local
+ * "did it load" tracking it reports up via `onStatusChange` — the editor owns the
+ * reload nonce, the postMessage listener, and the draft-enable. TEMPLATE-DECOUPLED:
+ * imports NO template; the iframe IS the isolation boundary (D-01).
+ */
+function PreviewPane({
+  username,
+  reloadNonce,
+  status,
+  onStatusChange,
+  onReload,
+  iframeRef,
+  showAtXl,
+  showBelowXl,
+}: {
+  username: string;
+  reloadNonce: number;
+  status: 'loading' | 'loaded' | 'failed';
+  onStatusChange: (s: 'loading' | 'loaded' | 'failed') => void;
+  onReload: () => void;
+  iframeRef: React.RefObject<HTMLIFrameElement | null>;
+  showAtXl: boolean;
+  showBelowXl: boolean;
+}) {
+  // No username yet → the owner has no published slug to preview (D — empty state).
+  const hasTarget = username.trim().length > 0;
+  // The draft render URL. `?edit=1` is the D-02 flag the (portfolio) bridge self-gates
+  // on; the origin always comes from siteUrl() (NEXT_PUBLIC_SITE_URL), never the Host.
+  const src = hasTarget ? siteUrl('/' + username) + '?edit=1' : '';
+
+  // Visibility: hidden entirely below xl unless the toggle picked 'preview'; at xl+
+  // shown iff `showAtXl`. When hidden at xl the form reclaims the width (no column).
+  const visibility =
+    (showBelowXl ? 'flex ' : 'hidden ') + (showAtXl ? 'xl:flex ' : 'xl:hidden ');
+
+  return (
+    <aside
+      className={
+        visibility +
+        'flex-1 flex-col border-t border-border bg-surface-muted ' +
+        'xl:w-[480px] xl:min-w-[420px] xl:flex-none xl:border-l xl:border-t-0'
+      }
+      aria-label="Live preview"
+    >
+      <div className="relative flex flex-1 flex-col">
+        {!hasTarget ? (
+          // Empty: the owner has no slug/content to preview yet.
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+            <h2 className="text-base font-semibold text-foreground">
+              Nothing to preview yet
+            </h2>
+            <p className="max-w-xs text-base text-muted-foreground">
+              Add or edit a section on the left — your changes appear here the moment you
+              save.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* The draft iframe (keyed on reloadNonce so a save remounts + re-fetches). */}
+            <iframe
+              key={reloadNonce}
+              ref={iframeRef}
+              title="Live preview of your portfolio"
+              src={src}
+              className="h-full min-h-[480px] w-full flex-1 border-0 bg-background"
+              onLoad={() => onStatusChange('loaded')}
+              onError={() => onStatusChange('failed')}
+            />
+
+            {/* Loading overlay — a calm surface-muted placeholder + caption (NOT a
+                spinner-only void). Shown on mount + each reload bump until onLoad. */}
+            {status === 'loading' ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-surface-muted">
+                <p className="text-[13px] leading-tight text-muted-foreground">
+                  Loading preview…
+                </p>
+              </div>
+            ) : null}
+
+            {/* Load-failure overlay — heading + body + a 44px retry control. */}
+            {status === 'failed' ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface-muted p-6 text-center">
+                <h2 className="text-base font-semibold text-foreground">
+                  Preview didn’t load
+                </h2>
+                <p className="max-w-xs text-base text-muted-foreground">
+                  Your editing still works. Reload the preview to try again.
+                </p>
+                <button
+                  type="button"
+                  onClick={onReload}
+                  className={
+                    'inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border px-4 ' +
+                    'text-sm font-semibold text-foreground outline-none transition-colors ' +
+                    'hover:border-border-strong hover:text-accent ' +
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+                    'motion-reduce:transition-none'
+                  }
+                >
+                  Reload preview
+                </button>
+              </div>
+            ) : null}
+          </>
+        )}
+
+        {/* The < xl view-only hint (D-17) — documents tap-to-edit isn't on mobile yet
+            without nagging. Hidden at xl+ where click-to-edit works. */}
+        {hasTarget ? (
+          <p className="border-t border-border px-4 py-2 text-[13px] leading-tight text-muted-foreground xl:hidden">
+            Tap-to-edit is coming to mobile — for now, edit from the section list.
+          </p>
+        ) : null}
+      </div>
+    </aside>
   );
 }
 
