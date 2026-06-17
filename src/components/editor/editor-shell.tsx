@@ -70,37 +70,24 @@ import { UnsupportedSectionBanner } from './unsupported-section-banner';
 import { UnsavedChangesGuard, useGuardedNavigate } from './unsaved-guard';
 
 /**
- * The sentinel `activeSectionId` for the PROFILE / IDENTITY panel (WR-02). The
- * profile is not a `sections` row, so it gets its own non-UUID id; selecting the
- * "Profile" rail entry sets this, routing the panel to the ProfileForm.
+ * The sentinel `activeSectionId`s for the non-`sections`-row panels (PROFILE / TEMPLATE /
+ * BLOG / CONTACT). The single source of truth now lives in `@/lib/preview/resolve-section-id`
+ * (Phase 27 — EDIT-02 / D-06) so the editor, the pure preview resolver, and its unit test
+ * all reference ONE definition (no drifting `'__contact_socials__'` copies). Re-exported
+ * here for callers that still import the sentinels from the editor module.
  */
-const PROFILE_PANEL_ID = '__profile__';
-
-/**
- * The sentinel `activeSectionId` for the TEMPLATE picker panel (07-05). Like the
- * profile, the template gallery is not a `sections` row, so it gets its own non-UUID
- * id; selecting the "Template" rail entry sets this, routing the panel to the
- * TemplatePicker (Surface B — platform chrome).
- */
-const TEMPLATE_PANEL_ID = '__template__';
-
-/**
- * The sentinel `activeSectionId` for the BLOG authoring panel (13.2-06 / D-19). The
- * blog panel is not a `sections` row (posts are first-class `blog_posts` rows), so
- * it gets its own non-UUID id; selecting the "Blog" rail entry sets this, routing
- * the panel to the BlogPanel (posts list → post editor, in the same two-pane shell).
- */
-const BLOG_PANEL_ID = '__blog__';
-
-/**
- * The sentinel `activeSectionId` for the CONTACT & SOCIALS panel (24-03 / D-07). The
- * contact/social settings are `portfolio_settings` columns, not a `sections` row, so
- * the panel gets its own non-UUID id; selecting the "Contact & Socials" rail entry
- * sets this, routing the panel to the ContactSocialsForm (SET-01/02/03). Mirrors the
- * PROFILE / TEMPLATE / BLOG sentinels exactly.
- */
-// D-07
-const CONTACT_PANEL_ID = '__contact_socials__';
+export {
+  PROFILE_PANEL_ID,
+  TEMPLATE_PANEL_ID,
+  BLOG_PANEL_ID,
+  CONTACT_PANEL_ID,
+} from '@/lib/preview/resolve-section-id';
+import {
+  PROFILE_PANEL_ID,
+  TEMPLATE_PANEL_ID,
+  BLOG_PANEL_ID,
+  CONTACT_PANEL_ID,
+} from '@/lib/preview/resolve-section-id';
 
 /**
  * The simple (single-form) section types handled by SectionForm. `blog_preview`
