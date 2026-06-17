@@ -34,6 +34,7 @@ import { CharCounter } from '@/components/ui/char-counter';
 import { Input } from '@/components/ui/input';
 import { saveSectionAction } from '@/lib/cms/save-section-action';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { notifyPreviewSaved } from '@/lib/stores/preview-save-signal';
 
 import { FormPanelHeader } from './form-panel-header';
 import type { SaveState } from './save-button';
@@ -110,6 +111,8 @@ export function BlogPreviewForm({ sectionId, initialContent, username }: BlogPre
 
       if (result.ok) {
         setSaveState('saved');
+        // Phase 27 (EDIT-03/D-04): reload the preview + re-scroll to the blog teaser.
+        notifyPreviewSaved('blog_preview');
         return { ok: true };
       }
 

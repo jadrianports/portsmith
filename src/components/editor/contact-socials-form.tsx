@@ -63,6 +63,8 @@ import { UrlInput } from './url-input';
 import { saveSettingsAction, type SaveSettingsInput } from '@/lib/cms/save-settings-action';
 import { SOCIAL_PLATFORMS } from '@/lib/validations';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { notifyPreviewSaved } from '@/lib/stores/preview-save-signal';
+import { CONTACT_PANEL_ID } from '@/lib/preview/resolve-section-id';
 
 import { FormPanelHeader } from './form-panel-header';
 import type { SaveState } from './save-button';
@@ -245,6 +247,9 @@ export function ContactSocialsForm({ initial, username }: ContactSocialsFormProp
       const result = await saveSettingsAction(buildInput());
       if (result.ok) {
         setSaveState('saved');
+        // Phase 27 (EDIT-03/D-04): reload the preview + re-scroll to the footer
+        // (the contact/socials region anchor). The pane resolves this region tag.
+        notifyPreviewSaved(CONTACT_PANEL_ID);
         return { ok: true };
       }
       if (result.fieldErrors) setFieldErrors(result.fieldErrors);

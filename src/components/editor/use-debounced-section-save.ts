@@ -50,6 +50,7 @@ import {
   type SaveSectionInput,
   type SaveSectionResult,
 } from '@/lib/cms/save-section-action';
+import { notifyPreviewSaved } from '@/lib/stores/preview-save-signal';
 
 /**
  * The trailing-debounce window (UX-only LITERAL, ~400-600ms per UI-SPEC Save Model).
@@ -290,6 +291,10 @@ export function useDebouncedSectionSave(
     if (result.ok) {
       setState('saved');
       live?.(); // never-claim-live-early: only the latest resolved {ok:true}.
+      // Phase 27 (EDIT-03/D-04/D-14): signal the live-preview pane to reload the
+      // iframe + re-scroll to this section (the item-based save path: projects,
+      // experience, skills, moodboard, …). Only on the latest flush's {ok:true}.
+      notifyPreviewSaved(t);
     } else {
       setState('error');
     }

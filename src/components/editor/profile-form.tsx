@@ -39,6 +39,7 @@ import { CharCounter } from '@/components/ui/char-counter';
 import { Input } from '@/components/ui/input';
 import { saveProfileAction } from '@/lib/cms/save-profile-action';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { notifyPreviewSaved } from '@/lib/stores/preview-save-signal';
 
 import { FormPanelHeader } from './form-panel-header';
 import { ImageUploader } from './image-uploader';
@@ -133,6 +134,10 @@ export function ProfileForm({ initial, username }: ProfileFormProps) {
       const result = await saveProfileAction(buildInput());
       if (result.ok) {
         setSaveState('saved');
+        // Phase 27 (EDIT-03/D-04): the profile identity (name/headline/avatar) renders
+        // in the hero — reload the preview + re-scroll there. `null` if no hero exists
+        // would just reload without a scroll; 'hero' is the natural identity anchor.
+        notifyPreviewSaved('hero');
         return { ok: true };
       }
       if (result.fieldErrors) setFieldErrors(result.fieldErrors);

@@ -31,6 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { saveSectionAction } from '@/lib/cms/save-section-action';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { notifyPreviewSaved } from '@/lib/stores/preview-save-signal';
 
 import { ExampleChip } from './example-chip';
 import { FormPanelHeader } from './form-panel-header';
@@ -246,6 +247,9 @@ export function SectionForm({ sectionId, type, initialContent, username }: Secti
         // Resolved ok → clear dirty (Zustand) + fire the saved-&-live beat. Never
         // before the action resolves (the save is not optimistic).
         setSaveState('saved');
+        // Phase 27 (EDIT-03/D-04/D-14): signal the live-preview pane to reload the
+        // iframe + re-scroll to this section. UI-only signal store (NOT uiStore).
+        notifyPreviewSaved(type);
         return { ok: true };
       }
 
