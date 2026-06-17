@@ -36,6 +36,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { PreviewBanner } from '@/components/editor/preview-banner';
+import { EditPreviewBridgeMount } from '@/components/portfolio/edit-preview-bridge-mount';
 import { PREVIEW_TEMPLATE_COOKIE } from '@/lib/preview/cookie';
 import { TemplateRenderer } from '@/components/templates/template-renderer';
 import {
@@ -193,6 +194,13 @@ export default async function PortfolioPage({
             prospective template, else the owner's PERSISTED slug — the candidate
             rides this existing __prerender_bypass dynamic branch only. */}
         <TemplateRenderer slug={renderedSlug} data={ownerData} />
+        {/* Phase 27 (EDIT-04 / D-02 / D-08): the owner-only click-to-edit bridge,
+            mounted ONLY inside this single sanctioned dynamic draft arm — NEVER on the
+            cookie-less public branch below. It lazy-imports its logic in a browser
+            effect (chunk stays off rootMainFiles) and self-gates on `?edit`, so a plain
+            draft preview pays nothing and `/[username]` stays ● SSG. No `searchParams`
+            prop is added to the page (that would flip the route dynamic). */}
+        <EditPreviewBridgeMount />
       </>
     );
   }

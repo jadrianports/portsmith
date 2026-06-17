@@ -24,8 +24,12 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-/** Candidate bridge source paths (Plan 02 picks the exact filename; we scan any present). */
+/** Candidate bridge source paths (Plan 02 picks the exact filename; we scan any present).
+ *  The bridge LOGIC module is a plain browser `.ts` (no `'use client'`/React — that shape
+ *  is what keeps it off the route's client bundle, EDIT-04); the MOUNT trigger is a
+ *  `'use client'` `.tsx`. We list both extensions so the guard binds whichever lands. */
 const BRIDGE_CANDIDATES = [
+  'src/components/portfolio/edit-preview-bridge.ts',
   'src/components/portfolio/edit-preview-bridge.tsx',
   'src/components/portfolio/edit-preview-bridge-mount.tsx',
 ].map((p) => path.resolve(p));
