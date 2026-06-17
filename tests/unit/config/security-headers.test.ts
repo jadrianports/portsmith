@@ -36,7 +36,12 @@ describe('next.config.ts — static SSG-safe security headers (D-13/D-14)', () =
     expect(csp, 'Content-Security-Policy must be present').toBeTruthy();
 
     // Structural / clickjacking directives.
-    expect(csp).toContain("frame-ancestors 'none'");
+    // frame-ancestors is 'self' (not 'none'): the chrome editor frames the portfolio
+    // for the EDIT-01 live preview (Phase 27); cross-origin framing stays blocked (D-13).
+    expect(csp).toContain("frame-ancestors 'self'");
+    expect(csp).not.toContain("frame-ancestors 'none'");
+    // frame-src allows 'self' so the editor may embed its own /[username]?edit=1 iframe.
+    expect(csp).toContain("frame-src 'self'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("base-uri 'self'");
     expect(csp).toContain("form-action 'self'");

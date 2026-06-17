@@ -29,11 +29,11 @@ const nextConfig: NextConfig = {
       "style-src 'self' 'unsafe-inline'", // template inline style={...}
       `script-src-elem 'self' 'unsafe-inline' ${turnstile}`, // NO nonce (D-14) — inline FOUC/JSON-LD + Turnstile
       `connect-src 'self' ${supabase} ${turnstile}`, // Supabase API + Turnstile siteverify-side
-      `frame-src ${turnstile}`, // Turnstile challenge iframe
+      `frame-src 'self' ${turnstile}`, // Turnstile challenge iframe + EDIT-01 same-origin live-preview iframe (Phase 27)
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",
-      "frame-ancestors 'none'", // clickjacking (D-13, replaces X-Frame-Options)
+      "frame-ancestors 'self'", // clickjacking (D-13, replaces X-Frame-Options); 'self' (was 'none') lets the same-origin chrome editor frame the portfolio for the EDIT-01 live preview — cross-origin framing still blocked
     ].join('; ');
     return [
       {
