@@ -84,6 +84,13 @@ export function Footer({ data }: FooterProps) {
 
   return (
     <footer
+      // Render-only owner-preview anchor (Phase 27 / D-06): the footer carries the
+      // socials + contact links but emits no `data-section-type`, so the edit-preview
+      // bridge reads THIS region tag to route a footer click → the Contact & Socials
+      // panel. Distinct attribute name from `data-section-type` (keeps the PIPE-05
+      // section-conformance grep unaffected); harmless static marker (like
+      // `data-portfolio-id`), read only by the owner-only `?edit=1` bridge.
+      data-preview-region="contact"
       style={{
         position: 'relative',
         marginTop: '96px',

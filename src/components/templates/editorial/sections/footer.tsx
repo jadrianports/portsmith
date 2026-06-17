@@ -89,6 +89,11 @@ export function Footer({ data }: FooterProps) {
 
   return (
     <footer
+      // Render-only owner-preview anchor (Phase 27 / D-06): the edit-preview bridge reads
+      // this region tag to route a footer click → the Contact & Socials panel. Distinct
+      // from `data-section-type` (keeps the PIPE-05 conformance grep unaffected); harmless
+      // static marker read only by the owner-only `?edit=1` bridge.
+      data-preview-region="contact"
       style={{
         marginTop: '96px',
         paddingTop: '48px',
