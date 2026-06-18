@@ -6,6 +6,7 @@
  * client island. The card surface/radius/shadow/hairline are token-driven
  * (no inline hex). A cross-link to login sits below the form.
  */
+import { GoogleSignInSection } from '@/components/auth/google-button';
 import { Link } from '@/components/ui/link';
 
 import { SignupForm } from './signup-form';
@@ -27,6 +28,8 @@ export default function SignupPage() {
       </div>
 
       <SignupForm />
+
+      <GoogleSignInSection />
 
       <p className="mt-6 text-center text-[13px] text-muted-foreground">
         Already have an account? <Link href="/login">Log in</Link>

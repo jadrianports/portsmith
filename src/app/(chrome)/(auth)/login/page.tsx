@@ -12,6 +12,7 @@
  * `searchParams` is a Promise in Next 16 — awaited. Both query values are echoed
  * UI context, never a data lookup, so there is no enumeration surface here.
  */
+import { GoogleSignInSection } from '@/components/auth/google-button';
 import { Alert } from '@/components/ui/alert';
 import { Link } from '@/components/ui/link';
 
@@ -46,6 +47,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       ) : null}
 
       <LoginForm redirectedFrom={redirectedFrom} />
+
+      <GoogleSignInSection />
 
       <p className="mt-6 text-center text-[13px] text-muted-foreground">
         Don&apos;t have an account? <Link href="/signup">Create your account</Link>
