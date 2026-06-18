@@ -24,6 +24,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 
+import { USERNAME_REGEX, RESERVED_USERNAMES } from '@/lib/validations/username';
+
 import {
   adminClient,
   cleanupTestUsers,
@@ -109,17 +111,39 @@ describe('CR-03 — reserved usernames are rejected at the DB signup boundary', 
   });
 });
 
-describe('CR-03 — a missing username is rejected at signup', () => {
-  it('admin.createUser with NO username in metadata creates no profile', async () => {
+describe('OAUTH-03/04 (migration 026) — a missing username is now PROVISIONED, not rejected', () => {
+  // PRE-026 CONTRACT (superseded): handle_new_user RAISEd 'username is required at
+  // signup', so a no-username create made no profile. Migration 026 resolves the
+  // deferred provisional-username carve-out (Phase 28): a no-username create (the
+  // Google OAuth shape) now DERIVES a collision-safe, format-valid, non-reserved
+  // handle from the email local-part (D-04/D-05) and creates the profile atomically.
+  // The full carve-out is covered by tests/integration/oauth-provisional-username.test.ts;
+  // this updated case pins that signup-guards no longer expects the old RAISE.
+  it('admin.createUser with NO username derives a valid provisional handle + profile', async () => {
     const { data, error } = await admin.auth.admin.createUser({
       email: `nouser-${RUN}@example.test`,
       password: 'Test-Password-123!',
       email_confirm: true,
-      user_metadata: { display_name: 'No Username' }, // username omitted
+      user_metadata: { display_name: 'No Username' }, // username omitted (OAuth shape)
     });
-    // handle_new_user RAISEs 'username is required at signup' (wrapped by GoTrue).
-    expect(error).not.toBeNull();
-    if (data?.user?.id) createdIds.push(data.user.id);
+    expect(error).toBeNull();
+    const userId = data.user?.id;
+    expect(userId).toBeTruthy();
+    if (userId) createdIds.push(userId);
+
+    const { data: prof, error: profErr } = await admin
+      .from('profiles')
+      .select('id, username')
+      .eq('id', userId!)
+      .single();
+    expect(profErr).toBeNull();
+    const username: string = prof!.username;
+    // A valid, non-reserved provisional handle (CR-03), derived from the local part.
+    expect(USERNAME_REGEX.test(username)).toBe(true);
+    expect(username.length).toBeGreaterThanOrEqual(3);
+    expect(username.length).toBeLessThanOrEqual(30);
+    expect(RESERVED_USERNAMES.has(username)).toBe(false);
+    expect(username.startsWith('nouser')).toBe(true);
   });
 });
 
