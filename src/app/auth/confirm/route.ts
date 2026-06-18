@@ -49,6 +49,7 @@
 import { type EmailOtpType } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { safeInternalPath, relativeRedirect } from '@/lib/auth/safe-internal-path';
 import { createClient } from '@/lib/supabase/server';
 
 /** Where a successful email confirmation lands when no (valid) `next` is given. */
@@ -75,41 +76,9 @@ const RECOVERY_NEXT = '/update-password';
  */
 const ALLOWED_TYPES = new Set<EmailOtpType>(['email', 'recovery', 'email_change']);
 
-/**
- * Returns a safe, INTERNAL redirect path or `null` if `raw` is not a same-origin
- * absolute path. Rejects:
- *   - null / empty
- *   - protocol-relative (`//host`, `/\host`) — these navigate off-origin
- *   - anything that parses as an absolute URL (has a scheme + host)
- *   - anything that does not start with a single `/`
- */
-function safeInternalPath(raw: string | null): string | null {
-  if (!raw) return null;
-  // Must be an absolute path beginning with exactly one forward slash.
-  if (!raw.startsWith('/')) return null;
-  // Reject protocol-relative and backslash-smuggling forms (`//`, `/\`).
-  if (raw.startsWith('//') || raw.startsWith('/\\')) return null;
-  // Belt-and-suspenders: if it parses as an absolute URL, it is not a bare path.
-  try {
-    // A bare path throws here (no base) — an absolute URL (http:, javascript:, …)
-    // does not, so a successful parse means `raw` carried a scheme: reject it.
-    new URL(raw);
-    return null;
-  } catch {
-    // Expected for a genuine relative path — fall through and accept it.
-  }
-  return raw;
-}
-
-/**
- * Emit a RELATIVE 303 redirect (WR-03). `path` is an already-validated internal
- * absolute path (begins with a single `/`); the browser resolves it against the
- * request origin it is already on, so we never trust the `Host` header and never
- * drop the verifyOtp cookie by hopping origins. The token query is never carried.
- */
-function relativeRedirect(path: string): NextResponse {
-  return new NextResponse(null, { status: 303, headers: { Location: path } });
-}
+// `safeInternalPath` + `relativeRedirect` (the WR-03 open-redirect hardening) now
+// live in `@/lib/auth/safe-internal-path` so this route and `/auth/callback` (the
+// PKCE flow) share ONE copy — no copy-paste drift between the two auth redirects.
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
