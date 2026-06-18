@@ -44,6 +44,7 @@ import {
 } from '@/components/editor/unsaved-guard';
 import type { AllowedTemplate } from '@/lib/templates/available-templates';
 
+import { HandleStep } from './steps/handle-step';
 import { TemplateStep } from './steps/template-step';
 import {
   ContentStep,
@@ -61,6 +62,10 @@ import { OnboardingStepper } from './onboarding-stepper';
 
 /** Per-step coaching copy (UI-SPEC § Per-step coaching — heading + one-line subtext). */
 const STEP_COACHING: Record<OnboardingStep, { heading: string; subtext: string }> = {
+  handle: {
+    heading: 'Your URL',
+    subtext: 'This is your portfolio address — change it if you like.',
+  },
   template: {
     heading: 'Choose your look',
     subtext: 'Pick a template — you can change it anytime, even after you publish.',
@@ -331,7 +336,10 @@ export function OnboardingWizard({
         {/* Step slot: the full 6-step sequence wired end-to-end (18-04 Step 1 + 18-05
             content/publish). Template(1) → Hero(2)/About(3)/Projects(4)/Contact(5) via
             the coached ContentStep wrapper → Publish(6) → the payoff (terminal). */}
-        {current === 'template' ? (
+        {current === 'handle' ? (
+          // 28-04 / D-06: the FIRST step — confirm or edit the trigger-assigned handle.
+          <HandleStep username={username} />
+        ) : current === 'template' ? (
           <TemplateStep
             username={username}
             currentSlug={currentTemplateSlug}

@@ -40,6 +40,7 @@ import { ONBOARDING_SEED } from '@/lib/cms/onboarding-seed';
  * `'publish'` when every prior step is done (Publish is the terminal step).
  */
 export type OnboardingStep =
+  | 'handle'
   | 'template'
   | 'hero'
   | 'about'
@@ -49,6 +50,7 @@ export type OnboardingStep =
 
 /** The canonical step order — the predicate walks this and returns the first not-done. */
 const STEP_ORDER: readonly OnboardingStep[] = [
+  'handle',
   'template',
   'hero',
   'about',
@@ -91,6 +93,17 @@ function nonEmptyString(v: unknown): boolean {
 }
 
 // ── Per-step "is this step done?" predicates (RESEARCH Risk 3 table) ──────────────
+
+/**
+ * (0) Handle → ALWAYS done (28-04 / D-06). The handle ALWAYS exists post-trigger
+ * (`handle_new_user` assigns a collision-safe one at create — never null). The "Your
+ * URL" step is a confirm/nudge, NEVER a resume gate: a returning user must never be
+ * yo-yo'd back to it just because they accepted the assigned handle. Mirrors
+ * `templateDone()` — always-true so it is never the derived resume target.
+ */
+function handleDone(): boolean {
+  return true;
+}
 
 /**
  * (1) Template → ALWAYS done once a portfolio exists. Bootstrap always seeds a
@@ -165,6 +178,7 @@ function publishDone(input: OnboardingStepInput): boolean {
 
 /** The per-step done map, in step order. */
 const STEP_DONE: Record<OnboardingStep, (input: OnboardingStepInput) => boolean> = {
+  handle: handleDone,
   template: templateDone,
   hero: heroDone,
   about: aboutDone,
