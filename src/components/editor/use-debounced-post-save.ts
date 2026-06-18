@@ -54,6 +54,7 @@ import {
   type SavePostInput,
   type SavePostResult,
 } from '@/lib/cms/save-post-action';
+import { notifyPreviewSaved } from '@/lib/stores/preview-save-signal';
 
 import {
   createCoalescingSaver,
@@ -196,6 +197,12 @@ export function useDebouncedPostSave(
     if (result.ok) {
       setState('saved');
       onSaved?.(result.id); // promote a CREATE → UPDATE on the returned id.
+      // Phase 27 (EDIT-03/D-04/D-14): signal the live-preview pane to reload the
+      // iframe on a saved post — the first-class-row analog of the section hook's
+      // `notifyPreviewSaved(t)` (use-debounced-section-save.ts:297). `null` (not a
+      // section type) because a blog post has no homepage section to re-scroll to;
+      // the signal only needs to bump the iframe key. Latest-flush guarded above.
+      notifyPreviewSaved(null);
     } else {
       setState('error');
     }
