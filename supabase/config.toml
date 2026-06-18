@@ -96,10 +96,18 @@ site_url = "http://127.0.0.1:3000"
 # emits. Corrected to the bare http origin (the site_url / NEXT_PUBLIC_SITE_URL
 # origin), so a redirect to the origin without the /auth/confirm suffix is also
 # covered alongside the two explicit /auth/confirm landing paths.
+#
+# Phase 28 (Pitfall 3): the Google OAuth flow bounces back to the BARE /auth/callback
+# PKCE route (signInWithGoogleAction sets redirectTo `${NEXT_PUBLIC_SITE_URL}/auth/callback`).
+# That path MUST be allow-listed here on the local stack or GoTrue rejects the
+# exchange and the flow dead-ends ("redirect_to is not allowed"). Both dev origins
+# (127.0.0.1 and localhost) are listed to match either NEXT_PUBLIC_SITE_URL value.
 additional_redirect_urls = [
   "http://127.0.0.1:3000",
   "http://127.0.0.1:3000/auth/confirm",
   "http://localhost:3000/auth/confirm",
+  "http://127.0.0.1:3000/auth/callback",
+  "http://localhost:3000/auth/callback",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum
 # 604,800 (1 week).
@@ -153,6 +161,18 @@ content_path = "./supabase/templates/change-email.html"
 # `slack`, `spotify`, `workos`, `zoom`.
 [auth.external.apple]
 enabled = false
+
+# Google OAuth provider (Phase 28, OAUTH-06 / D-07). Local stack reads the client
+# id/secret from env — the operator must supply GOOGLE_OAUTH_CLIENT_ID /
+# GOOGLE_OAUTH_CLIENT_SECRET in .env.local for these env(...) references to resolve
+# (without them the stanza is inert, no crash). PROD enables the provider in the
+# Supabase dashboard, not here. `redirect_uri` is omitted — Supabase uses its own
+# /auth/v1/callback; the app's post-auth /auth/callback bounce is allow-listed via
+# additional_redirect_urls above (Pitfall 3).
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_OAUTH_CLIENT_ID)"
+secret = "env(GOOGLE_OAUTH_CLIENT_SECRET)"
 
 [analytics]
 enabled = false
