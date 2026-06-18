@@ -2145,6 +2145,10 @@ export type Database = {
         }[]
       }
       request_account_deletion: { Args: never; Returns: undefined }
+      set_onboarding_username: {
+        Args: { new_username: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
