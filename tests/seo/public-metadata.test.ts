@@ -38,6 +38,9 @@ type Meta = {
   robots?: { index?: boolean; follow?: boolean };
   openGraph?: { images?: string[] };
   twitter?: { card?: string; title?: unknown; description?: unknown; images?: string[] };
+  // 29-01: the favicon `icons` ladder (D-04). `icon` is the App-Router metadata
+  // shape — an array of `{ url, type }` descriptors.
+  icons?: { icon?: Array<{ url?: unknown; type?: unknown }> };
 };
 
 async function loadBuilder(): Promise<
@@ -55,12 +58,25 @@ async function loadBuilder(): Promise<
  * parity (the builder derives the dynamic card URL from `username`, not the slug —
  * the slug→accent resolution lives in the OG route, not the metadata builder).
  */
-function makeData(overrides?: { ogImageUrl?: string | null }) {
+function makeData(overrides?: {
+  ogImageUrl?: string | null;
+  // 29-01: the favicon ladder inputs (D-04). `undefined` keeps the default.
+  faviconUrl?: string | null;
+  avatarUrl?: string | null;
+  displayName?: string;
+  pageTitle?: string | null;
+}) {
   return {
-    profile: { display_name: 'Ada Lovelace', avatar_url: null, headline: 'Engineer' },
+    profile: {
+      display_name: overrides?.displayName ?? 'Ada Lovelace',
+      avatar_url: overrides?.avatarUrl ?? null,
+      headline: 'Engineer',
+    },
     settings: {
+      page_title: overrides?.pageTitle ?? null,
       meta_description: 'Portfolio of Ada',
       og_image_url: overrides?.ogImageUrl ?? null,
+      favicon_url: overrides?.faviconUrl ?? null,
     },
     sections: [],
     recentPosts: [],
@@ -117,5 +133,57 @@ describe('SHARE-03 — net-new Twitter summary_large_image card', () => {
     const meta = await build(makeData({ ogImageUrl: 'https://cdn.example/custom-card.png' }), 'ada');
     expect(meta.openGraph?.images?.[0]).toBe('https://cdn.example/custom-card.png');
     expect(meta.twitter?.images?.[0]).toBe('https://cdn.example/custom-card.png');
+  });
+});
+
+// 29-01 (META-01 / D-07) — the NULL page_title render-time fallback. This ALREADY
+// passes against the current builder (the fallback predates Phase 29) — pinned here
+// as a regression guard so the SEO write work cannot silently remove it.
+describe('META-01 / D-07 — page_title fallback', () => {
+  it('NULL page_title falls back to "{displayName} — Portfolio"', async () => {
+    const build = await loadBuilder();
+    const meta = await build(makeData({ pageTitle: null, displayName: 'Grace Hopper' }), 'grace');
+    expect(meta.title).toBe('Grace Hopper — Portfolio');
+  });
+
+  it('a set page_title WINS over the fallback', async () => {
+    const build = await loadBuilder();
+    const meta = await build(makeData({ pageTitle: 'Grace H. — Compiler Pioneer' }), 'grace');
+    expect(meta.title).toBe('Grace H. — Compiler Pioneer');
+  });
+});
+
+// 29-01 (META-03 / D-04) — the favicon `icons` ladder. RED until Plan 03 adds
+// `resolveFaviconIcons(data)` and spreads it into the builder's return:
+//   favicon_url  →  avatar_url  →  generated single-initial data:image/svg+xml URI.
+// The emitted `<link rel=icon>` carries `type: 'image/webp'` (the stored WebP).
+describe('META-03 / D-04 — favicon icons ladder', () => {
+  it('emits favicon_url with type image/webp when set (top rung)', async () => {
+    const build = await loadBuilder();
+    const meta = await build(
+      makeData({ faviconUrl: 'https://cdn.example/fav.webp' }),
+      'ada',
+    );
+    expect(meta.icons?.icon?.[0]).toEqual({
+      url: 'https://cdn.example/fav.webp',
+      type: 'image/webp',
+    });
+  });
+
+  it('falls back to avatar_url when favicon_url is null (middle rung)', async () => {
+    const build = await loadBuilder();
+    const meta = await build(
+      makeData({ faviconUrl: null, avatarUrl: 'https://cdn.example/avatar.webp' }),
+      'ada',
+    );
+    expect(meta.icons?.icon?.[0]?.url).toBe('https://cdn.example/avatar.webp');
+  });
+
+  it('falls back to a generated data:image/svg+xml URI when both are null (bottom rung)', async () => {
+    const build = await loadBuilder();
+    const meta = await build(makeData({ faviconUrl: null, avatarUrl: null }), 'ada');
+    const url = meta.icons?.icon?.[0]?.url;
+    expect(typeof url).toBe('string');
+    expect(url as string).toContain('data:image/svg+xml,');
   });
 });
