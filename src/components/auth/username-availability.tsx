@@ -70,6 +70,16 @@ export function UsernameAvailability({
       return;
     }
 
+    // Owner no-op: the caller's OWN current handle is not "taken" — it is simply
+    // unchanged. Skip the read and show no error (the change panel disables confirm on a
+    // no-op anyway). Signup passes no `currentUsername`, so this never fires there.
+    if (currentUsername && trimmed === currentUsername) {
+      setStatus('idle');
+      setMessage('');
+      onAvailabilityChange?.(null);
+      return;
+    }
+
     // 2) Debounced availability read.
     setStatus('checking');
     setMessage('Checking availability…');
