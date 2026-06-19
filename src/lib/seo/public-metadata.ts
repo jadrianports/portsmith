@@ -68,6 +68,47 @@ export function subRouteRobots(data: PortfolioData): Pick<Metadata, 'robots'> {
 }
 
 /**
+ * META-03 / D-04 — the bottom-rung favicon default. A static, system-built SVG
+ * data-URI (a rounded Evergreen square + the name's uppercase first initial in a
+ * system-ui font) so an owner who sets neither a favicon nor an avatar still gets a
+ * coherent tab mark (never a blank tab). PURE — no fetch / no I/O; the `name` is the
+ * already-resolved display name. The SVG is system-authored (NOT user input), so it
+ * is not a stored-XSS sink (T-29-01).
+ */
+function generatedInitialDataUri(name: string): string {
+  const initial = (name.trim()[0] ?? '?').toUpperCase();
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">` +
+    `<rect width="64" height="64" rx="12" fill="#0b3d2e"/>` +
+    `<text x="32" y="44" font-size="36" text-anchor="middle" fill="#fff" ` +
+    `font-family="system-ui,sans-serif">${initial}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+/**
+ * META-03 / D-04 — the render-time favicon ladder, resolved over already-loaded
+ * `PortfolioData` (Pitfall 5 / D-22: PURE — no cookies()/headers()/host-read/fetch):
+ *
+ *   1. explicit `settings.favicon_url`  — a stored WebP (CR-01: empty/whitespace
+ *      falls through, so a saved-empty value never emits `<link rel=icon href="">`).
+ *   2. `profile.avatar_url`             — already a 1:1 Storage WebP.
+ *   3. the generated single-initial      — a system-built `data:image/svg+xml` URI.
+ *
+ * The emitted `<link rel=icon>` carries `type: 'image/webp'` for the two Storage
+ * rungs; the `data:` rung omits `type` (the SVG is not WebP).
+ */
+export function resolveFaviconIcons(
+  data: PortfolioData,
+  username: string,
+): Pick<Metadata, 'icons'> {
+  const explicit = data.settings.favicon_url?.trim();
+  const avatar = data.profile.avatar_url?.trim();
+  const href = explicit || avatar || generatedInitialDataUri(resolveDisplayName(data, username));
+  const type = href.startsWith('data:') ? undefined : 'image/webp';
+  return { icons: { icon: [type ? { url: href, type } : { url: href }] } };
+}
+
+/**
  * Build the PUBLIC-page Metadata for a published portfolio: per-portfolio
  * title/description, the siteUrl canonical, the SAFE-04 robots gate, the D-06
  * dynamic-card OG image, and the net-new Twitter summary_large_image card. PURE
@@ -96,6 +137,9 @@ export function buildPublicMetadata(data: PortfolioData, username: string): Meta
     alternates: { canonical },
     // Withheld from indexes while incomplete; still followed + reachable (D-11).
     ...(complete ? {} : { robots: { index: false, follow: true } }),
+    // META-03 / D-04: the favicon→avatar→generated-initial ladder, pure over the
+    // already-loaded data (no request-time read — D-22 preserved).
+    ...resolveFaviconIcons(data, username),
     // SHARE-03 / D-06: the per-portfolio dynamic card (override → card ladder). All
     // URLs env-driven via siteUrl (PUB-03); never the static og-default.png (D-04).
     openGraph: {
