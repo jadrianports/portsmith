@@ -65,6 +65,7 @@ import { CompletenessChecklist } from './completeness-checklist';
 import { ContactSocialsForm } from './contact-socials-form';
 import { ItemManager, type ItemSectionType } from './item-card';
 import { MoodboardManager } from './moodboard-manager';
+import { PageIdentityForm } from './page-identity-form';
 import { ProfileForm } from './profile-form';
 import { PublishToggle } from './publish-toggle';
 import { SectionForm, type SimpleSectionType } from './section-form';
@@ -87,12 +88,14 @@ export {
   TEMPLATE_PANEL_ID,
   BLOG_PANEL_ID,
   CONTACT_PANEL_ID,
+  SEO_PANEL_ID,
 } from '@/lib/preview/resolve-section-id';
 import {
   PROFILE_PANEL_ID,
   TEMPLATE_PANEL_ID,
   BLOG_PANEL_ID,
   CONTACT_PANEL_ID,
+  SEO_PANEL_ID,
 } from '@/lib/preview/resolve-section-id';
 
 /**
@@ -438,6 +441,8 @@ export function EditorShell({
   const blogActive = activeSectionId === BLOG_PANEL_ID;
   // 24-03 / D-07: whether the CONTACT & SOCIALS panel is the active selection.
   const contactSocialsActive = activeSectionId === CONTACT_PANEL_ID;
+  // 29 / D-01: whether the PAGE IDENTITY & SEO panel is the active selection.
+  const seoActive = activeSectionId === SEO_PANEL_ID;
 
   // 07-05: the portfolio's CURRENT template slug — threaded into the picker so it can
   // mark the "● Current" card. The dashboard passes it explicitly; fall back to the
@@ -890,6 +895,15 @@ export function EditorShell({
               onSelect={() => selectSection(CONTACT_PANEL_ID)}
             />
 
+            {/* PAGE IDENTITY & SEO entry (29 — D-01). Sits with the Profile/Template/
+                Blog/Contact entries at the top of the rail; selecting it routes the
+                panel to the PageIdentityForm (title/description/favicon/share image).
+                Dirty-guarded like every in-app navigation. */}
+            <PageIdentitySeoRailEntry
+              active={seoActive}
+              onSelect={() => selectSection(SEO_PANEL_ID)}
+            />
+
             <RailSectionList
               sections={sections}
               portfolioId={portfolioId}
@@ -987,6 +1001,20 @@ export function EditorShell({
                     | null) ?? null,
                   location: data.settings.location,
                   phone: data.settings.phone,
+                }}
+                username={username}
+              />
+            ) : seoActive ? (
+              // 29 / D-01 (META-01..04): the PAGE IDENTITY & SEO editor — the UI caller
+              // for saveSeoSettings. Seeded from the owner read's PublicSettings, which
+              // carries all four SEO columns (page_title/meta_description/og/favicon).
+              <PageIdentityForm
+                key={SEO_PANEL_ID}
+                initial={{
+                  page_title: data.settings.page_title,
+                  meta_description: data.settings.meta_description,
+                  og_image_url: data.settings.og_image_url,
+                  favicon_url: data.settings.favicon_url,
                 }}
                 username={username}
               />
@@ -1418,6 +1446,44 @@ function ContactSocialsRailEntry({
       <span className="text-sm font-semibold text-foreground">Contact &amp; Socials</span>
       <span className="ml-auto text-[13px] leading-tight text-muted-foreground">
         Email · links · location
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The PAGE IDENTITY & SEO rail entry (29 — D-01 / META-01..04). A selectable row,
+ * styled identically to the Profile/Template/Blog/Contact entries, that routes the
+ * panel to the PageIdentityForm. Carries the active brand marker when selected (parity
+ * with the other rail entries) and a leading lucide `Settings` glyph.
+ */
+function PageIdentitySeoRailEntry({
+  active,
+  onSelect,
+}: {
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      className={
+        'group relative flex min-h-11 items-center gap-2 rounded-md border border-border ' +
+        'bg-surface px-3 py-2 text-left outline-none transition-colors ' +
+        'hover:border-border-strong hover:text-accent ' +
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+        'motion-reduce:transition-none'
+      }
+    >
+      {active ? (
+        <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] rounded-l-md bg-brand" />
+      ) : null}
+      <Settings aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+      <span className="text-sm font-semibold text-foreground">Page Identity &amp; SEO</span>
+      <span className="ml-auto text-[13px] leading-tight text-muted-foreground">
+        Title · favicon · share
       </span>
     </button>
   );
