@@ -59,8 +59,15 @@ import { withHeroResumeUrl } from '@/lib/portfolio/inject-hero-resume';
 import { createClient } from '@/lib/supabase/server';
 
 /** The owner read returns the template contract PLUS the live `published` flag the
- *  PreviewBanner needs ("This page is not public yet."). */
-export type OwnerPortfolioData = PortfolioData & { published: boolean };
+ *  PreviewBanner needs ("This page is not public yet.") AND the live
+ *  `showcase_opt_in` flag the Page Identity & SEO panel's Explore toggle seeds from
+ *  (SHOW-03 / D-07). Both are `profiles` columns carried as top-level siblings (NOT on
+ *  `PublicProfile`, which is the `public_profiles` view Row — `showcase_opt_in` is not
+ *  projected into that no-leak view). */
+export type OwnerPortfolioData = PortfolioData & {
+  published: boolean;
+  showcase_opt_in: boolean;
+};
 
 /**
  * Options for {@link getPortfolioOwnerByUsername}.
@@ -112,7 +119,9 @@ export async function getPortfolioOwnerByUsername(
   //     `published` rides along for the banner. maybeSingle() → no row = null.
   const { data: profile, error: profileError } = await db
     .from('profiles')
-    .select('id, username, display_name, headline, avatar_url, resume_url, published')
+    .select(
+      'id, username, display_name, headline, avatar_url, resume_url, published, showcase_opt_in',
+    )
     .eq('id', callerId)
     .maybeSingle();
   if (profileError) {
@@ -227,5 +236,9 @@ export async function getPortfolioOwnerByUsername(
     templateSlug, // owner's persisted slug (resolved from the static map).
     templateSpec: resolveSpec(templateSlug), // spec for the SAME slug (Pitfall 6).
     published: profile.published, // for the PreviewBanner "not public yet" caption.
+    // SHOW-03 / D-07: the live Explore opt-in (default false), seeding the Page Identity
+    // & SEO panel's toggle. Null-coalesce defensively (the column is NOT NULL DEFAULT
+    // false in 028, but the contract type is strict boolean).
+    showcase_opt_in: profile.showcase_opt_in ?? false,
   };
 }

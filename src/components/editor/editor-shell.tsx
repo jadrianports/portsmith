@@ -1015,6 +1015,9 @@ export function EditorShell({
                   meta_description: data.settings.meta_description,
                   og_image_url: data.settings.og_image_url,
                   favicon_url: data.settings.favicon_url,
+                  // SHOW-03 / D-07: the Explore opt-in is a `profiles` column (NOT a
+                  // settings column), carried as a top-level sibling on the owner read.
+                  showcase_opt_in: data.showcase_opt_in,
                 }}
                 username={username}
               />

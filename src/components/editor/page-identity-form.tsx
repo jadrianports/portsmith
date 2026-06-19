@@ -41,6 +41,7 @@ import { CharCounter } from '@/components/ui/char-counter';
 import { Input } from '@/components/ui/input';
 import { changeUsernameAction } from '@/lib/cms/change-username-action';
 import { saveSeoSettings, type SaveSeoSettingsInput } from '@/lib/cms/save-settings-action';
+import { setShowcaseOptIn } from '@/lib/cms/set-showcase-action';
 import { THIRTY_DAYS_MS, formatNextAllowedDate } from '@/lib/cms/username-cooldown';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { notifyPreviewSaved } from '@/lib/stores/preview-save-signal';
@@ -65,6 +66,8 @@ export interface PageIdentityFormProps {
     meta_description: string | null;
     og_image_url: string | null;
     favicon_url: string | null;
+    /** SHOW-03 / D-07: the live Explore opt-in (a `profiles` column, default false). */
+    showcase_opt_in: boolean;
   };
   /** The owner's username — passed so the action's revalidate needs no round-trip. */
   username?: string;
@@ -222,6 +225,66 @@ function UsernameUrlField({ currentUsername }: { currentUsername: string }) {
   );
 }
 
+/**
+ * The Explore opt-in toggle (SHOW-03 / D-06 / D-07) — a SEPARATE control inside the
+ * Page Identity panel (both halves are "how your page is publicly identified &
+ * discovered", D-07). Like the publish toggle, it is an IMMEDIATE write: on change it
+ * calls `setShowcaseOptIn(value)` directly — NOT part of the SEO dirty-guard SaveButton
+ * form (the SEO form writes the disjoint `portfolio_settings` table; `showcase_opt_in`
+ * is a `profiles` column written by its own action). State is local `useState` seeded
+ * from the owner read — never mirrored into Zustand (CLAUDE.md state split). Default off.
+ * Chrome single-layer only (Evergreen/Copper `@theme` tokens + Inter; no template token,
+ * no inline hex). On a failed write the checkbox reverts to its prior value.
+ */
+function ShowcaseOptInField({ initialOptedIn }: { initialOptedIn: boolean }) {
+  const [optedIn, setOptedIn] = useState(initialOptedIn);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleChange(next: boolean) {
+    if (pending) return;
+    setError(null);
+    setPending(true);
+    // Optimistic flip; revert on a non-ok result so the control reflects the truth.
+    setOptedIn(next);
+    try {
+      const result = await setShowcaseOptIn(next);
+      if (!result.ok) {
+        setOptedIn(!next);
+        setError(result.error ?? 'Something went wrong. Please try again.');
+      }
+    } catch {
+      setOptedIn(!next);
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-2" aria-label="Explore listing">
+      <label className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          checked={optedIn}
+          disabled={pending}
+          onChange={(e) => handleChange(e.target.checked)}
+          className="mt-0.5 size-4 rounded-sm border-border text-brand outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
+        />
+        <span className="flex flex-col gap-0.5">
+          <span className="text-[13px] font-semibold text-foreground">
+            Show my published portfolio on the public Explore page.
+          </span>
+          <span className="text-[13px] leading-tight text-muted-foreground">
+            When on, your live portfolio can appear in the public Explore gallery. Off by default.
+          </span>
+        </span>
+      </label>
+      {error ? <Alert variant="error">{error}</Alert> : null}
+    </section>
+  );
+}
+
 export function PageIdentityForm({ initial, username }: PageIdentityFormProps) {
   const setDirty = useUIStore((s) => s.setDirty);
 
@@ -318,6 +381,10 @@ export function PageIdentityForm({ initial, username }: PageIdentityFormProps) {
       {/* HANDLE-01 / D-07: the username / vanity-URL control — a SEPARATE sub-form calling
           changeUsernameAction, cleanly off the SEO save below. */}
       <UsernameUrlField currentUsername={username ?? ''} />
+
+      {/* SHOW-03 / D-07: the Explore opt-in toggle — an IMMEDIATE write via setShowcaseOptIn,
+          cleanly off the SEO save below (both are "how your page is publicly discovered"). */}
+      <ShowcaseOptInField initialOptedIn={initial.showcase_opt_in} />
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
         {banner ? <Alert variant="error">{banner}</Alert> : null}
