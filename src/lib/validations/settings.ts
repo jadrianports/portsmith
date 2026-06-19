@@ -137,6 +137,30 @@ export const seoSettingsSchema = z.object({
   meta_description: z.string().max(META_DESCRIPTION_MAX).or(z.literal('')).optional(),
   og_image_url: urlOrEmptyOptional, // CR-01 — http(s)-only; rejects javascript:/data:
   favicon_url: urlOrEmptyOptional, // CR-01 — http(s)-only; rejects javascript:/data:
+  // SHOW-03 / D-06 / D-07: the owner-editable Explore opt-in flag. It lives on the
+  // Page Identity & SEO panel (both halves are "how your page is publicly identified
+  // & discovered"), but its WRITE PATH is the immediate `setShowcaseOptIn` action
+  // (NOT this dirty-guard SEO form save, which writes the disjoint `portfolio_settings`
+  // table — `showcase_opt_in` is a `profiles` column). It is included here so the
+  // panel's form schema models the field; the action's strict re-parse gate is
+  // `showcaseOptInSchema` below.
+  showcase_opt_in: z.boolean().optional(),
 });
 
 export type SeoSettings = z.infer<typeof seoSettingsSchema>;
+
+// ---------------------------------------------------------------------------
+// Showcase opt-in write gate (Phase 31 — SHOW-03 / D-06 / D-07, T-31-08)
+// ---------------------------------------------------------------------------
+
+/**
+ * The STRICT boolean gate `setShowcaseOptIn` (31-03) re-parses server-side BEFORE
+ * the authenticated-RLS write — the "Zod on every write" invariant (CLAUDE.md). A
+ * non-boolean payload is rejected and nothing is written (the server re-parse is the
+ * gate, not the client toggle). Unlike `seoSettingsSchema.showcase_opt_in` (optional —
+ * it is one slice of a partial form), this is a bare `z.boolean()`: the action always
+ * passes an explicit value, so the parsed result is the single value the write commits
+ * (never the raw client `optIn`). Imported only from the `@/lib/validations` barrel.
+ */
+// SHOW-03 / D-06 / T-31-08
+export const showcaseOptInSchema = z.boolean();
