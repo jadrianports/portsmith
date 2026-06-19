@@ -17,6 +17,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
+import { redirectIfRenamedHandle } from '@/lib/portfolio/username-redirect';
 import { EdgerunnerV2PageShell } from '@/components/templates/edgerunner-v2/pages/page-shell';
 import { ServicesPageContent } from '@/components/templates/edgerunner-v2/pages/services-page-content';
 import { subRouteRobots, resolveFaviconIcons } from '@/lib/seo/public-metadata';
@@ -93,7 +94,10 @@ export default async function ServicesPage({
 
   // Cookie-LESS anon read — keeps this route ISR-cacheable (D-22, Pitfall 2)
   const data = await getPortfolioByUsername(username);
-  if (!data) notFound(); // D-24 — missing/unpublished
+  if (!data) {
+    await redirectIfRenamedHandle(username, '/services'); // HANDLE-02 — preserve /services (D-03)
+    notFound(); // D-24 — missing/unpublished
+  }
 
   // D-14 gate: 404 unless the resolved spec declares the 'services' page.
   if (!data.templateSpec.pages?.includes('services')) notFound();

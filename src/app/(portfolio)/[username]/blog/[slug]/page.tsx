@@ -24,6 +24,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
+import { redirectIfRenamedHandle } from '@/lib/portfolio/username-redirect';
 import {
   getPublishedPostBySlug,
   getPublishedPosts,
@@ -133,7 +134,10 @@ export default async function BlogPostPage({
 
   // Cookie-LESS anon read — keeps this route ISR-cacheable (D-22, Pitfall 2)
   const data = await getPortfolioByUsername(username);
-  if (!data) notFound();
+  if (!data) {
+    await redirectIfRenamedHandle(username, '/blog/' + slug); // HANDLE-02 — preserve sub-path (D-03)
+    notFound();
+  }
 
   // D-14 gate: 404 unless the resolved spec declares the 'blog' page.
   if (!data.templateSpec.pages?.includes('blog')) notFound();

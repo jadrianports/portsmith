@@ -19,6 +19,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
+import { redirectIfRenamedHandle } from '@/lib/portfolio/username-redirect';
 import { getPublishedPosts } from '@/lib/portfolio/get-posts';
 import { EdgerunnerV2PageShell } from '@/components/templates/edgerunner-v2/pages/page-shell';
 import { BlogIndexContent } from '@/components/templates/edgerunner-v2/pages/blog/blog-index-content';
@@ -99,7 +100,10 @@ export default async function BlogIndexPage({
 
   // Cookie-LESS anon read — keeps this route ISR-cacheable (D-22, Pitfall 2)
   const data = await getPortfolioByUsername(username);
-  if (!data) notFound(); // D-24 — missing/unpublished
+  if (!data) {
+    await redirectIfRenamedHandle(username, '/blog'); // HANDLE-02 — preserve /blog (D-03)
+    notFound(); // D-24 — missing/unpublished
+  }
 
   // D-14 gate: 404 unless the resolved spec declares the 'blog' page (posts stay
   // saved as data on a non-granted template; the URL 404s).

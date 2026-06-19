@@ -47,6 +47,7 @@ import {
 import { filledVisibleSectionTypes } from '@/lib/templates/filled-sections';
 import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
 import { getPortfolioOwnerByUsername } from '@/lib/portfolio/get-portfolio-owner';
+import { redirectIfRenamedHandle } from '@/lib/portfolio/username-redirect';
 import { buildPublicMetadata } from '@/lib/seo/public-metadata';
 
 /** D-21 ISR backstop — 1 hour. On-demand revalidatePath on publish is Phase 4. */
@@ -207,7 +208,13 @@ export default async function PortfolioPage({
 
   // PUBLIC PATH — UNCHANGED, cookie-LESS, ISR-cacheable (lines below this comment).
   const data = await getPortfolioByUsername(username);
-  if (!data) notFound(); // D-24 — missing/unpublished.
+  if (!data) {
+    // HANDLE-02: a renamed old handle 308-redirects to its current URL (D-02/D-01
+    // single-hop); a genuine miss falls through to notFound(). The lookup is
+    // cookie-less so this branch stays ISR-cacheable (D-22).
+    await redirectIfRenamedHandle(username);
+    notFound(); // D-24 — missing/unpublished.
+  }
 
   // Phase 7: render the slug resolved from `public_portfolios.template_id` via the
   // STATIC map in `get-portfolio.ts` (`data.templateSlug`) — NO request-time
