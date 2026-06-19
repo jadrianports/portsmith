@@ -114,3 +114,29 @@ export const contactSocialsSettingsSchema = z.object({
 });
 
 export type ContactSocialsSettings = z.infer<typeof contactSocialsSettingsSchema>;
+
+// ---------------------------------------------------------------------------
+// SEO / page-identity write-subset (Phase 29 — META-01..04, D-02)
+// ---------------------------------------------------------------------------
+
+/**
+ * The write-subset `saveSeoSettings` (29-02) re-parses — the SEO/page-identity
+ * slice ONLY (page_title + meta_description + og_image_url + favicon_url). DISJOINT
+ * from `contactSocialsSettingsSchema` (no shared columns) so the partial-update
+ * no-clobber contract (D-02, the #1 functional risk) holds: an SEO save can never
+ * null the contact columns and vice-versa.
+ *
+ * All fields optional; `''` is the explicit set-and-clear (revert) idiom (D-06). The
+ * two image URLs reuse `urlOrEmptyOptional` (= the http(s)-only CR-01 stored-XSS
+ * gate), so an `og_image_url`/`favicon_url` of `javascript:`/`data:` is rejected at
+ * the Zod gate before any write — these feed rendered metadata `href` sinks.
+ */
+// D-02 / META-01..04
+export const seoSettingsSchema = z.object({
+  page_title: z.string().max(PAGE_TITLE_MAX).or(z.literal('')).optional(),
+  meta_description: z.string().max(META_DESCRIPTION_MAX).or(z.literal('')).optional(),
+  og_image_url: urlOrEmptyOptional, // CR-01 — http(s)-only; rejects javascript:/data:
+  favicon_url: urlOrEmptyOptional, // CR-01 — http(s)-only; rejects javascript:/data:
+});
+
+export type SeoSettings = z.infer<typeof seoSettingsSchema>;

@@ -51,9 +51,13 @@
  */
 import { revalidatePath } from 'next/cache';
 
-import { buildSettingsAllowlist } from '@/lib/cms/settings-allowlist';
+import { buildSeoAllowlist, buildSettingsAllowlist } from '@/lib/cms/settings-allowlist';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
-import { contactSocialsSettingsSchema, type ContactSocialsSettings } from '@/lib/validations';
+import {
+  contactSocialsSettingsSchema,
+  seoSettingsSchema,
+  type ContactSocialsSettings,
+} from '@/lib/validations';
 
 /** Per-field validation messages, keyed by the settings field name. */
 export type SaveSettingsFieldErrors = Record<string, string>;
@@ -170,6 +174,119 @@ export async function saveSettingsAction(input: SaveSettingsInput): Promise<Save
   // purge the landing page); we skip the owner-page purge silently (matching the
   // sibling actions, which do not log) and still return { ok: true } — the DB write
   // already succeeded.
+  const username = (input.username ?? dbUsername ?? '').trim();
+  if (username) {
+    // LITERAL path, NO second arg (the one CLAUDE.md correction — Pitfall 1).
+    revalidatePath('/' + username);
+  }
+
+  // 6) Success — the editor clears its dirty flag.
+  return { ok: true };
+}
+
+// ===========================================================================
+// saveSeoSettings — the SEO / page-identity CMS write (META-01..04, D-02).
+// ===========================================================================
+
+/**
+ * The SEO / page-identity editable fields (META-01..04). `username` is OPTIONAL and
+ * is used ONLY to build the revalidate path — it is NEVER written as a column.
+ */
+export interface SaveSeoSettingsInput {
+  page_title?: string;
+  meta_description?: string;
+  og_image_url?: string;
+  favicon_url?: string;
+  /**
+   * The owner's username, passed from the dashboard so the revalidate needs no extra
+   * round-trip. When omitted the action uses the username resolved by the owning-
+   * portfolio read — NEVER the request host (PUB-03).
+   */
+  username?: string;
+}
+
+/**
+ * saveSeoSettings — clones the `saveSettingsAction` SHARED-A skeleton VERBATIM,
+ * swapping only the schema (`seoSettingsSchema`), the allowlist (`buildSeoAllowlist`),
+ * and the input shape. The DISJOINT `buildSeoAllowlist` emits ONLY the 4 SEO columns,
+ * so this save can NEVER null the contact columns (D-02 — the no-clobber contract,
+ * the #1 functional risk, pinned by the no-clobber RLS integration test). The 6
+ * numbered SHARED-A steps are load-bearing (a failure at step N never reaches N+1):
+ * verified identity → hard-fail `sub` guard → Zod re-parse (the CR-01 javascript:/
+ * data: image-URL gate) → owning-portfolio read → EXPLICIT 4-SEO-column allowlist
+ * UPDATE under the AUTHENTICATED RLS client (NEVER service-role) → revalidatePath →
+ * { ok: true }.
+ */
+// D-02 / META-01..04
+export async function saveSeoSettings(input: SaveSeoSettingsInput): Promise<SaveSettingsResult> {
+  // 1) Verified identity (AUTH-05 — never getSession). // D-02
+  const claims = await getVerifiedClaims();
+  if (!claims) return { ok: false, error: NOT_SIGNED_IN };
+
+  // 1b) WR-05 hard-fail: a verified claim MUST carry a subject — never `sub ?? ''`
+  //     (which would scope the owning read / UPDATE to a non-existent row and
+  //     silently write 0 rows, masking the invariant violation). // D-02
+  const sub = (claims as { sub?: string }).sub;
+  if (!sub) return { ok: false, error: NOT_SIGNED_IN };
+
+  // 2) Zod re-parse — THE gate (META-01..04). The og_image_url / favicon_url fields
+  //    reuse the http(s)-only CR-01 allowlist, so a javascript:/data: image URL is
+  //    rejected HERE, before the write at step 4.
+  const parsed = seoSettingsSchema.safeParse({
+    page_title: input.page_title,
+    meta_description: input.meta_description,
+    og_image_url: input.og_image_url,
+    favicon_url: input.favicon_url,
+  });
+  if (!parsed.success) {
+    const fieldErrors: SaveSettingsFieldErrors = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.join('.');
+      if (key && !(key in fieldErrors)) {
+        fieldErrors[key] = issue.message;
+      }
+    }
+    return { ok: false, fieldErrors };
+  }
+
+  // 3) Owning-portfolio read (one round-trip). Resolve the owner's portfolio_id
+  //    (= the UPDATE key) + username (for the revalidate, PUB-03 — never the request
+  //    host) under the AUTHENTICATED RLS client (never service-role). Scoped
+  //    `.eq('user_id', sub)` so owner.id is GUARANTEED the caller's portfolio.
+  const supabase = await createClient();
+  const { data: ownerRow } = await supabase
+    .from('portfolios')
+    .select('id, profiles!inner(username)')
+    .eq('user_id', sub)
+    .single();
+  const owner = (ownerRow as {
+    id?: string;
+    profiles?: { username?: string } | { username?: string }[] | null;
+  } | null) ?? null;
+  if (!owner?.id) return { ok: false, error: SAVE_FAILED };
+
+  // 4) EXPLICIT 4-SEO-COLUMN ALLOWLIST (D-02). Built BY HAND — NEVER a spread. DISJOINT
+  //    from buildSettingsAllowlist, so this UPDATE touches NONE of the contact columns
+  //    (the no-clobber contract). portfolio_settings has NO protected-columns trigger,
+  //    so the allowlist IS the column guard; RLS is the tenant boundary.
+  const allowlist = buildSeoAllowlist(parsed.data);
+
+  // Write under RLS via the AUTHENTICATED client (never service-role). The
+  // `portfolio_settings own all` policy + .eq('portfolio_id', owner.id) scope the
+  // UPDATE to the caller's own row — a cross-tenant portfolio_id filters to 0 rows.
+  const { error } = await supabase
+    .from('portfolio_settings')
+    .update(allowlist)
+    .eq('portfolio_id', owner.id);
+  if (error) return { ok: false, error: SAVE_FAILED };
+
+  // 5) Resolve the owner username (prefer the dashboard-passed value; else the DB read
+  //    above — NEVER the request host, PUB-03) and revalidate the public page.
+  const embeddedProfiles = owner.profiles;
+  const dbUsername = Array.isArray(embeddedProfiles)
+    ? embeddedProfiles[0]?.username
+    : embeddedProfiles?.username;
+  // WR-01 — only purge the owner page when we have a NON-EMPTY username.
   const username = (input.username ?? dbUsername ?? '').trim();
   if (username) {
     // LITERAL path, NO second arg (the one CLAUDE.md correction — Pitfall 1).

@@ -9,7 +9,7 @@
  * its own plain module rather than alongside an async action. `saveSettingsAction`
  * imports it from here.
  */
-import { type ContactSocialsSettings } from '@/lib/validations';
+import { type ContactSocialsSettings, type SeoSettings } from '@/lib/validations';
 
 /** The exact shape written to `portfolio_settings` — exactly four columns. */
 export interface SettingsAllowlist {
@@ -38,5 +38,40 @@ export function buildSettingsAllowlist(parsed: ContactSocialsSettings): Settings
     socials: parsed.socials ?? [],
     location: emptyToNull(parsed.location),
     phone: emptyToNull(parsed.phone),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// SEO / page-identity allowlist (Phase 29 — META-01..04, D-02)
+// ---------------------------------------------------------------------------
+
+/**
+ * The exact shape an SEO save writes to `portfolio_settings` — exactly the four SEO
+ * columns. DISJOINT from `SettingsAllowlist` (no shared keys): so `saveSeoSettings`
+ * touches NONE of the contact columns (email_public / socials / location / phone) and
+ * vice-versa (D-02 — the no-clobber contract, the #1 functional risk).
+ */
+export interface SeoAllowlist {
+  page_title: string | null;
+  meta_description: string | null;
+  og_image_url: string | null;
+  favicon_url: string | null;
+}
+
+/**
+ * Build the EXPLICIT SEO `portfolio_settings` UPDATE payload BY HAND (D-02 / the
+ * mass-assignment defense, mirroring `buildSettingsAllowlist`). Returns EXACTLY the
+ * four SEO columns — a smuggled key (role / username / storage_used_bytes / any
+ * contact column) is dropped and can never reach `.update()`. Each empty/undefined
+ * value → null (D-06 set-and-clear revert). Pure (no I/O), DISJOINT from the contact
+ * allowlist so the partial save never clobbers the columns it does not own.
+ */
+// D-02 / META-01..04
+export function buildSeoAllowlist(parsed: SeoSettings): SeoAllowlist {
+  return {
+    page_title: emptyToNull(parsed.page_title),
+    meta_description: emptyToNull(parsed.meta_description),
+    og_image_url: emptyToNull(parsed.og_image_url),
+    favicon_url: emptyToNull(parsed.favicon_url),
   };
 }
