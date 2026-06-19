@@ -153,5 +153,14 @@ export async function unlockPortfolio(
   //    literal-path purge idiom).
   revalidatePath('/' + targetUsername);
 
+  // 4b) Purge /explore for symmetry with lockPortfolio (WR-01 / D-12). Unlock
+  //     leaves `published` untouched, so in the normal lock→unlock path the
+  //     gallery is unaffected (the page is still unpublished → ineligible) and
+  //     this is a cheap no-op purge. Adding it removes the fragile implicit
+  //     "still unpublished" assumption so any future unlock path that restores
+  //     eligibility refreshes the gallery instead of waiting out the 1h ISR
+  //     backstop. LITERAL path, NO 2nd arg.
+  revalidatePath('/explore');
+
   return { ok: true };
 }
