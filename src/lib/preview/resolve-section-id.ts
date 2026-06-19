@@ -48,6 +48,16 @@ export const BLOG_PANEL_ID = '__blog__';
 export const CONTACT_PANEL_ID = '__contact_socials__';
 
 /**
+ * The sentinel `activeSectionId` for the PAGE IDENTITY & SEO panel (29 / D-01). The SEO
+ * settings (`page_title` / `meta_description` / `og_image_url` / `favicon_url`) are
+ * `portfolio_settings` columns, not a `sections` row, so this gets a non-UUID id;
+ * selecting the "Page Identity & SEO" rail entry sets this, routing the panel to the
+ * PageIdentityForm. Like PROFILE/TEMPLATE/BLOG (and UNLIKE CONTACT), it is rail-nav ONLY —
+ * NOT a preview-bridge click region — so it has NO branch in `resolvePreviewTarget` below.
+ */
+export const SEO_PANEL_ID = '__page_identity__';
+
+/**
  * Resolve a clicked `sectionType` (or footer region tag) → the editor's `activeSectionId`
  * (EDIT-02 / D-06). Three buckets (RESEARCH Pattern 4):
  *
