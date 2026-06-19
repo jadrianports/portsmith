@@ -184,3 +184,46 @@ describe('SHARE-02 — the opengraph-image generator route prerenders ● (SSG)/
     expect(revalidate as number).toBeGreaterThan(0);
   });
 });
+
+/**
+ * HANDLE-02 (Phase 30) — the old-handle redirect injection must NOT flip the 4 public
+ * routes dynamic.
+ *
+ * Plan 04 injects `await redirectIfRenamedHandle(username, subPath)` at the post-read
+ * `notFound()` site of `/[username]`, `/[username]/blog`, `/[username]/blog/[slug]`, and
+ * `/[username]/services`. The helper reads `public_username_redirects` via a COOKIE-LESS
+ * anon NEXT_PUBLIC_* client (get-portfolio.ts posture, 30-RESEARCH.md Pitfall 4) so the
+ * lookup does NOT introduce `cookies()`/`headers()`/`no-store`/request-host reads — the
+ * routes stay `● (SSG)`/ISR (D-22). If a future edit reaches for the cookie-reading
+ * server client inside the redirect path, these routes flip `ƒ` (dynamic) and the
+ * prerendered instances vanish from the manifest — this block is the regression guard
+ * that locks the invariant against that drift (key_links: route-table → page.tsx, D-22).
+ *
+ * This re-pins the SAME 4 routes the blocks above assert, but FRAMED as the redirect-
+ * injection invariant so the Plan 04 change re-runs it as its dedicated gate. It passes
+ * today (the routes are already SSG) — the value is locking it so Plan 04 cannot regress
+ * it silently.
+ */
+const REDIRECT_INJECTED_ROUTES: ReadonlyArray<readonly [srcRoute: string, instance: string]> = [
+  [ROUTE_SRC, ROUTE_INSTANCE],
+  ...SUB_ROUTES,
+];
+
+describe('HANDLE-02 / D-22 — the redirect injection keeps all 4 public routes ● (SSG)/ISR', () => {
+  for (const [srcRoute, instance] of REDIRECT_INJECTED_ROUTES) {
+    it(`${srcRoute} stays SSG/ISR after the cookie-less redirect injection (instance ${instance} prerendered)`, () => {
+      const pm = readPrerenderManifest();
+      const route = pm.routes?.[instance];
+      expect(
+        route,
+        `${srcRoute} is NOT ISR/static — no prerendered instance "${instance}" in ` +
+          'prerender-manifest.routes. The Phase-30 redirect helper must stay cookie-LESS ' +
+          '(anon NEXT_PUBLIC_* client, persistSession:false); a cookie()/header() read in ' +
+          'the redirect path flips the route dynamic (ƒ) and breaks the D-22 perf budget.',
+      ).toBeTruthy();
+      expect(route?.srcRoute).toBe(srcRoute);
+      expect(typeof route?.initialRevalidateSeconds).toBe('number');
+      expect(route?.initialRevalidateSeconds as number).toBeGreaterThan(0);
+    });
+  }
+});
