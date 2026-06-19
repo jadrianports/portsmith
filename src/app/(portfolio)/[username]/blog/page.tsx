@@ -22,7 +22,7 @@ import { getPortfolioByUsername } from '@/lib/portfolio/get-portfolio';
 import { getPublishedPosts } from '@/lib/portfolio/get-posts';
 import { EdgerunnerV2PageShell } from '@/components/templates/edgerunner-v2/pages/page-shell';
 import { BlogIndexContent } from '@/components/templates/edgerunner-v2/pages/blog/blog-index-content';
-import { subRouteRobots } from '@/lib/seo/public-metadata';
+import { subRouteRobots, resolveFaviconIcons } from '@/lib/seo/public-metadata';
 import { resolveDisplayName, shareImageUrl } from '@/lib/og/og-image-url';
 import { siteUrl } from '@/lib/url';
 
@@ -69,6 +69,8 @@ export async function generateMetadata({
     // D-18: inherit the portfolio's isPublishReady noindex gate (no posts-as-indexable
     // side-door) — withheld-but-reachable while the parent portfolio is incomplete.
     ...subRouteRobots(data),
+    // META-03 / D-03: the favicon reaches this sub-route too (inline builder — Pitfall 2).
+    ...resolveFaviconIcons(data, username),
     // D-05/D-06: reuse the SAME per-portfolio dynamic card (override → card ladder)
     // the root page uses — one generator, env-driven via siteUrl (PUB-03); never the
     // static og-default.png (D-04, reserved for non-portfolio pages).

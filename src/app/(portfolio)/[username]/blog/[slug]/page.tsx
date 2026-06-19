@@ -35,7 +35,8 @@ import {
   BlogPostContent,
   type KeepReadingItem,
 } from '@/components/templates/edgerunner-v2/pages/blog/blog-post-content';
-import { subRouteRobots } from '@/lib/seo/public-metadata';
+import { subRouteRobots, resolveFaviconIcons } from '@/lib/seo/public-metadata';
+import { shareImageUrl } from '@/lib/og/og-image-url';
 import { blogPostingLdScriptHtml } from '@/lib/seo/blogposting-jsonld';
 import { JsonLd } from '@/lib/seo/json-ld';
 import { siteUrl } from '@/lib/url';
@@ -90,6 +91,8 @@ export async function generateMetadata({
     alternates: { canonical },
     // D-18: inherit the portfolio's isPublishReady noindex gate (no side-door).
     ...subRouteRobots(data),
+    // META-03 / D-03: the favicon reaches this sub-route too (inline builder — Pitfall 2).
+    ...resolveFaviconIcons(data, username),
     openGraph: {
       title,
       description,
@@ -105,14 +108,18 @@ export async function generateMetadata({
       ...(Array.isArray(post.tags) && post.tags.length > 0
         ? { tags: post.tags.filter((t): t is string => typeof t === 'string' && t.length > 0) }
         : {}),
-      images: [data.settings.og_image_url ?? siteUrl('/og-default.png')],
+      // META-04 / Pitfall 4 — uniform shareImageUrl ladder (override → dynamic card),
+      // matching the other three routes; a saved-empty og_image_url falls through (no
+      // og:image:['']) instead of pinning the static default share image.
+      images: [shareImageUrl(username, data.settings.og_image_url)],
     },
     // Twitter/X large-image card — controls the link unfurl + CTR.
     twitter: {
       card: 'summary_large_image',
       title,
       description,
-      images: [data.settings.og_image_url ?? siteUrl('/og-default.png')],
+      // META-04 / Pitfall 4 — uniform shareImageUrl ladder (same resolved card).
+      images: [shareImageUrl(username, data.settings.og_image_url)],
     },
   };
 }
