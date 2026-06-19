@@ -114,6 +114,14 @@ export async function lockPortfolio(
   //    404 within minutes (no deploy).
   revalidatePath('/' + targetUsername);
 
+  // 4b) Purge the public /explore gallery (SHOW-05 / D-12) — the view filters on
+  //     `locked = false`, so a locked page is excluded; purge /explore so the
+  //     suspended portfolio drops off the gallery near-immediately instead of
+  //     lingering up to the 1h ISR backstop (a stale-takedown info-leak, T-31-05b).
+  //     LITERAL path, NO 2nd arg. This is the ONLY change here — the service-role
+  //     admin write path above is unchanged.
+  revalidatePath('/explore');
+
   return { ok: true };
 }
 

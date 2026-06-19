@@ -59,8 +59,7 @@
  * `uuidForSlug` from the template registry (the single slug↔UUID source of
  * truth, D-P7-13 / Pitfall 3); revalidatePath signature [VERIFIED: Next 16.2.6].
  */
-import { revalidatePath } from 'next/cache';
-
+import { revalidatePublicPortfolio } from '@/lib/cms/revalidate-public';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 import { templateSlugSchema, uuidForSlug } from '@/components/templates/registry';
 
@@ -166,7 +165,12 @@ export async function switchTemplateAction(slug: string): Promise<SwitchTemplate
     .single();
   const username = (prof as { username?: string } | null)?.username;
   if (username) {
-    revalidatePath('/' + username);
+    // Purge the page AND the sibling og-image segment (D-05 / Q1) — a template/accent
+    // switch changes the og card's accent, and a literal revalidatePath('/'+username)
+    // does NOT cascade to /[username]/opengraph-image, so the carousel/Explore preview
+    // would otherwise stay stale up to the 1h ISR backstop. Both LITERAL paths, NO 2nd
+    // arg (Pitfall 5 / CLAUDE.md).
+    revalidatePublicPortfolio(username);
   }
 
   // 5) Success — the template picker fires its confirmation beat.

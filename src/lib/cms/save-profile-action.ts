@@ -65,9 +65,8 @@
  * from `@/lib/supabase/server.ts`; `deleteStorageObject` from
  * `@/lib/media/delete-object.ts`.
  */
-import { revalidatePath } from 'next/cache';
-
 import { deleteStorageObject } from '@/lib/media/delete-object';
+import { revalidatePublicPortfolio } from '@/lib/cms/revalidate-public';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 import { profileSchema } from '@/lib/validations';
 
@@ -219,8 +218,12 @@ export async function saveProfileAction(input: SaveProfileInput): Promise<SavePr
   //    public page so the change is live within seconds (D-P4-01).
   const username = input.username ?? prior?.username ?? undefined;
   if (username) {
-    // LITERAL path, NO second arg (RESEARCH Pitfall 1 / CLAUDE.md correction).
-    revalidatePath('/' + username);
+    // Purge the page AND the sibling og-image segment (D-05 / Q1) — a literal
+    // revalidatePath('/'+username) does NOT cascade to /[username]/opengraph-image,
+    // so a name/headline/avatar change would otherwise leave the carousel/Explore
+    // preview card stale up to the 1h ISR backstop. Both LITERAL paths, NO 2nd arg
+    // (RESEARCH Pitfall 1 / CLAUDE.md correction).
+    revalidatePublicPortfolio(username);
   }
 
   // 6) Success — the dashboard clears the dirty flag.

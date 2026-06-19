@@ -50,6 +50,7 @@
  */
 import { revalidatePath } from 'next/cache';
 
+import { revalidatePublicPortfolio } from '@/lib/cms/revalidate-public';
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 
 /**
@@ -122,8 +123,19 @@ export async function setPublished(published: boolean): Promise<SetPublishedResu
   //    D-P4-02). LITERAL path, NO second arg (RESEARCH Pitfall 1 / CLAUDE.md).
   const username = (prof as { username?: string } | null)?.username;
   if (username) {
-    revalidatePath('/' + username);
+    // Purge the page AND the sibling og-image segment (D-05 / Q1) — a publish flip
+    // changes whether the card is live; a literal revalidatePath('/'+username) does NOT
+    // cascade to /[username]/opengraph-image. Both LITERAL paths, NO 2nd arg.
+    revalidatePublicPortfolio(username);
   }
+
+  // 3b) Purge the public /explore gallery (SHOW-05 / D-12 / Q7) — a publish/unpublish flip
+  //     changes the view's `profile_is_showcased` eligibility (published is one of its
+  //     gates), so an ineligible page must drop off (or a newly-eligible one appear)
+  //     near-immediately instead of waiting on the gallery's 1h ISR backstop. LITERAL
+  //     path, NO 2nd arg. Independent of the username — the gallery is a single shared
+  //     route, so purge it whether or not the username read succeeded.
+  revalidatePath('/explore');
 
   // 4) Success — the control fires the publish beat / the calm unpublish flip.
   return { ok: true };
@@ -239,8 +251,17 @@ export async function markOnboardedAndPublish(): Promise<SetPublishedResult> {
   //    D-P4-02). LITERAL path, NO second arg (RESEARCH Pitfall 1 / CLAUDE.md).
   const username = (prof as { username?: string } | null)?.username;
   if (username) {
-    revalidatePath('/' + username);
+    // Purge the page AND the sibling og-image segment (D-05 / Q1) — the wizard's terminal
+    // publish makes the card live; a literal revalidatePath('/'+username) does NOT cascade
+    // to /[username]/opengraph-image. Both LITERAL paths, NO 2nd arg.
+    revalidatePublicPortfolio(username);
   }
+
+  // 3b) Purge the public /explore gallery (SHOW-05 / D-12 / Q7) — the wizard's terminal
+  //     publish flips `published` true, which (with opt-in) makes the page newly eligible
+  //     for the gallery, so it must appear near-immediately instead of waiting on the 1h
+  //     ISR backstop. LITERAL path, NO 2nd arg; independent of the username read.
+  revalidatePath('/explore');
 
   // 4) Success — the wizard's terminal Publish step lands the user on their live page.
   return { ok: true };
