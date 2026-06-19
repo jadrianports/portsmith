@@ -227,3 +227,52 @@ describe('HANDLE-02 / D-22 — the redirect injection keeps all 4 public routes 
     });
   }
 });
+
+/**
+ * SHOW-04 (Phase 31, Wave-0 RED) — the NEW `/explore` gallery route prerenders
+ * ● (SSG)/ISR, never ƒ (dynamic).
+ *
+ * Plan 31-05 adds `src/app/(portfolio)/explore/page.tsx` — a cookie-less ISR
+ * route (`export const revalidate = 3600`) under the `(portfolio)` root that
+ * reads the public showcase views with NO cookies()/headers()/host read, so it
+ * stays static like every other `(portfolio)` route. `/explore` is a NON-dynamic
+ * route (no `[param]`), so the `(portfolio)` group strips its prefix and it keys
+ * in the prerender manifest as the literal `/explore`, with `srcRoute` ===
+ * `/explore` (mirroring how `/` keys as `/` for the chrome group — 31-RESEARCH
+ * Q4 / Assumption A2). Asserting its PRESENCE + positive ISR revalidate is the
+ * deterministic SSG/ISR proof: a dynamic route would not yield a prerendered
+ * instance.
+ *
+ * This is a NEW, ADDITIVE block — it does NOT touch the `/[username]`, SUB_ROUTES,
+ * SHARE-02 og-route, or HANDLE-02 assertions above. Their staying-green is the
+ * SHOW-04 no-public-route-regression half. RED until 31-05 lands the route AND a
+ * production build emits the instance (the read-tolerant missing-build hard-fail
+ * in `readPrerenderManifest()` prevents a false green when no build exists).
+ */
+const EXPLORE_INSTANCE = '/explore';
+const EXPLORE_SRC = '/explore';
+
+describe('SHOW-04 — /explore stays ● (SSG)/ISR, never ƒ (dynamic)', () => {
+  it('has a concrete prerendered instance in the prerender manifest (SSG/ISR proof)', () => {
+    const pm = readPrerenderManifest();
+    expect(
+      pm.routes?.[EXPLORE_INSTANCE],
+      `${EXPLORE_SRC} is NOT ISR/static — no prerendered instance "${EXPLORE_INSTANCE}" in ` +
+        'prerender-manifest.routes. The new Explore gallery likely went DYNAMIC (ƒ): an ' +
+        'accidental cookies()/headers()/host read in the candidate read flips it dynamic ' +
+        'and breaks the SHOW-04 perf budget. It MUST use the cookie-less anon client.',
+    ).toBeTruthy();
+  });
+
+  it('maps the prerendered instance back to the /explore source route', () => {
+    const pm = readPrerenderManifest();
+    expect(pm.routes?.[EXPLORE_INSTANCE]?.srcRoute).toBe(EXPLORE_SRC);
+  });
+
+  it('carries a positive ISR revalidate (the D-12 backstop), confirming ISR not dynamic', () => {
+    const pm = readPrerenderManifest();
+    const revalidate = pm.routes?.[EXPLORE_INSTANCE]?.initialRevalidateSeconds;
+    expect(typeof revalidate).toBe('number');
+    expect(revalidate as number).toBeGreaterThan(0);
+  });
+});

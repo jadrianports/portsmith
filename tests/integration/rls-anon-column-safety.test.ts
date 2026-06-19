@@ -98,6 +98,17 @@ beforeAll(async () => {
     .update({ visible: false })
     .eq('id', hiddenSectionId);
   expect(hide.error).toBeNull();
+
+  // SHOW-05 (Phase 31, Wave-0 RED): opt A INTO the showcase via the service role
+  // so the new `public_showcase_profiles` anon read returns A's row (and we can
+  // assert its KEY ABSENCE). `showcase_opt_in` is the NOT-YET-EXISTING column
+  // (migration 028) — this write is RED until 028 lands. Best-effort so the
+  // existing FND-02 assertions above still run on a pre-028 tree: a failure here
+  // only affects the new SHOW-05 describe block below.
+  await admin
+    .from('profiles')
+    .update({ showcase_opt_in: true })
+    .eq('id', userA.id);
 }, 30_000);
 
 afterAll(async () => {
@@ -195,5 +206,51 @@ describe('FND-02 — anon column safety (the signature negative test)', () => {
     expect(ids).not.toContain(hiddenSectionId);
     // sanity: at least one VISIBLE section of A's published portfolio is public
     expect((data ?? []).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * SHOW-05 (Phase 31, Wave-0 RED) — the NEW `public_showcase_profiles` view must
+ * never leak a private column to anon. This clones the FND-02 per-view
+ * KEY-ABSENCE block above for the showcase view: an anon read of an eligible
+ * (opted-in + published + non-locked) profile must expose ONLY the public
+ * columns — every `PRIVATE_PROFILE_COLUMNS` key (email / role /
+ * storage_used_bytes / locked / locked_reason / deleted_at / created_at, plus
+ * the implicitly-private updated_at / user_id) must be ABSENT from the returned
+ * object, exactly as the existing `public_profiles` block proves for the public
+ * portfolio read (31-RESEARCH Q2 / Pitfall 3).
+ *
+ * RED until Plan 31-02 lands migration 028 (the `public_showcase_profiles`
+ * `security_invoker` view + the `profile_is_showcased` DEFINER helper + the anon
+ * GRANT). Today the relation does not exist → the anon read returns a non-null
+ * PGRST205 error and an empty result, so the eligible-row assertion fails. Do NOT
+ * modify the FND-02 `public_profiles` / `public_sections` blocks above — their
+ * staying-green is the no-regression half.
+ */
+describe('SHOW-05 — public_showcase_profiles exposes NO private column to anon (KEY ABSENCE)', () => {
+  it('an eligible showcase profile returns ONLY public columns (no PRIVATE_PROFILE_COLUMNS key)', async () => {
+    const { data, error } = await anon
+      .from('public_showcase_profiles')
+      .select('*')
+      .eq('id', userA.id);
+
+    // A is opted-in + published + non-locked in setup, so once 028 lands the row
+    // MUST be visible (a blocked/filtered read would be [], a missing relation a
+    // non-null error — both fail here, which is the RED contract pre-028).
+    expect(error).toBeNull();
+    expect(data && data.length).toBeGreaterThan(0);
+
+    const keys = Object.keys(data![0]);
+    for (const priv of PRIVATE_PROFILE_COLUMNS) {
+      // KEY ABSENCE — not `=== null`. The private column must not exist at all.
+      expect(keys).not.toContain(priv);
+    }
+    // updated_at + user_id are private too (not in the 7-col public SELECT).
+    expect(keys).not.toContain('updated_at');
+    expect(keys).not.toContain('user_id');
+    // sanity: the public surface the Explore card needs IS present.
+    expect(keys).toEqual(
+      expect.arrayContaining(['id', 'username', 'display_name']),
+    );
   });
 });
