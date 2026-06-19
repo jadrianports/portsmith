@@ -105,6 +105,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [
     { url: siteUrl('/'), changeFrequency: 'monthly', priority: 1 },
+    // D-15 — the public showcase gallery, a static indexable entry. Literal URL keeps
+    // the sitemap cookie-less; siteUrl() (never the request Host) is host-decoupled.
+    { url: siteUrl('/explore'), changeFrequency: 'weekly', priority: 0.8 },
     ...profileEntries,
     ...postEntries,
   ];
