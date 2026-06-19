@@ -1823,6 +1823,39 @@ export type Database = {
         }
         Relationships: []
       }
+      username_history: {
+        Row: {
+          created_at: string
+          old_handle: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          old_handle: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          old_handle?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "username_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "username_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       public_blog_posts: {
@@ -2066,6 +2099,21 @@ export type Database = {
           },
         ]
       }
+      public_username_redirects: {
+        Row: {
+          current_username: string | null
+          old_handle: string | null
+        }
+        Insert: {
+          current_username?: never
+          old_handle?: string | null
+        }
+        Update: {
+          current_username?: never
+          old_handle?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       activation_funnel_counts: {
@@ -2084,6 +2132,7 @@ export type Database = {
         Args: { p_blog_post_id: string }
         Returns: boolean
       }
+      change_username: { Args: { new_username: string }; Returns: undefined }
       count_orphaned_if_revoked: {
         Args: { p_template_id: string; p_user_id: string }
         Returns: {
@@ -2098,6 +2147,7 @@ export type Database = {
           usernames: string[]
         }[]
       }
+      current_handle_for: { Args: { p_old_handle: string }; Returns: string }
       fallback_ungranted_to_editorial: {
         Args: { p_template_id: string }
         Returns: {
