@@ -40,7 +40,13 @@ function scrollBehavior(): ScrollBehavior {
 export function ShowcaseCarousel() {
   const trackRef = useRef<HTMLUListElement>(null);
   const slideRefs = useRef<(HTMLLIElement | null)[]>([]);
+  /** Per-slide intersection ratios — the source of truth for "which slide is most visible". */
+  const ratiosRef = useRef<number[]>([]);
   const [active, setActive] = useState(0);
+  /** Whether the track actually overflows (is scrollable). When false (all slides fit — e.g. 2
+   *  cards on wide desktop), the prev/next + dots are meaningless and are hidden, so the resting
+   *  state never reads as "last slide active + Next disabled" on a non-scrollable track. */
+  const [scrollable, setScrollable] = useState(false);
 
   const count = SHOWCASE_USERNAMES.length;
 
@@ -56,24 +62,55 @@ export function ShowcaseCarousel() {
   const goPrev = useCallback(() => goTo(active - 1), [active, goTo]);
   const goNext = useCallback(() => goTo(active + 1), [active, goTo]);
 
-  /** Track the active slide via IntersectionObserver (no scroll-event thrash). */
+  /**
+   * Track the active slide via IntersectionObserver (no scroll-event thrash). The active slide is
+   * the MOST-visible one (highest intersection ratio), breaking ties toward the LOWEST index — so
+   * at rest it resolves to slide 0 (the visible/first slide), never the last intersecting entry.
+   */
   useEffect(() => {
     const track = trackRef.current;
     if (!track) return;
+    ratiosRef.current = new Array(slideRefs.current.length).fill(0);
     const observer = new IntersectionObserver(
       (entries) => {
+        // Record each reported slide's latest visibility ratio.
         for (const entry of entries) {
-          if (!entry.isIntersecting) continue;
           const idx = slideRefs.current.indexOf(entry.target as HTMLLIElement);
-          if (idx >= 0) setActive(idx);
+          if (idx >= 0) ratiosRef.current[idx] = entry.intersectionRatio;
         }
+        // Pick the most-visible slide; ties (equal ratio) resolve to the LOWEST index.
+        let best = 0;
+        let bestRatio = -1;
+        for (let i = 0; i < ratiosRef.current.length; i++) {
+          if (ratiosRef.current[i] > bestRatio) {
+            bestRatio = ratiosRef.current[i];
+            best = i;
+          }
+        }
+        setActive(best);
       },
-      { root: track, threshold: 0.6 },
+      // Multiple thresholds so the ratio comparison is fine-grained (not a single 0.6 cliff).
+      { root: track, threshold: [0, 0.25, 0.5, 0.75, 1] },
     );
     for (const slide of slideRefs.current) {
       if (slide) observer.observe(slide);
     }
     return () => observer.disconnect();
+  }, []);
+
+  /** Detect whether the track overflows (is scrollable); keep it current across resizes. */
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const measure = () => setScrollable(track.scrollWidth > track.clientWidth + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const ro = new ResizeObserver(measure);
+    ro.observe(track);
+    return () => ro.disconnect();
   }, []);
 
   return (
@@ -102,8 +139,14 @@ export function ShowcaseCarousel() {
         ))}
       </ul>
 
-      {/* Prev/next + dots — the keyboard/button controls layered over native scroll-snap. */}
-      <div className="mt-4 flex items-center justify-center gap-4">
+      {/* Prev/next + dots — the keyboard/button controls layered over native scroll-snap. Hidden
+          when the track does not overflow (all slides fit — e.g. 2 cards on wide desktop): with
+          nothing to scroll the affordances are meaningless, so we drop them entirely rather than
+          render an ambiguous "last slide active + Next disabled" resting state. */}
+      <div
+        className={`mt-4 flex items-center justify-center gap-4 ${scrollable ? '' : 'hidden'}`}
+        aria-hidden={scrollable ? undefined : true}
+      >
         <button
           type="button"
           onClick={goPrev}
