@@ -31,7 +31,17 @@ const RESUME_CEILING_BYTES = 10 * 1024 * 1024; // 10 MiB = 10485760
  * existing `isImageKind`/`ALLOWED_IMAGE_MIME` path), NO migration (the BEFORE-INSERT
  * atomic quota trigger gates ALL `media` writes regardless of render state).
  */
-export type UploadKind = 'avatar' | 'project' | 'testimonial' | 'moodboard' | 'resume';
+export type UploadKind =
+  | 'avatar'
+  | 'project'
+  | 'testimonial'
+  | 'moodboard'
+  // 29-02 (META-03 / META-04): the page-identity image slots — a square favicon and
+  // a 1.91:1 social-share OG card. Pure config additions riding the `media` bucket's
+  // existing webp-only + quota-trigger upload path (no migration, no new bypass).
+  | 'favicon'
+  | 'og'
+  | 'resume';
 
 /** A user-writable Storage bucket (migration 003). */
 export type UploadBucket = 'avatars' | 'media' | 'resumes';
@@ -92,6 +102,25 @@ export const UPLOAD_KINDS: Record<UploadKind, UploadSlotConfig> = {
     target: { width: 1200, height: 1200 },
     ceiling: IMAGE_CEILING_BYTES,
   },
+  // 29-02 (D-03 / META-03): the browser-tab favicon slot. A square crop (1:1) at a
+  // 256×256 retina target; bucket `media` so the BEFORE-INSERT quota trigger gates it
+  // unchanged. `ceiling: IMAGE_CEILING_BYTES` is per-request defense-in-depth.
+  favicon: {
+    bucket: 'media',
+    context: 'favicon',
+    aspect: 1,
+    target: { width: 256, height: 256 },
+    ceiling: IMAGE_CEILING_BYTES,
+  },
+  // 29-02 (D-05 / META-04): the social-share OG card slot. The canonical 1.91:1
+  // aspect at the 1200×630 target; same `media` bucket + quota-trigger path.
+  og: {
+    bucket: 'media',
+    context: 'og',
+    aspect: 1.91,
+    target: { width: 1200, height: 630 },
+    ceiling: IMAGE_CEILING_BYTES,
+  },
   resume: {
     bucket: 'resumes',
     context: 'resume',
@@ -126,6 +155,8 @@ export const kindToBucket: Record<UploadKind, UploadBucket> = {
   project: UPLOAD_KINDS.project.bucket,
   testimonial: UPLOAD_KINDS.testimonial.bucket,
   moodboard: UPLOAD_KINDS.moodboard.bucket,
+  favicon: UPLOAD_KINDS.favicon.bucket,
+  og: UPLOAD_KINDS.og.bucket,
   resume: UPLOAD_KINDS.resume.bucket,
 };
 

@@ -73,7 +73,7 @@ import {
  *  (13.1-03, gap #3) is the gallery image slot the moodboard form uploads through. */
 export type ImageUploadKind = Extract<
   UploadKind,
-  'avatar' | 'project' | 'testimonial' | 'moodboard'
+  'avatar' | 'project' | 'testimonial' | 'moodboard' | 'favicon' | 'og'
 >;
 
 /** Image-slot byte ceiling in whole MB, for the truthful "{N} MB" copy. */
@@ -87,6 +87,9 @@ const RATIO_HINT: Record<ImageUploadKind, string> = {
   testimonial: 'Square — 1:1',
   project: 'Landscape — 16:9',
   moodboard: 'Square — 1:1',
+  // 29-02 (META-03 / META-04): the page-identity image slots.
+  favicon: 'Square — 1:1',
+  og: 'Landscape — 1.91:1',
 };
 
 /** Per-slot preview shape (05-UI-SPEC B-2/B-3/B-4 — 4px-aligned layout constants). */
@@ -96,6 +99,10 @@ const PREVIEW_CLASS: Record<ImageUploadKind, string> = {
   project: 'aspect-[16/9] w-full max-w-80 rounded-md',
   // A square gallery tile (1:1) on a rounded card — the moodboard grid swatch shape.
   moodboard: 'aspect-square w-full max-w-40 rounded-md',
+  // 29-02 (META-03): a small square favicon chip — the browser-tab icon preview.
+  favicon: 'size-16 rounded-md',
+  // 29-02 (META-04): a 1.91:1 social-share card preview.
+  og: 'aspect-[1.91/1] w-full max-w-80 rounded-md',
 };
 
 /** ~2.2s success-beat hold (05-UI-SPEC Motion "image added"). */

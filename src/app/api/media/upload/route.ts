@@ -73,6 +73,11 @@ const VALID_KINDS = new Set<UploadKind>([
   'project',
   'testimonial',
   'moodboard',
+  // 29-02 (META-03 / META-04): the page-identity image kinds ride the EXISTING
+  // isImageKind → ALLOWED_IMAGE_MIME (webp-only) → byte-ceiling → quota-trigger path
+  // UNCHANGED — no new bypass added.
+  'favicon',
+  'og',
   'resume',
 ]);
 
