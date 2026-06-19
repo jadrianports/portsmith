@@ -10,11 +10,13 @@
  * triggers the server-owned `signInWithGoogleAction` (the server boundary owns the
  * auth call — a bot can't bypass it by calling supabase.auth from the browser).
  *
- * Behavior: `signInWithGoogleAction` REDIRECTS on success (throws NEXT_REDIRECT,
- * which propagates out of the await and navigates the browser to Google's consent
- * screen). It only RETURNS on the rare `{ ok: false }` non-redirect failure — the
- * single case where we re-enable the button and surface a generic error (D-08:
- * no provider/reason leak).
+ * Behavior: `signInWithGoogleAction` RETURNS `{ ok: true, url }` on success (the
+ * Google consent URL) and we navigate to it with window.location.assign — a full
+ * external-origin redirect. On the rare `{ ok: false }` failure (or a transport
+ * error) we re-enable the button and surface a single generic error (D-08: no
+ * provider/reason leak). The action returns the URL rather than redirect()-ing so
+ * the navigation signal can't be swallowed by this island's try/catch (which
+ * caused a spurious error flash before the browser navigated).
  *
  * Tokens: chrome-only (Evergreen/Copper, Inter). The surface/border/text are
  * `--theme`-driven (no inline hex, SHARED-E). The official Google "G" glyph is the
@@ -71,15 +73,18 @@ export function GoogleButton() {
     setPending(true);
     setFailed(false);
     try {
-      // Redirects on success (throws NEXT_REDIRECT). Only returns on { ok: false }.
       const result = await signInWithGoogleAction();
-      if (result && !result.ok) {
-        setFailed(true);
-        setPending(false);
+      if (result.ok) {
+        // Navigate to Google's consent screen (external origin). Full-page
+        // assign — keep `pending` true; the page is leaving.
+        window.location.assign(result.url);
+        return;
       }
+      // Generic, enumeration-safe failure (D-08) — re-enable the button.
+      setFailed(true);
+      setPending(false);
     } catch {
-      // A NEXT_REDIRECT propagates here on success and is re-thrown by React; a
-      // genuine network error lands here too — surface generically, re-enable.
+      // A genuine network/transport error — surface generically, re-enable.
       setFailed(true);
       setPending(false);
     }

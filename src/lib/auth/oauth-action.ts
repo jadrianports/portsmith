@@ -18,8 +18,12 @@
  *      `additional_redirect_urls` entry (Plan 03 adds it) or GoTrue rejects it.
  *      This call also sets the PKCE code-verifier cookie through the same ssr
  *      server client the callback later reads (Pitfall 2/4, load-bearing).
- *   3. On success `data.url` is the provider consent URL → `redirect(data.url)` at
- *      TOP LEVEL (throws NEXT_REDIRECT — never inside a swallowing try/catch).
+ *   3. On success `data.url` is the provider consent URL → returned as
+ *      `{ ok: true, url }` for the client island to navigate to (window.location).
+ *      We do NOT redirect() to an external origin from the action: when it is
+ *      awaited from a client onClick, NEXT_REDIRECT surfaces to the caller's
+ *      try/catch and is swallowed (a spurious error flash). Returning the URL is
+ *      the Supabase-documented pattern.
  *
  * D-09 (deliberate): the OAuth path is NOT Turnstile/BotID/disposable/ledger
  * gated. Google's consent screen is the bot barrier, and the OAuth redirect never
@@ -32,7 +36,6 @@
  *
  * Verified-identity discipline (AUTH-05): this action never calls `getSession()`.
  */
-import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { createClient } from '@/lib/supabase/server';
@@ -45,11 +48,13 @@ import { createClient } from '@/lib/supabase/server';
 const providerSchema = z.literal('google');
 
 /**
- * Initiate Google OAuth. Returns `{ ok: false }` ONLY on a (rare) non-redirect
- * failure; the success path throws `NEXT_REDIRECT` (it never returns normally),
- * which is why the return type is `{ ok: false } | never`.
+ * Initiate Google OAuth. Returns `{ ok: true, url }` (the provider consent URL)
+ * on success for the client island to navigate to, or `{ ok: false }` on a (rare)
+ * failure. We deliberately do NOT `redirect()` here — see step 3 above.
  */
-export async function signInWithGoogleAction(): Promise<{ ok: false } | never> {
+export async function signInWithGoogleAction(): Promise<
+  { ok: true; url: string } | { ok: false }
+> {
   const provider = providerSchema.parse('google');
   const supabase = await createClient();
 
@@ -67,7 +72,8 @@ export async function signInWithGoogleAction(): Promise<{ ok: false } | never> {
     return { ok: false };
   }
 
-  // Top-level redirect (throws NEXT_REDIRECT) — outside any try/catch so the
-  // redirect signal is never swallowed. Sends the browser to Google's consent.
-  redirect(data.url);
+  // Hand the consent URL to the client to navigate (window.location.assign). The
+  // PKCE code-verifier was set as an httpOnly cookie by signInWithOAuth above;
+  // only the public code_challenge is in this URL, so returning it is safe.
+  return { ok: true, url: data.url };
 }
