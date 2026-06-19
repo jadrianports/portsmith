@@ -35,10 +35,13 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { UsernameAvailability } from '@/components/auth/username-availability';
 import { Alert } from '@/components/ui/alert';
 import { CharCounter } from '@/components/ui/char-counter';
 import { Input } from '@/components/ui/input';
+import { changeUsernameAction } from '@/lib/cms/change-username-action';
 import { saveSeoSettings, type SaveSeoSettingsInput } from '@/lib/cms/save-settings-action';
+import { THIRTY_DAYS_MS, formatNextAllowedDate } from '@/lib/cms/username-cooldown';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { notifyPreviewSaved } from '@/lib/stores/preview-save-signal';
 
@@ -65,6 +68,158 @@ export interface PageIdentityFormProps {
   };
   /** The owner's username — passed so the action's revalidate needs no round-trip. */
   username?: string;
+}
+
+/** Chrome text-button (link) style — accent on hover only (two-layer rule: never a fill). */
+const CHROME_LINK =
+  'self-start rounded-sm px-1 text-[13px] font-semibold text-brand outline-none ' +
+  'transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+  'focus-visible:outline-ring motion-reduce:transition-none disabled:opacity-50';
+/** Chrome confirm button — bordered/neutral (NO accent fill, NO inline hex). */
+const CHROME_CONFIRM =
+  'inline-flex items-center rounded-md border border-border bg-card px-3 py-1.5 text-[13px] ' +
+  'font-semibold text-foreground outline-none transition-colors hover:bg-muted ' +
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+  'disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none';
+
+/**
+ * The username / vanity-URL control (HANDLE-01, D-07/D-08) — a SEPARATE sub-form inside
+ * the Page Identity panel that calls `changeUsernameAction` (NOT `saveSeoSettings`): the
+ * handle is the protected-column path with its own cooldown + 308-redirect, so it must
+ * stay cleanly off the SEO save. D-08 two-step inline confirm: "Change URL" reveals the
+ * input + warning copy; "Confirm new URL /{name}" commits. On a successful change (or a
+ * cooldown denial) the control locks and shows the next-allowed date. The live
+ * `UsernameAvailability` island gets `currentUsername` so the owner's own prior handle
+ * reads as available (D-05 reclaim). Chrome single-layer only.
+ */
+function UsernameUrlField({ currentUsername }: { currentUsername: string }) {
+  const [liveHandle, setLiveHandle] = useState(currentUsername);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(currentUsername);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  // Set on a successful change OR a cooldown denial — both carry the "…again on {date}"
+  // copy. When set, the control is disabled (D-08 cooldown state).
+  const [lockedMessage, setLockedMessage] = useState<string | null>(null);
+
+  const newName = value.trim();
+  const isSame = newName === liveHandle;
+  // The warning copy's upper-bound date (the action surfaces the precise one on denial).
+  const warningDate = formatNextAllowedDate(Date.now() + THIRTY_DAYS_MS);
+  const canConfirm = !pending && !isSame && newName.length >= 3 && available !== false;
+
+  function startEditing() {
+    setValue(liveHandle);
+    setError(null);
+    setFieldError(null);
+    setAvailable(null);
+    setEditing(true);
+  }
+
+  function cancel() {
+    setEditing(false);
+    setValue(liveHandle);
+    setError(null);
+    setFieldError(null);
+    setAvailable(null);
+  }
+
+  async function confirm() {
+    if (!canConfirm) return;
+    setPending(true);
+    setError(null);
+    setFieldError(null);
+    try {
+      const result = await changeUsernameAction({ username: newName });
+      if (result.ok) {
+        setLiveHandle(newName);
+        setEditing(false);
+        setLockedMessage(
+          `Changed. You can change your username again on ${formatNextAllowedDate(
+            Date.now() + THIRTY_DAYS_MS,
+          )}.`,
+        );
+        return;
+      }
+      if (result.fieldErrors?.username) setFieldError(result.fieldErrors.username);
+      if (result.error) {
+        setError(result.error);
+        // A cooldown denial carries the dated "…change your username again on…" copy —
+        // lock the control and surface it (D-08 cooldown-disabled state).
+        if (/again on/i.test(result.error)) {
+          setLockedMessage(result.error);
+          setEditing(false);
+        }
+      }
+    } catch {
+      setError('Something went wrong changing your URL. Please try again.');
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section className="flex flex-col gap-2" aria-label="Your URL">
+      <div className="flex flex-col gap-1">
+        <span className="text-[13px] font-semibold text-foreground">Your URL</span>
+        <p className="text-[13px] leading-tight text-muted-foreground">
+          Your public address:{' '}
+          <span className="font-medium text-foreground">/{liveHandle}</span>
+        </p>
+      </div>
+
+      {lockedMessage ? (
+        <p className="text-[13px] leading-tight text-muted-foreground" aria-live="polite">
+          {lockedMessage}
+        </p>
+      ) : !editing ? (
+        <button type="button" onClick={startEditing} className={CHROME_LINK}>
+          Change URL
+        </button>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <Input
+            label="New username"
+            name="new_username"
+            value={value}
+            maxLength={30}
+            onChange={(e) => {
+              setValue(e.target.value);
+              setError(null);
+              setFieldError(null);
+            }}
+            error={fieldError ?? undefined}
+          />
+          <UsernameAvailability
+            value={value}
+            currentUsername={liveHandle}
+            onAvailabilityChange={setAvailable}
+          />
+          {error ? <Alert variant="error">{error}</Alert> : null}
+          <p className="text-[13px] leading-tight text-muted-foreground">
+            Your URL becomes{' '}
+            <span className="font-medium text-foreground">/{newName || '…'}</span>. Old links
+            keep working via a redirect. You can change again on {warningDate}.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={confirm}
+              disabled={!canConfirm}
+              className={CHROME_CONFIRM}
+            >
+              {pending ? 'Changing…' : `Confirm new URL /${newName || ''}`}
+            </button>
+            <button type="button" onClick={cancel} disabled={pending} className={CHROME_LINK}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }
 
 export function PageIdentityForm({ initial, username }: PageIdentityFormProps) {
@@ -157,10 +312,15 @@ export function PageIdentityForm({ initial, username }: PageIdentityFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <FormPanelHeader title="Page Identity &amp; SEO" dirty={dirty} saveState={saveState} />
 
-      {banner ? <Alert variant="error">{banner}</Alert> : null}
+      {/* HANDLE-01 / D-07: the username / vanity-URL control — a SEPARATE sub-form calling
+          changeUsernameAction, cleanly off the SEO save below. */}
+      <UsernameUrlField currentUsername={username ?? ''} />
+
+      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
+        {banner ? <Alert variant="error">{banner}</Alert> : null}
 
       {/* ── Text block: page title · meta description ─────────────────────────── */}
       <div className="flex flex-col gap-4">
@@ -279,7 +439,8 @@ export function PageIdentityForm({ initial, username }: PageIdentityFormProps) {
             No share image set — links unfurl with an auto-generated card built from your portfolio.
           </p>
         )}
-      </div>
-    </form>
+        </div>
+      </form>
+    </div>
   );
 }
