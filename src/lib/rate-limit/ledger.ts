@@ -21,10 +21,16 @@ import 'server-only';
  *     to a generic 429 — D-04, never leaking the cap);
  *   - otherwise inserts a fresh ledger event and returns `true` (allowed).
  *
- * Fail-open on a transient COUNT error (documented choice): the cap is a speed-bump,
+ * Fail-open on a transient COUNT error (documented DEFAULT): the cap is a speed-bump,
  * not the primary bot gate (Turnstile is). A DB blip on the count read must not block
  * a legitimate visitor's contact submit — so a count error returns `true`. (Turnstile
  * + the no-public-INSERT boundary remain in force regardless.)
+ *
+ * PER-BUCKET FAIL-CLOSED (D-06, Phase 30): for a PRODUCT-LIMIT bucket (e.g.
+ * `'username_change'`, cap 1 / 30 days) fail-open is wrong — a DB blip must not let a
+ * 2nd change slip through. Pass `{ failClosed: true }` to flip the count-error branch to
+ * DENY for that one call. The flag is OPTIONAL and defaults to `false`, so the existing
+ * contact/report callers are byte-for-byte unchanged (fail-open).
  */
 import { supabaseAdmin } from '@/lib/supabase/service-role';
 
@@ -37,12 +43,16 @@ import { supabaseAdmin } from '@/lib/supabase/service-role';
  * @param subject  the rate-limit subject, e.g. the `portfolio_id` or a hashed-IP digest.
  * @param windowMs the rolling window in milliseconds (contact: 3_600_000 = 1h).
  * @param cap      the maximum allowed events in the window (contact: 20).
+ * @param options  `{ failClosed }` — when `true`, a transient COUNT error returns `false`
+ *                 (DENY) instead of the default `true` (fail-open). Use for product-limit
+ *                 buckets like `username_change`; omit for spam speed-bumps (contact/report).
  */
 export async function countAndRecord(
   bucket: string,
   subject: string,
   windowMs: number,
   cap: number,
+  options?: { failClosed?: boolean },
 ): Promise<boolean> {
   const since = new Date(Date.now() - windowMs).toISOString();
 
@@ -53,8 +63,9 @@ export async function countAndRecord(
     .eq('subject', subject)
     .gte('created_at', since);
 
-  // Fail-open on a transient count error — the cap is a speed-bump, not the gate.
-  if (countError) return true;
+  // Count-error posture: fail-OPEN by default (the cap is a speed-bump), but fail-CLOSED
+  // (deny) when the caller opts in for a product-limit bucket (D-06 username_change).
+  if (countError) return !options?.failClosed;
 
   if ((count ?? 0) >= cap) return false;
 

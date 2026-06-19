@@ -85,10 +85,8 @@ describe('HANDLE-01 / D-06 — the username_change cooldown fails CLOSED on a co
     const { countAndRecord } = await import('@/lib/rate-limit/ledger');
     countResult = { count: null, error: { message: 'transient count blip' } };
 
-    // RED: the current signature is (bucket, subject, windowMs, cap) and ignores any
-    // 5th argument, still returning true on a count error. Plan 03 adds the
-    // `failClosed` option flipping the count-error branch to DENY for this bucket.
-    // @ts-expect-error — the `failClosed` option is added in Plan 03 (Wave-0 RED).
+    // Plan 03 added the `failClosed` option flipping the count-error branch to DENY for
+    // this bucket; without it the default stays fail-OPEN (asserted above).
     const allowed = await countAndRecord(BUCKET, 'user-sub', THIRTY_DAYS_MS, 1, {
       failClosed: true,
     });
