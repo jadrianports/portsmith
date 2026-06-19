@@ -31,11 +31,22 @@ export interface UsernameAvailabilityProps {
   value: string;
   /** Optional callback so the parent can gate submit on a known-taken username. */
   onAvailabilityChange?: (available: boolean | null) => void;
+  /**
+   * The OWNER's current handle, passed by the change panel (Plan 05) to enable the D-05
+   * self-reclaim special-case: a candidate reserved in the owner's OWN history (the
+   * reserved row resolves to this `currentUsername`) reads as AVAILABLE. Signup passes
+   * nothing, so any reserved hit is treated as taken (the plain D-04 union).
+   */
+  currentUsername?: string;
 }
 
 const DEBOUNCE_MS = 350;
 
-export function UsernameAvailability({ value, onAvailabilityChange }: UsernameAvailabilityProps) {
+export function UsernameAvailability({
+  value,
+  onAvailabilityChange,
+  currentUsername,
+}: UsernameAvailabilityProps) {
   const [status, setStatus] = useState<Status>('idle');
   const [message, setMessage] = useState<string>('');
   const reqId = useRef(0);
@@ -90,11 +101,38 @@ export function UsernameAvailability({ value, onAvailabilityChange }: UsernameAv
           setStatus('taken');
           setMessage('That username is taken.');
           onAvailabilityChange?.(false);
-        } else {
-          setStatus('available');
-          setMessage(`${trimmed} is available.`);
-          onAvailabilityChange?.(true);
+          return;
         }
+
+        // D-04/D-05: no LIVE collision — check the reserved-handle history through the
+        // public_username_redirects view (old_handle + current_username only; NO user_id).
+        // A reserved handle is taken UNLESS it is the OWNER's own prior handle (D-05),
+        // i.e. the reserved row resolves to the owner's current username.
+        const { data: reserved, error: reservedError } = await supabase
+          .from('public_username_redirects')
+          .select('current_username')
+          .eq('old_handle', trimmed)
+          .maybeSingle();
+
+        // Ignore stale responses (a newer keystroke superseded this one).
+        if (myReq !== reqId.current) return;
+
+        // A reservation read error is non-blocking (the RPC union-uniqueness is the real
+        // gate at submit) — fall through to available rather than wedge the user.
+        if (!reservedError && reserved) {
+          const isOwnReclaim =
+            !!currentUsername && reserved.current_username === currentUsername;
+          if (!isOwnReclaim) {
+            setStatus('taken');
+            setMessage('That username is reserved.');
+            onAvailabilityChange?.(false);
+            return;
+          }
+        }
+
+        setStatus('available');
+        setMessage(`${trimmed} is available.`);
+        onAvailabilityChange?.(true);
       } catch {
         if (myReq !== reqId.current) return;
         setStatus('idle');
