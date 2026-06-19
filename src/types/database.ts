@@ -1152,6 +1152,13 @@ export type Database = {
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "activation_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_showcase_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       announcements: {
@@ -1498,6 +1505,13 @@ export type Database = {
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "portfolios_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "public_showcase_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       profiles: {
@@ -1515,6 +1529,7 @@ export type Database = {
           published: boolean
           resume_url: string | null
           role: string
+          showcase_opt_in: boolean
           storage_used_bytes: number
           updated_at: string
           username: string
@@ -1533,6 +1548,7 @@ export type Database = {
           published?: boolean
           resume_url?: string | null
           role?: string
+          showcase_opt_in?: boolean
           storage_used_bytes?: number
           updated_at?: string
           username: string
@@ -1551,6 +1567,7 @@ export type Database = {
           published?: boolean
           resume_url?: string | null
           role?: string
+          showcase_opt_in?: boolean
           storage_used_bytes?: number
           updated_at?: string
           username?: string
@@ -1636,6 +1653,13 @@ export type Database = {
             columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "public_showcase_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1759,6 +1783,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "template_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "public_showcase_profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "template_grants_template_id_fkey"
             columns: ["template_id"]
             isOneToOne: false
@@ -1777,6 +1808,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "template_grants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_showcase_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1852,6 +1890,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "public_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "username_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "public_showcase_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2025,6 +2070,13 @@ export type Database = {
             referencedRelation: "public_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "portfolios_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "public_showcase_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       public_profiles: {
@@ -2098,6 +2150,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      public_showcase_profiles: {
+        Row: {
+          avatar_url: string | null
+          display_name: string | null
+          headline: string | null
+          id: string | null
+          published: boolean | null
+          resume_url: string | null
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          display_name?: string | null
+          headline?: string | null
+          id?: string | null
+          published?: boolean | null
+          resume_url?: string | null
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          display_name?: string | null
+          headline?: string | null
+          id?: string | null
+          published?: boolean | null
+          resume_url?: string | null
+          username?: string | null
+        }
+        Relationships: []
       }
       public_username_redirects: {
         Row: {
@@ -2176,6 +2258,7 @@ export type Database = {
         Returns: boolean
       }
       profile_is_public: { Args: { p_user_id: string }; Returns: boolean }
+      profile_is_showcased: { Args: { p_user_id: string }; Returns: boolean }
       rate_limit_events_by_bucket: {
         Args: { p_days?: number }
         Returns: {
