@@ -314,3 +314,60 @@ describe('DEF-01 / CR-02 — handle freed by the REAL RPC is reclaimable', () =>
     expect(liveRows![0].id).toBe(reclaimed.id);
   });
 });
+
+/**
+ * Phase 30 — username_history rows cascade away on HARD account deletion (Wave-0 RED).
+ *
+ * Migration 027 adds `username_history.user_id UUID NOT NULL REFERENCES profiles(id)
+ * ON DELETE CASCADE` (30-RESEARCH.md DDL). A deleted account must release its reserved
+ * old handles: `admin.deleteUser(sub)` (the /api/account/delete route, route.ts:119)
+ * removes the `auth.users` row, the 001 FK cascade wipes `profiles`, and the new
+ * `username_history.user_id → profiles(id)` FK cascades from that — no orphaned reserved
+ * handles linger past deletion. This is the enumerated "cascade | account-delete"
+ * verification row from 30-VALIDATION.md (closing the T-30-06 orphaned-assertion gap).
+ *
+ * This ADDS a username_history-cascade assertion alongside the existing soft-delete /
+ * reclaim cases above (which continue to pass unchanged) — it asserts the HARD-delete
+ * path (auth.users removal), the only path that triggers the FK cascade.
+ *
+ * RED STATE: the `username_history` table does not exist until Plan 02 — the seed
+ * INSERT errors on a missing relation, which IS the intended Wave-0 RED. It flips GREEN
+ * once 027 is applied. The admin client is untyped, so `.from('username_history')` is
+ * type-clean (the regen lands in Plan 02).
+ */
+describe('Phase 30 — deleting an account cascades away its username_history rows', () => {
+  it('a hard account delete removes every username_history row owned by that user', async () => {
+    const handle = `uh${RUN}`.slice(0, 30);
+    const user = await createTestUser({
+      email: `${handle}@example.test`,
+      password: 'Test-Password-123!',
+      username: handle,
+      display_name: 'History Cascade',
+    });
+    createdIds.push(user.id);
+
+    // Seed a reserved old handle owned by this user (a prior rename, modeled directly).
+    const seed = await admin
+      .from('username_history')
+      .insert({ old_handle: `${handle}-old`.slice(0, 30), user_id: user.id });
+    expect(seed.error).toBeNull(); // RED now — the username_history relation does not exist yet
+
+    // Sanity: the row is present before deletion.
+    const before = await admin
+      .from('username_history')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id);
+    expect(before.count ?? 0).toBe(1);
+
+    // HARD delete the account (auth.users removal) — the path the FK cascade composes with.
+    const del = await admin.auth.admin.deleteUser(user.id);
+    expect(del.error).toBeNull();
+
+    // The ON DELETE CASCADE swept the history rows: zero remain for that user_id.
+    const after = await admin
+      .from('username_history')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id);
+    expect(after.count ?? 0).toBe(0);
+  });
+});
