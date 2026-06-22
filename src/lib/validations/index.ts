@@ -33,3 +33,6 @@ export * from './account';
 
 // Page-view beacon (POST /api/page-view request body — server gate, D-04; no Turnstile).
 export * from './page-view';
+
+// Outbound-click event beacon (POST /api/event request body — server gate, D-09; no Turnstile).
+export * from './event';
