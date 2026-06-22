@@ -9,10 +9,12 @@
  * tests/build/route-table-landing-ssg.test.ts assertion).
  *
  * The metadata mirrors the in-repo `buildPublicMetadata` SHAPE (OG + Twitter
- * summary_large_image) but STATIC — the homepage variant pointing at the existing
- * `og-default.png` placeholder until Phase 23 ships the art-directed art. All absolute
- * URLs derive from `siteUrl()` (D-11 / T-22-03): no `metadataBase` is configured, so a
- * relative OG image URL would be rejected by crawlers (Pitfall 5).
+ * summary_large_image) but STATIC. The OG/Twitter card IMAGE is supplied by the sibling
+ * `(chrome)/opengraph-image.tsx` file-convention card via Next metadata inheritance
+ * (Phase 32 / BRAND-04 / D-11) — the old explicit `og-default.png` image refs were
+ * removed here so they no longer outrank that card for `/`. All absolute URLs derive from
+ * `siteUrl()` (D-11 / T-22-03): no `metadataBase` is configured, so a relative OG image
+ * URL would be rejected by crawlers (Pitfall 5).
  *
  * The `(chrome)` root layout already supplies `<html>`/`<body>`/`<Providers>` + Inter +
  * BotID and has NO shared nav — so the page supplies ONLY its own header/main/footer.
@@ -40,13 +42,15 @@ const TITLE = 'Portsmith — a polished portfolio in about 15 minutes';
 const DESCRIPTION =
   "Pick a curated template, fill in your experience, and publish — Portsmith handles the design, so you get a page you're proud to share.";
 const CANONICAL = siteUrl('/');
-const OG_IMAGE = siteUrl('/og-default.png');
 
 /**
  * D-11 — full front-door metadata. Static homepage variant of the `buildPublicMetadata`
- * shape: marketing title/description, the siteUrl canonical, and OG + Twitter
- * summary_large_image cards over the absolute `og-default.png` (the placeholder until
- * Phase 23's art-directed image). Every image/url is absolute via `siteUrl()` (Pitfall 5).
+ * shape: marketing title/description and the siteUrl canonical. The OG/Twitter card image
+ * is now supplied by the `(chrome)/opengraph-image.tsx` file-convention card via Next
+ * metadata inheritance — the explicit `og-default.png` refs are REMOVED so they no longer
+ * outrank the file convention for `/` (Phase 32 / BRAND-04 / D-11). `public/og-default.png`
+ * and its generator/tests stay — the out-of-scope `(portfolio)` routes still reference it.
+ * `twitter.card: 'summary_large_image'` is kept so the inherited card renders large.
  */
 export const metadata: Metadata = {
   title: TITLE,
@@ -56,13 +60,11 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     url: CANONICAL,
-    images: [OG_IMAGE],
   },
   twitter: {
     card: 'summary_large_image',
     title: TITLE,
     description: DESCRIPTION,
-    images: [OG_IMAGE],
   },
 };
 
