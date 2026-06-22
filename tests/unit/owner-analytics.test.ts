@@ -27,10 +27,9 @@
  */
 import { describe, expect, it } from 'vitest';
 
-// The not-yet-built ANLY-06 helper module (Plan 33-04). Variable specifier so there
-// is no STATIC reference for `tsc` to fail on; the runtime export is `undefined`
-// until 33-04 → the .skip block below is RED-pending.
-const ANALYTICS_MOD = '@/lib/analytics/owner-analytics';
+// GREENED BY 33-04 — the ANLY-06 conversion helper is now exported. `computeConversion`
+// is a pure, DB-free function (no `server-only` reach), so it is unit-testable directly.
+import { computeConversion } from '@/lib/analytics/owner-analytics';
 
 /**
  * The reference conversion guard the production helper MUST reproduce: messages ÷
@@ -59,18 +58,20 @@ describe('ANLY-06 — conversion ÷0 → null contract (ACTIVE reference)', () =
   });
 });
 
-// RED until Plan 33-04 extends `getOwnerAnalytics` with the ANLY-06 conversion +
-// outbound-click aggregation. Skipped so the not-yet-existing exports are not
-// evaluated on every run; flip to `describe(` (drop `.skip`) when 33-04 lands.
-describe.skip('ANLY-06 — getOwnerAnalytics conversion + click aggregation (RED until 33-04)', () => {
-  it('exposes a conversion30d helper/field that returns null on zero views', async () => {
-    const mod = (await import(/* @vite-ignore */ ANALYTICS_MOD)) as {
-      computeConversion?: (messages: number, views: number) => number | null;
-    };
-    expect(typeof mod.computeConversion).toBe('function');
-    expect(mod.computeConversion!(5, 0)).toBeNull();
+// GREENED BY 33-04 — `computeConversion` is the exported ÷0-safe conversion helper.
+describe('ANLY-06 — getOwnerAnalytics conversion helper (live export)', () => {
+  it('exposes computeConversion and returns null on zero views (÷0 → null)', () => {
+    expect(typeof computeConversion).toBe('function');
+    expect(computeConversion(5, 0)).toBeNull();
   });
 
-  it.todo('clicks30d counts analytics_events rows in the 30-day window');
-  it.todo('topDestinations groups by derived category (social/contact/project/other) desc');
+  it('computeConversion = messages ÷ views for non-zero views', () => {
+    expect(computeConversion(4, 200)).toBeCloseTo(0.02, 5);
+    expect(computeConversion(1, 12)).toBeCloseTo(1 / 12, 6);
+  });
+
+  it('a zero-messages window → 0, not null (views exist, nobody converted yet)', () => {
+    // 0 messages over real views is a genuine 0% conversion — distinct from the ÷0 null.
+    expect(computeConversion(0, 50)).toBe(0);
+  });
 });

@@ -35,6 +35,9 @@ const LOAD_ERROR = 'We couldn’t load analytics. Please try again.';
 /** How many source buckets to surface inline (keeps the card glanceable). */
 const MAX_REFERRERS = 4;
 
+/** How many outbound-click destinations to surface inline (keeps the card glanceable). */
+const MAX_DESTINATIONS = 4;
+
 /** The card consumes the `getOwnerAnalytics()` shape directly (spread by the RSC). */
 export type AnalyticsCardProps = OwnerAnalytics;
 
@@ -44,6 +47,9 @@ export function AnalyticsCard({
   blogAllTime,
   daily,
   topReferrers,
+  clicks30d,
+  topDestinations,
+  conversion30d,
   error,
 }: AnalyticsCardProps) {
   // A read error degrades to calm defaults upstream; surface the load-error Alert
@@ -83,6 +89,11 @@ export function AnalyticsCard({
   // Surface the top buckets only (keeps the card glanceable); buckets arrive sorted
   // desc with the explicit "Direct / unknown" always present (owner-analytics.ts).
   const referrers = topReferrers.slice(0, MAX_REFERRERS);
+  // Outbound-click destinations arrive sorted desc; surface the top few inline (ANLY-05).
+  const destinations = topDestinations.slice(0, MAX_DESTINATIONS);
+  // The conversion figure renders only when there is enough data (null → hidden, D-11).
+  const conversionPct =
+    conversion30d !== null ? (conversion30d * 100).toLocaleString(undefined, { maximumFractionDigits: 1 }) : null;
 
   return (
     <section aria-labelledby="owner-analytics-heading">
@@ -119,6 +130,40 @@ export function AnalyticsCard({
               ))}
             </p>
           </div>
+        ) : null}
+
+        {/* Outbound clicks (30d) — engagement beyond views (ANLY-05). */}
+        {clicks30d > 0 ? (
+          <div className="mt-4">
+            <h3 className="mb-1 text-sm font-semibold text-foreground">Outbound clicks</h3>
+            <p className="text-base text-foreground">
+              <span className="font-semibold tabular-nums">{clicks30d.toLocaleString()}</span>{' '}
+              <span className="text-[13px] text-muted-foreground">Last 30 days</span>
+            </p>
+            {/* Top-clicked destinations — the same inline `·`-separated tnum idiom as referrers. */}
+            {destinations.length > 0 ? (
+              <p className="mt-1 text-base text-muted-foreground">
+                {destinations.map((row, i) => (
+                  <span key={row.host}>
+                    {i > 0 ? <span aria-hidden="true"> · </span> : null}
+                    <span>{row.host} </span>
+                    <span className="tabular-nums text-foreground">
+                      {row.clicks.toLocaleString()}
+                    </span>
+                  </span>
+                ))}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Views→contacts conversion (ANLY-06) — hidden when null (not enough data, D-11). */}
+        {conversionPct !== null ? (
+          <p className="mt-3 text-[13px] text-muted-foreground">
+            Conversion ·{' '}
+            <span className="tabular-nums text-foreground">{conversionPct}%</span> of viewers
+            reached out
+          </p>
         ) : null}
 
         {/* Optional blog-views sub-figure (Caption 13/400) — only when non-zero. */}

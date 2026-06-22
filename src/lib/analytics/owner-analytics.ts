@@ -59,6 +59,14 @@ export interface OwnerReferrerRow {
   views: number;
 }
 
+/** One outbound-click destination host + its click count (ANLY-05 / D-12). */
+export interface OwnerDestinationRow {
+  /** The outbound destination host (e.g. `linkedin.com`) or a scheme (`mailto:`/`tel:`). */
+  host: string;
+  /** Outbound clicks to that host in the 30-day window. */
+  clicks: number;
+}
+
 /** The typed shape the `AnalyticsCard` consumes (D-12). */
 export interface OwnerAnalytics {
   /** All-time total page views across the owner's portfolio (headline, D-12). */
@@ -79,6 +87,16 @@ export interface OwnerAnalytics {
   daily: OwnerDailyRow[];
   /** Top source buckets (desc), always including the explicit "Direct / unknown". */
   topReferrers: OwnerReferrerRow[];
+  /** Total outbound clicks in the last 30 days (ANLY-05 / D-12). */
+  clicks30d: number;
+  /** Top outbound-click destination hosts (desc) in the 30-day window (ANLY-05). */
+  topDestinations: OwnerDestinationRow[];
+  /**
+   * The trailing-30-day views→contacts conversion (ANLY-06 / D-11): 30-day contact
+   * `messages` ÷ 30-day `page_views`. `null` when there are zero page views in the
+   * window (÷0 → null, NOT 0 — a `null` reads honestly as "not enough data yet").
+   */
+  conversion30d: number | null;
   /**
    * True when a read failed (the data fields then hold calm defaults). The card
    * renders its `<Alert variant="error">` load-error state instead of reading an
@@ -96,6 +114,12 @@ interface PageViewWindowRow {
   created_at: string;
 }
 
+/** The window-scoped columns the outbound-click destination aggregation needs. */
+interface AnalyticsEventWindowRow {
+  destination_host: string | null;
+  created_at: string;
+}
+
 /** The calm-default shape returned on any read error (still a valid `OwnerAnalytics`). */
 function emptyAnalytics(error: boolean): OwnerAnalytics {
   return {
@@ -104,8 +128,39 @@ function emptyAnalytics(error: boolean): OwnerAnalytics {
     blogAllTime: 0,
     daily: buildDailySeries([]),
     topReferrers: [{ source: DIRECT_BUCKET, views: 0 }],
+    clicks30d: 0,
+    topDestinations: [],
+    conversion30d: null, // ÷0 → null (no views yet — honest "not enough data").
     error,
   };
+}
+
+/**
+ * The trailing-30-day views→contacts conversion (ANLY-06 / D-11): `messages ÷ views`.
+ * A zero-views window collapses to `null` (NEVER 0 / NaN / Infinity) — a `null` reads
+ * on the card as "not enough data yet" (honest); a `0` would falsely read as "nobody
+ * converts". Exported so the math is unit-testable without a request context.
+ */
+export function computeConversion(messages: number, views: number): number | null {
+  if (views <= 0) return null; // ÷0 → null (the D-11 honesty guard, not 0).
+  return messages / views;
+}
+
+/**
+ * Group the windowed outbound-click rows by destination host, sorted by clicks desc
+ * (ANLY-05). Mirrors {@link buildTopReferrers}'s in-TS grouping. Rows with no host are
+ * skipped (the card shows named destinations only).
+ */
+function buildTopDestinations(rows: AnalyticsEventWindowRow[]): OwnerDestinationRow[] {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const host = row.destination_host;
+    if (!host) continue;
+    counts.set(host, (counts.get(host) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([host, clicks]) => ({ host, clicks }))
+    .sort((a, b) => b.clicks - a.clicks);
 }
 
 /** `YYYY-MM-DD` (UTC) for a date — the per-day bucket key + the series label. */
@@ -182,37 +237,66 @@ export async function getOwnerAnalytics(): Promise<OwnerAnalytics> {
   //    headline `total30d` source so it NEVER saturates at ROW_CAP the way a capped
   //    `rows.length` would — the windowed read below stays capped for the glanceable
   //    series/referrer breakdown only.
-  const [allTimeRes, blogRes, total30dRes, windowRes] = await Promise.all([
-    supabase.from('page_views').select('id', { count: 'exact', head: true }),
-    supabase
-      .from('page_views')
-      .select('id', { count: 'exact', head: true })
-      // WR-02: anchor to the `/blog` route segment (the real routes are
-      // `/[username]/blog` and `/[username]/blog/[slug]`). The two-pattern `.or`
-      // matches `…/blog` and `…/blog/<slug>` but NOT substrings like
-      // `…/blogging-tips` or `…/weblog`, which a bare `%/blog%` would over-count.
-      .or('path.ilike.%/blog,path.ilike.%/blog/%'),
-    // True 30-day count (WR-01) — unaffected by ROW_CAP; mirrors the all-time head
-    // count above, just scoped to the window with the same `since` instant.
-    supabase
-      .from('page_views')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', since),
-    supabase
-      .from('page_views')
-      .select('path, referrer, utm_source, utm_medium, created_at')
-      .gte('created_at', since)
-      .order('created_at', { ascending: false })
-      .limit(ROW_CAP),
-  ]);
+  const [allTimeRes, blogRes, total30dRes, windowRes, clicks30dRes, clickRowsRes, messages30dRes] =
+    await Promise.all([
+      supabase.from('page_views').select('id', { count: 'exact', head: true }),
+      supabase
+        .from('page_views')
+        .select('id', { count: 'exact', head: true })
+        // WR-02: anchor to the `/blog` route segment (the real routes are
+        // `/[username]/blog` and `/[username]/blog/[slug]`). The two-pattern `.or`
+        // matches `…/blog` and `…/blog/<slug>` but NOT substrings like
+        // `…/blogging-tips` or `…/weblog`, which a bare `%/blog%` would over-count.
+        .or('path.ilike.%/blog,path.ilike.%/blog/%'),
+      // True 30-day count (WR-01) — unaffected by ROW_CAP; mirrors the all-time head
+      // count above, just scoped to the window with the same `since` instant.
+      supabase
+        .from('page_views')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', since),
+      supabase
+        .from('page_views')
+        .select('path, referrer, utm_source, utm_medium, created_at')
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(ROW_CAP),
+      // ANLY-05: a 30-day HEAD count of outbound clicks (own-rows via the
+      // `analytics_events own select` RLS — no explicit filter, the policy is the boundary).
+      supabase
+        .from('analytics_events')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', since),
+      // ANLY-05: the windowed click rows for the top-destinations breakdown (capped).
+      supabase
+        .from('analytics_events')
+        .select('destination_host, created_at')
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(ROW_CAP),
+      // ANLY-06 (D-11): the 30-day contact `messages` count — the conversion numerator
+      // (owner-readable under the `messages own select` RLS; the owner already reads inbox).
+      supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', since),
+    ]);
 
   // Any read error → calm defaults + the error flag (the card shows the load-error
   // Alert, not a misleading "no views yet" empty state).
-  if (allTimeRes.error || blogRes.error || total30dRes.error || windowRes.error) {
+  if (
+    allTimeRes.error ||
+    blogRes.error ||
+    total30dRes.error ||
+    windowRes.error ||
+    clicks30dRes.error ||
+    clickRowsRes.error ||
+    messages30dRes.error
+  ) {
     return emptyAnalytics(true);
   }
 
   const rows = (windowRes.data ?? []) as unknown as PageViewWindowRow[];
+  const clickRows = (clickRowsRes.data ?? []) as unknown as AnalyticsEventWindowRow[];
 
   return {
     allTime: allTimeRes.count ?? 0,
@@ -220,6 +304,10 @@ export async function getOwnerAnalytics(): Promise<OwnerAnalytics> {
     blogAllTime: blogRes.count ?? 0,
     daily: buildDailySeries(rows),
     topReferrers: buildTopReferrers(rows),
+    clicks30d: clicks30dRes.count ?? 0,
+    topDestinations: buildTopDestinations(clickRows),
+    // D-11: 30-day messages ÷ 30-day page views; ÷0 → null (honest "not enough data").
+    conversion30d: computeConversion(messages30dRes.count ?? 0, total30dRes.count ?? 0),
     error: false,
   };
 }
