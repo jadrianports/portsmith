@@ -255,10 +255,17 @@ export function SectionListRow({
   };
 
   // Row container token classes per the UI-SPEC §2 state table.
+  // 33-06 (UX-05 / D-16 rail polish): the rows sit on `bg-surface` inside a
+  // `bg-surface-muted` list, so the prior `hover:bg-surface` was a dead no-op (hover
+  // and rest were the same color). The SELECTED row now carries a real `bg-surface-muted`
+  // tint (in addition to the 3px brand marker) and every row gets a genuine
+  // `hover:bg-surface-muted` so the rail has a clear active-vs-rest read. Chrome tokens
+  // only; color-independence is preserved (the marker + eye/badge still carry state).
+  const selectedState = selected ? 'bg-surface-muted' : 'bg-surface';
   const base =
     'group relative flex min-h-11 items-center gap-2 border-b border-border ' +
-    'bg-surface px-2 py-2 text-left outline-none transition-colors ' +
-    'hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+    `${selectedState} px-2 py-2 text-left outline-none transition-colors ` +
+    'hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-offset-2 ' +
     'focus-visible:outline-ring motion-reduce:transition-none';
   const draggingState = isDragging
     ? 'z-10 shadow-card motion-reduce:shadow-none'

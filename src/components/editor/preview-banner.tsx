@@ -139,19 +139,41 @@ export function PreviewBanner({
         // edgerunner-v2 navbar is `fixed top-0 z-50`). At equal z-index the template
         // (later in the DOM) would paint over the banner and EAT its button clicks, so
         // the banner must outrank the whole template z-scale.
+        //
+        // 33-06 (D-17 — the aesthetic-ux-cms-editor named nit): the banner was an
+        // UNDERSTATED thin `bg-surface-muted` strip that read as ambient chrome and was
+        // easy to miss against a busy template surface. It is now given clear visual
+        // WEIGHT so the owner can never mistake a private draft for the live page: the
+        // opaque `bg-surface` panel sits over the template, a 3px BRAND top edge
+        // (`border-t-[3px] border-t-brand`) flags it as a platform overlay (brand fill
+        // is allowed here — it is a status SURFACE edge, not an interactive copper
+        // accent), a `shadow-card` lifts it off the template, and a left brand marker
+        // (rendered below) ties it to the chrome identity. z-[100] + the explicit
+        // `--font-sans` chrome-isolation are PRESERVED (the load-bearing discipline).
         'preview-banner-enter font-sans fixed inset-x-0 top-0 z-[100] flex flex-col gap-2 ' +
-        'border-b border-border bg-surface-muted px-4 py-3 text-foreground'
+        'border-b border-t-[3px] border-border border-t-brand bg-surface px-4 py-3 ' +
+        'text-foreground shadow-card'
       }
     >
+      {/* 33-06 (D-17): a 3px brand left marker — the same chrome "this is ours" cue the
+          rail + Edit/Preview toggle use. Ties the overlay to the platform identity and
+          adds weight on the leading edge without a caution color. */}
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-0 left-0 w-[3px] bg-brand"
+      />
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          {/* Calm glyph (muted, not a warning tone) — the reassurance is the point. */}
-          <CircleAlert aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+          {/* 33-06 (D-17): the calm glyph reads in the BRAND tone now (not muted) so
+              the leading cue carries the same "platform overlay" weight as the brand
+              edge — confident, NOT a caution color. */}
+          <CircleAlert aria-hidden="true" className="size-5 shrink-0 text-brand" />
           <div className="min-w-0">
-            {/* D-07: the confident primary line (Label, foreground). It is accurate
-                in BOTH the base draft and the switch flow (you ARE looking at a
-                private draft); the switch-flow context line sits beneath it. */}
-            <p className="truncate text-sm font-semibold text-foreground">
+            {/* D-07 / 33-06 (D-17): the confident primary line, bumped to 15px so it
+                reads clearly over a busy template surface (legibility — the named nit).
+                Accurate in BOTH the base draft and the switch flow (you ARE looking at
+                a private draft); the switch-flow context line sits beneath it. */}
+            <p className="truncate text-[15px] font-semibold leading-tight text-foreground">
               Draft · only you can see this page
             </p>
             {isSwitchFlow ? (

@@ -30,13 +30,25 @@ export interface FormPanelHeaderProps {
 
 export function FormPanelHeader({ title, dirty, saveState, onSave }: FormPanelHeaderProps) {
   return (
-    <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-surface py-3">
-      <h2 className="text-base font-semibold text-foreground">{title}</h2>
+    // 33-06 (UX-05 / D-16 form-panel polish): a touch more vertical weight (`pb-4`)
+    // and a backdrop blur on the sticky header so a long scrolled form reads cleanly
+    // UNDER the always-reachable Save row, sharpening the panel's visual hierarchy.
+    // Chrome tokens only (Inter + Evergreen/Copper). The Save-proximity trust contract
+    // and the `sticky`/`z-10`/dirty-indicator semantics are unchanged.
+    <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-surface/95 pb-4 pt-3 backdrop-blur-sm">
+      <h2 className="text-[17px] font-semibold leading-tight tracking-[-0.01em] text-foreground">
+        {title}
+      </h2>
 
       {dirty ? (
+        // 33-06: the dirty indicator reads as a quiet chip (a soft `bg-surface-muted`
+        // pill in the warning tone) so "Unsaved changes" registers at a glance without
+        // nagging — color-independent (the dot + the word both carry the state). There
+        // is no `--color-warning-bg` chrome token, so the neutral muted surface is the
+        // sanctioned tint here (the warning hue lives in the text + dot).
         <span
           aria-live="polite"
-          className="flex items-center gap-1.5 text-[13px] leading-tight text-warning"
+          className="flex items-center gap-1.5 rounded-full bg-surface-muted px-2 py-0.5 text-[13px] leading-tight font-semibold text-warning"
         >
           <span aria-hidden="true" className="size-1.5 rounded-full bg-warning" />
           <span>Unsaved changes</span>

@@ -40,7 +40,16 @@
  */
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, ExternalLink, Eye, EyeOff, Mail, Settings, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  Mail,
+  MousePointerClick,
+  Settings,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -664,7 +673,15 @@ export function EditorShell({
           Your portfolio
         </h1>
 
-        <div className="ml-auto flex flex-wrap items-center gap-3">
+        {/* 33-06 (UX-05 / D-16 header polish): the ml-auto control cluster is tightened
+            from `gap-3` to `gap-2` so the same-weight bordered-button row reads as one
+            coherent group rather than five loosely-spaced controls, and leaves headroom
+            for the Share control (added in Plan 03). Chrome tokens only; the controls
+            keep their existing border/hover:text-accent/focus-ring idiom (the copper
+            accent stays on hover/focus only, never a fill). No structural rework — the
+            Edit/Preview toggle, Hide preview, Messages, Settings, Preview, View-my-page,
+            and the Publish toggle are unchanged in identity and order. */}
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {/* Phase 27 (D-17): the `< xl` Edit | Preview segmented toggle — swaps the
               visible pane on narrow screens where three columns don't fit. The
               small-screen preview is VIEW-ONLY (no click-to-edit). Hidden at xl+ where
@@ -1622,12 +1639,23 @@ function SectionPanel({
 
 /** The unselected empty pane (UI-SPEC States Matrix — never a blank void). */
 function EmptyPane() {
+  // 33-06 (UX-05 / D-16 form-panel polish): the bare left-aligned text block read as
+  // an unfinished state. It is now a calmer, centered empty state — a muted glyph in a
+  // soft `bg-surface-muted` chip over a constrained-width copy block — so the panel
+  // looks intentional before a section is picked. Chrome tokens only (Inter + the
+  // muted surface); no accent fill, no template token.
   return (
-    <div className="flex flex-col items-start gap-2 py-12">
-      <h2 className="text-[28px] font-semibold leading-tight tracking-[-0.01em] text-foreground">
+    <div className="flex flex-col items-center gap-4 py-16 text-center">
+      <span
+        aria-hidden="true"
+        className="flex size-12 items-center justify-center rounded-full bg-surface-muted text-muted-foreground"
+      >
+        <MousePointerClick className="size-6" />
+      </span>
+      <h2 className="text-[22px] font-semibold leading-tight tracking-[-0.01em] text-foreground">
         Pick a section to edit
       </h2>
-      <p className="text-base text-muted-foreground">
+      <p className="max-w-sm text-base leading-snug text-muted-foreground">
         Choose a section on the left to start editing. Every change you save goes
         live on your page.
       </p>
