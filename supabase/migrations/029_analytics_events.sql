@@ -50,7 +50,19 @@ CREATE POLICY "analytics_events own select"
   ));
 
 -- =============================================================================
--- 3. anon SELECT REVOKE backstop  (WR-08 defense-in-depth; T-33-01)
+-- 3. Explicit base grants  (self-contained — do NOT rely on platform defaults)
+-- =============================================================================
+-- New public tables must GRANT their base privileges explicitly rather than lean on
+-- the Supabase platform-default ALTER DEFAULT PRIVILEGES: a local `supabase db reset`
+-- (and some CI/restore paths) do NOT reapply those defaults to freshly-created tables,
+-- so the own-select RLS policy above would have no base SELECT to build on (42501).
+-- service_role is the sole writer (the /api/event route, D-09); authenticated reads
+-- its own rows via the own-select policy (RLS restricts rows; the grant enables access).
+GRANT SELECT ON analytics_events TO authenticated;
+GRANT INSERT, SELECT ON analytics_events TO service_role;
+
+-- =============================================================================
+-- 4. anon SELECT REVOKE backstop  (WR-08 defense-in-depth; T-33-01)
 -- =============================================================================
 -- This is a no-public-view, PII-adjacent table. Like page_views/messages (005:187),
 -- REVOKE anon's base SELECT so a future stray "public read" policy or RLS regression

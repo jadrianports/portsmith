@@ -57,7 +57,19 @@ CREATE POLICY "draft_shares own all"
   ));
 
 -- =============================================================================
--- 3. anon SELECT REVOKE backstop  (WR-08 defense-in-depth)
+-- 3. Explicit base grants  (self-contained — do NOT rely on platform defaults)
+-- =============================================================================
+-- New public tables must GRANT their base privileges explicitly rather than lean on
+-- the Supabase platform-default ALTER DEFAULT PRIVILEGES: a local `supabase db reset`
+-- (and some CI/restore paths) do NOT reapply those defaults to freshly-created tables,
+-- so the own_all RLS policy above would have no base privileges to build on (42501).
+-- authenticated owns generate/revoke via the own_all policy (RLS restricts to its row);
+-- service_role performs ONLY the token-gated recipient SELECT (get-portfolio-by-draft-token).
+GRANT SELECT, INSERT, UPDATE, DELETE ON draft_shares TO authenticated;
+GRANT SELECT ON draft_shares TO service_role;
+
+-- =============================================================================
+-- 4. anon SELECT REVOKE backstop  (WR-08 defense-in-depth)
 -- =============================================================================
 -- draft_shares holds the opaque preview token; anon must never read it through
 -- PostgREST. The recipient read is the supabaseAdmin (service-role) token-gated path,
