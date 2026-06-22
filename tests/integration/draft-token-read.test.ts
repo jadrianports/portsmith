@@ -54,6 +54,7 @@ const DRAFT_READ_MOD = '@/lib/portfolio/get-portfolio-by-draft-token';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 let userA: TestUser;
+let ownerAClient: SupabaseClient;
 let portfolioA: string;
 let activeToken: string;
 let expiredToken: string;
@@ -81,8 +82,8 @@ beforeAll(async () => {
     display_name: 'DIST-02 Read User',
   });
 
-  const ownerA = await signedInClient(userA);
-  const { data: pid, error } = await ownerA.rpc('initialize_portfolio');
+  ownerAClient = await signedInClient(userA);
+  const { data: pid, error } = await ownerAClient.rpc('initialize_portfolio');
   expect(error).toBeNull();
   portfolioA = pid as unknown as string;
 
@@ -100,9 +101,17 @@ afterAll(async () => {
   await cleanupTestUsers(userA?.id);
 });
 
-/** Upsert the single draft_shares row into a given state (PK = portfolio_id). */
+/**
+ * Upsert the single draft_shares row into a given state (PK = portfolio_id).
+ *
+ * Writes go through the AUTHENTICATED owner client (own_all RLS), NOT the service
+ * role: by the durable security posture (migration 030), service_role holds ONLY
+ * SELECT on draft_shares — the token-gated recipient read — while the owner does all
+ * DML via their own_all policy. Seeding here mirrors that production write path
+ * exactly (the generate/revoke action is authenticated-RLS, never supabaseAdmin).
+ */
 async function setDraftRow(token: string, expiresMsFromNow: number, revoked: boolean) {
-  await admin.from('draft_shares').upsert(
+  const { error } = await ownerAClient.from('draft_shares').upsert(
     {
       portfolio_id: portfolioA,
       token,
@@ -111,6 +120,7 @@ async function setDraftRow(token: string, expiresMsFromNow: number, revoked: boo
     },
     { onConflict: 'portfolio_id' },
   );
+  expect(error).toBeNull();
 }
 
 describe('DIST-02 — getPortfolioByDraftToken surface (RED until Plan 33-02)', () => {
@@ -160,35 +170,64 @@ describe('DIST-02 — the draft_shares lookup invariants the read enforces (ACTI
   });
 });
 
-// RED until Plan 33-02 ships the read + its column-safe projection. Skipped so the
-// not-yet-existing read is not invoked on every run; flip to `describe(` when 33-02
-// lands `getPortfolioByDraftToken`.
-describe.skip('DIST-02 — the resolved draft result is column-safe + non-leaking (RED until 33-02)', () => {
+// GREEN as of Plan 33-02: `getPortfolioByDraftToken` exists, so the read's actual
+// resolve/null/projection contract is exercised end-to-end against the live stack.
+// Each block re-seeds the single PK row into the state it asserts (the row is shared
+// across the suite, PK = portfolio_id). The read accepts ONLY a 43-char base64url
+// token (the format gate), so the seed tokens here use that exact shape.
+describe('DIST-02 — the resolved draft result is column-safe + non-leaking (33-02 GREEN)', () => {
+  // 43-char base64url tokens (the read's `/^[A-Za-z0-9_-]{43}$/` format gate).
+  const validToken = Buffer.from(crypto.randomUUID() + crypto.randomUUID())
+    .toString('base64url')
+    .slice(0, 43);
+
   it('a valid token → only this owner’s draft (no other portfolio leaks)', async () => {
+    await setDraftRow(validToken, SEVEN_DAYS_MS, false);
     const mod = (await import(/* @vite-ignore */ DRAFT_READ_MOD)) as {
-      getPortfolioByDraftToken: (token: string) => Promise<{ portfolio?: { id?: string } } | null>;
+      getPortfolioByDraftToken: (
+        token: string,
+      ) => Promise<{ portfolioId?: string } | null>;
     };
-    const result = await mod.getPortfolioByDraftToken(activeToken);
-    expect(result?.portfolio?.id).toBe(portfolioA);
+    // PortfolioData carries `portfolioId` (the contract shape), not a nested `portfolio`.
+    const result = await mod.getPortfolioByDraftToken(validToken);
+    expect(result?.portfolioId).toBe(portfolioA);
   });
 
   it('invalid / expired / revoked token → null (notFound)', async () => {
     const mod = (await import(/* @vite-ignore */ DRAFT_READ_MOD)) as {
       getPortfolioByDraftToken: (token: string) => Promise<unknown | null>;
     };
+    // A well-formed-but-unknown token (43-char base64url) → no row → null.
+    const unknownToken = 'A'.repeat(43);
+    expect(await mod.getPortfolioByDraftToken(unknownToken)).toBeNull();
+    // A malformed token is rejected by the format gate before any query → null.
     expect(await mod.getPortfolioByDraftToken('tok_does_not_exist')).toBeNull();
-    expect(await mod.getPortfolioByDraftToken(expiredToken)).toBeNull();
-    expect(await mod.getPortfolioByDraftToken(revokedToken)).toBeNull();
+
+    // Expired (D-02): the row exists but expires_at < now() → read returns null.
+    await setDraftRow(validToken, -SEVEN_DAYS_MS, false);
+    expect(await mod.getPortfolioByDraftToken(validToken)).toBeNull();
+
+    // Revoked (D-01): active expiry but revoked_at set → read returns null.
+    await setDraftRow(validToken, SEVEN_DAYS_MS, true);
+    expect(await mod.getPortfolioByDraftToken(validToken)).toBeNull();
   });
 
   it('the projected result carries NO private profile column (email/role/storage/locked)', async () => {
+    await setDraftRow(validToken, SEVEN_DAYS_MS, false); // re-activate for the projection read.
     const mod = (await import(/* @vite-ignore */ DRAFT_READ_MOD)) as {
-      getPortfolioByDraftToken: (token: string) => Promise<Record<string, unknown> | null>;
+      getPortfolioByDraftToken: (
+        token: string,
+      ) => Promise<{ profile?: Record<string, unknown> } | null>;
     };
-    const result = await mod.getPortfolioByDraftToken(activeToken);
-    const serialized = JSON.stringify(result ?? {});
+    const result = await mod.getPortfolioByDraftToken(validToken);
+    expect(result).not.toBeNull();
+    // KEY ABSENCE (the documented asymmetry): the private column must not be a key on
+    // the PublicProfile projection at all — not merely null. Scoped to `profile.*`
+    // because the private columns ARE profile columns; a coarse whole-tree substring
+    // check false-matches benign template field NAMES (e.g. the experience "role" field).
+    const profileKeys = Object.keys(result?.profile ?? {});
     for (const col of PRIVATE_PROFILE_COLUMNS) {
-      expect(serialized).not.toContain(`"${col}"`);
+      expect(profileKeys).not.toContain(col);
     }
   });
 });

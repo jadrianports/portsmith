@@ -64,6 +64,7 @@ let userB: TestUser;
 let portfolioA: string;
 let portfolioB: string;
 let ownerA: SupabaseClient;
+let ownerB: SupabaseClient;
 
 async function signedInClient(user: TestUser): Promise<SupabaseClient> {
   const c = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
@@ -103,7 +104,7 @@ beforeAll(async () => {
   });
 
   ownerA = await signedInClient(userA);
-  const ownerB = await signedInClient(userB);
+  ownerB = await signedInClient(userB);
   portfolioA = await bootstrapPortfolioAs(ownerA);
   portfolioB = await bootstrapPortfolioAs(ownerB);
 }, 30_000);
@@ -185,9 +186,11 @@ describe('DIST-02 — owner mints + rotates + revokes their OWN draft_shares row
 
 describe('DIST-02 — cross-tenant draft_shares write changes 0 rows (T-33-02)', () => {
   it('A cannot mint/alter B’s draft_shares row (RLS own_all → 0 rows changed)', async () => {
-    // Seed B's row via the service role (bypasses RLS).
+    // Seed B's row as B (authenticated own_all RLS). service_role holds ONLY SELECT on
+    // draft_shares by the durable posture (migration 030) — the owner does all DML — so
+    // B seeds their own row exactly as the production generate action would.
     const bToken = `tok_${crypto.randomUUID().replace(/-/g, '')}`;
-    await admin.from('draft_shares').upsert(
+    const { error: seedError } = await ownerB.from('draft_shares').upsert(
       {
         portfolio_id: portfolioB,
         token: bToken,
@@ -196,6 +199,7 @@ describe('DIST-02 — cross-tenant draft_shares write changes 0 rows (T-33-02)',
       },
       { onConflict: 'portfolio_id' },
     );
+    expect(seedError).toBeNull();
 
     // A (authenticated) attempts to hijack B's row, exactly as a forged action call would.
     await ownerA
