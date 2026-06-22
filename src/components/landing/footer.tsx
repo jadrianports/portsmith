@@ -11,6 +11,7 @@
  */
 import Link from 'next/link';
 
+import { Lockup } from '@/components/brand/lockup';
 import { Link as TextLink } from '@/components/ui/link';
 
 export function Footer() {
@@ -19,9 +20,9 @@ export function Footer() {
       <div className="mx-auto flex max-w-6xl flex-col items-start gap-4 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
         <Link
           href="/"
-          className="rounded-sm font-semibold text-brand outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          Portsmith
+          <Lockup />
         </Link>
         <nav className="flex items-center gap-6">
           <TextLink href="/explore">Explore portfolios</TextLink>

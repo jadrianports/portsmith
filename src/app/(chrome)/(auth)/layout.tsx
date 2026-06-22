@@ -11,6 +11,7 @@
  * Stays an RSC: only the form islands inside each page are `'use client'`.
  * Token-driven — no inline hex.
  */
+import { Lockup } from '@/components/brand/lockup';
 import { Link } from '@/components/ui/link';
 
 export default function AuthLayout({
@@ -23,9 +24,9 @@ export default function AuthLayout({
       <header>
         <Link
           href="/"
-          className="text-xl font-semibold !text-brand !no-underline hover:!text-brand-hover"
+          className="!no-underline hover:!text-brand-hover"
         >
-          Portsmith
+          <Lockup wordmarkClassName="text-xl" />
         </Link>
       </header>
 

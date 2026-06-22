@@ -14,6 +14,7 @@
  */
 import Link from 'next/link';
 
+import { Lockup } from '@/components/brand/lockup';
 import { Link as TextLink } from '@/components/ui/link';
 
 import { CtaLink } from './cta-link';
@@ -24,9 +25,9 @@ export function LandingHeader() {
       <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <Link
           href="/"
-          className="rounded-sm text-lg font-semibold text-brand outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          className="rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          Portsmith
+          <Lockup wordmarkClassName="text-lg" />
         </Link>
         <div className="flex items-center gap-3 sm:gap-4">
           <TextLink href="/login">Login</TextLink>
