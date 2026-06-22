@@ -13,8 +13,9 @@
  * `(chrome)/opengraph-image.tsx` file-convention card via Next metadata inheritance
  * (Phase 32 / BRAND-04 / D-11) — the old explicit `og-default.png` image refs were
  * removed here so they no longer outrank that card for `/`. All absolute URLs derive from
- * `siteUrl()` (D-11 / T-22-03): no `metadataBase` is configured, so a relative OG image
- * URL would be rejected by crawlers (Pitfall 5).
+ * `siteUrl()` (D-11 / T-22-03); the file-convention OG card resolves against the
+ * `metadataBase` set on the `(chrome)` root layout (CR-01 — driven by `siteOrigin()`/
+ * `NEXT_PUBLIC_SITE_URL`), so its `og:image` URL is absolute in production, not localhost.
  *
  * The `(chrome)` root layout already supplies `<html>`/`<body>`/`<Providers>` + Inter +
  * BotID and has NO shared nav — so the page supplies ONLY its own header/main/footer.

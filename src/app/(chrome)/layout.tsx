@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { BotIdClient } from 'botid/client';
 import { Providers } from './providers';
+import { siteOrigin } from '@/lib/url';
 import './globals.css';
 
 /**
@@ -40,7 +41,18 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
+/**
+ * CR-01 (Phase 32) — `metadataBase` is REQUIRED for the file-convention OG card to
+ * resolve to an absolute URL. Phase 32 (BRAND-04) removed the explicit `og-default.png`
+ * image refs from `(chrome)/page.tsx` so the sibling `opengraph-image.tsx` card wins via
+ * metadata inheritance — but Next resolves a file-convention `og:image` against
+ * `metadataBase`, and with it UNSET the URL silently falls back to `http://localhost:3000`
+ * in production. Drive it from `siteOrigin()` (env `NEXT_PUBLIC_SITE_URL`, the same source
+ * as `siteUrl()`), never the request Host — so a domain switch stays an env + DNS change
+ * and every chrome route ships correct absolute OG/Twitter image + canonical URLs.
+ */
 export const metadata: Metadata = {
+  metadataBase: new URL(siteOrigin()),
   title: 'Portsmith',
   description:
     'Publish a polished, single-scroll portfolio by filling in structured content and choosing a curated template.',
