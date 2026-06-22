@@ -276,3 +276,58 @@ describe('SHOW-04 — /explore stays ● (SSG)/ISR, never ƒ (dynamic)', () => {
     expect(revalidate as number).toBeGreaterThan(0);
   });
 });
+
+/**
+ * DIST-02 (Phase 33, Wave-0 RED) — the NEW `/draft/[token]` route is intrinsically
+ * DYNAMIC (ƒ), NOT prerendered — the NEGATIVE complement to every positive SSG/ISR
+ * assertion above.
+ *
+ * Plan 33-02 adds `src/app/(portfolio)/draft/[token]/page.tsx`: a draft-preview
+ * route keyed on a secret, revocable token. Unlike `/[username]` (whose instances
+ * `generateStaticParams` enumerates from public usernames), a draft token is a
+ * SECRET — it MUST NOT be enumerated into `generateStaticParams`, MUST NOT cache a
+ * prerendered instance (a cached draft would survive revoke — D-01), and reads
+ * per-request via `supabaseAdmin` gated on the token. So in the prerender manifest
+ * it appears in `dynamicRoutes` (the ƒ table) with NO concrete `/draft/<token>`
+ * key in `routes` (the ● SSG/ISR table). This block is the regression guard that a
+ * future edit never accidentally prerenders a draft instance.
+ *
+ * This is a NEW, ADDITIVE block — it does NOT touch the `/[username]`, SUB_ROUTES,
+ * SHARE-02, HANDLE-02, or SHOW-04 assertions above; their staying-green is the
+ * DIST-02 no-public-route-regression half.
+ *
+ * ── CROSS-WAVE DEPENDENCY (RED-TOLERANT, skipped now) ─────────────────────────
+ * `/draft/[token]/page.tsx` does NOT exist until Plan 33-02, so a build run in THIS
+ * plan's wave emits NO `/draft/[token]` entry in `dynamicRoutes` at all — a hard
+ * assertion would false-FAIL here on a missing route (not on a real regression).
+ * The block is therefore `describe.skip` until 33-02 lands the route AND a
+ * production build regenerates the manifest with the `/draft/[token]` dynamic
+ * entry. Drop `.skip` in 33-02 (the owning plan) to turn this GREEN. The assertion
+ * shape is final; only its activation is deferred (documented in 33-01-SUMMARY.md).
+ */
+const DRAFT_ROUTE_SRC = '/draft/[token]';
+
+describe.skip('DIST-02 — /draft/[token] is DYNAMIC (ƒ), never prerendered (RED until 33-02)', () => {
+  it('does NOT prerender any concrete /draft/<token> instance (no SSG/ISR cache of a secret draft)', () => {
+    const pm = readPrerenderManifest();
+    const prerenderedDraftKeys = Object.keys(pm.routes ?? {}).filter((k) =>
+      k.startsWith('/draft/'),
+    );
+    expect(
+      prerenderedDraftKeys,
+      `a /draft/<token> instance is prerendered (${prerenderedDraftKeys.join(', ')}) — a draft ` +
+        'token is SECRET and revocable; enumerating it into generateStaticParams or caching a ' +
+        'prerendered instance would survive a revoke (D-01) and leak the draft. The route MUST ' +
+        'stay dynamic (ƒ) and read per-request via supabaseAdmin gated on the token.',
+    ).toHaveLength(0);
+  });
+
+  it('appears in the dynamicRoutes (ƒ) table as /draft/[token]', () => {
+    const pm = readPrerenderManifest();
+    expect(
+      Object.keys(pm.dynamicRoutes ?? {}),
+      `${DRAFT_ROUTE_SRC} is absent from prerender-manifest.dynamicRoutes — the draft route is ` +
+        'not registered as a dynamic route (it must NOT be a prerendered/static route).',
+    ).toContain(DRAFT_ROUTE_SRC);
+  });
+});
