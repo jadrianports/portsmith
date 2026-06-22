@@ -1,0 +1,12 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Portsmith">
+  <!--
+    Static modern favicon (D-02/D-10) — served directly by Next as /icon.svg.
+    The same seal + copper "P" geometry as src/components/brand/logo.tsx, with the LIGHT
+    @theme values baked in (a static asset has no CSS cascade): evergreen seal ring
+    #1B3A2E (--color-brand) + copper "P" #C9683A (--color-accent). Hex literals are
+    sanctioned here — this is a static asset file, not the @theme/component layer the
+    D-06 no-hex rule governs. Open-counter "P" for 16px legibility (D-04).
+  -->
+  <circle cx="16" cy="16" r="14" fill="none" stroke="#1B3A2E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M12 9.5a1.25 1.25 0 0 1 1.25-1.25h4.25a4.75 4.75 0 0 1 0 9.5H14.5v5.25a1.25 1.25 0 0 1-2.5 0V9.5Zm2.5 5.75h3a2.25 2.25 0 0 0 0-4.5h-3v4.5Z" fill="#C9683A" />
+</svg>
