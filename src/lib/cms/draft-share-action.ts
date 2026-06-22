@@ -66,23 +66,39 @@ const REVOKE_FAILED = 'We couldn’t revoke your draft link. Please try again.';
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * Resolve the AUTHENTICATED caller's OWN portfolio id (RLS-scoped to their row), or
- * `null` when they have none yet. Used by both actions to key the `draft_shares`
- * write on the owner's portfolio (PK = portfolio_id, D-03) WITHOUT trusting any
- * client-supplied id.
+ * The outcome of resolving the caller's own portfolio id (WR-03). A discriminated union
+ * so callers can tell the THREE conditions apart — previously a bare `null` conflated a
+ * transient DB read error with "owner has no portfolio yet", which let `revokeDraftShare`
+ * report a false `{ ok: true }` on a read error (a leaked link believed dead but still live):
+ *   - `found`  — the owner has a portfolio; `id` is its PK.
+ *   - `none`   — the owner genuinely has no portfolio yet (a clean, non-error empty read).
+ *   - `error`  — the read FAILED (transient DB error); the caller must NOT treat this as a
+ *               no-op success.
+ */
+type ResolvePortfolioResult =
+  | { status: 'found'; id: string }
+  | { status: 'none' }
+  | { status: 'error' };
+
+/**
+ * Resolve the AUTHENTICATED caller's OWN portfolio id (RLS-scoped to their row). Returns a
+ * discriminated {@link ResolvePortfolioResult} (WR-03) so a transient read error is never
+ * confused with "no portfolio yet". Used by both actions to key the `draft_shares` write on
+ * the owner's portfolio (PK = portfolio_id, D-03) WITHOUT trusting any client-supplied id.
  */
 async function resolveOwnPortfolioId(
   db: Awaited<ReturnType<typeof createClient>>,
   sub: string,
-): Promise<string | null> {
+): Promise<ResolvePortfolioResult> {
   // RLS scopes this to the caller's own portfolio (portfolios.user_id = auth.uid()).
   const { data, error } = await db
     .from('portfolios')
     .select('id')
     .eq('user_id', sub) // WR-05: `sub` guaranteed present (no `?? ''`).
     .maybeSingle();
-  if (error || !data?.id) return null;
-  return data.id;
+  if (error) return { status: 'error' }; // WR-03: a read error is NOT "no portfolio".
+  if (!data?.id) return { status: 'none' };
+  return { status: 'found', id: data.id };
 }
 
 /**
@@ -104,8 +120,11 @@ export async function generateDraftShare(): Promise<DraftShareResult> {
   // 3) AUTHENTICATED RLS write (NEVER supabaseAdmin — the owner write goes through
   //    their own_all policy; only the recipient READ is service-role).
   const supabase = await createClient();
-  const portfolioId = await resolveOwnPortfolioId(supabase, sub);
-  if (!portfolioId) return { ok: false, error: NO_PORTFOLIO };
+  const resolved = await resolveOwnPortfolioId(supabase, sub);
+  // WR-03: distinguish a transient read error (retry) from "no portfolio yet".
+  if (resolved.status === 'error') return { ok: false, error: SAVE_FAILED };
+  if (resolved.status === 'none') return { ok: false, error: NO_PORTFOLIO };
+  const portfolioId = resolved.id;
 
   // Server-minted 256-bit token (V6 — NEVER Math.random). base64url → a 43-char,
   // URL-safe opaque string matching the read's `/^[A-Za-z0-9_-]{43}$/` format gate.
@@ -151,9 +170,15 @@ export async function revokeDraftShare(): Promise<RevokeDraftShareResult> {
   // 3) AUTHENTICATED RLS write (NEVER supabaseAdmin). Stamp revoked_at on the owner's
   //    own row — RLS scopes it to their portfolio; a cross-tenant target affects 0 rows.
   const supabase = await createClient();
-  const portfolioId = await resolveOwnPortfolioId(supabase, sub);
-  // No portfolio (and thus no draft_shares row) → nothing to revoke → success.
-  if (!portfolioId) return { ok: true };
+  const resolved = await resolveOwnPortfolioId(supabase, sub);
+  // WR-03: a transient read error must NOT masquerade as a successful revoke — for a
+  // security-revoke control ("kill this leaked link now"), a false `{ ok: true }` would
+  // tell the owner the link is dead while it stays live for its full 7-day expiry. Surface
+  // a generic retryable failure so the owner re-attempts the revoke.
+  if (resolved.status === 'error') return { ok: false, error: REVOKE_FAILED };
+  // No portfolio (and thus no draft_shares row) → genuinely nothing to revoke → success.
+  if (resolved.status === 'none') return { ok: true };
+  const portfolioId = resolved.id;
 
   const { error } = await supabase
     .from('draft_shares')
