@@ -53,8 +53,14 @@ export const runtime = 'nodejs';
 const EVENT_CAP = 600;
 const EVENT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
-/** Host substrings that mark a `social` outbound destination (D-10). */
-const SOCIAL_HOST_SUBSTRINGS: readonly string[] = [
+/**
+ * Registrable domains that mark a `social` outbound destination (D-10). WR-01: these are
+ * matched by exact host OR a dotted subdomain suffix (see `hostMatches`), NOT a bare
+ * substring — so `x.com` no longer matches `max.com`/`box.com` and `dev.to` no longer
+ * matches `yourdev.to`. Every entry MUST be a registrable domain (a bare label like
+ * `mastodon` would never suffix-match a real host, so the canonical instance is used).
+ */
+const SOCIAL_HOSTS: readonly string[] = [
   'linkedin.com',
   'github.com',
   'x.com',
@@ -69,7 +75,7 @@ const SOCIAL_HOST_SUBSTRINGS: readonly string[] = [
   'behance.net',
   'medium.com',
   'dev.to',
-  'mastodon',
+  'mastodon.social',
   'threads.net',
   'bsky.app',
   'twitch.tv',
@@ -91,10 +97,21 @@ function deriveCategory(destinationHost: string | null | undefined): string {
   if (host.startsWith('mailto:') || host.startsWith('tel:') || host === 'mailto' || host === 'tel') {
     return 'contact';
   }
-  if (SOCIAL_HOST_SUBSTRINGS.some((s) => host.includes(s))) {
+  // WR-01: suffix/exact match, NEVER a substring — `x.com` must not catch `max.com`.
+  // `endsWith('.' + needle)` covers `www.` and other subdomains of the registrable domain.
+  if (SOCIAL_HOSTS.some((s) => hostMatches(host, s))) {
     return 'social';
   }
   return 'project';
+}
+
+/**
+ * WR-01: a host belongs to a registrable domain `needle` when it equals it exactly or is
+ * a dotted subdomain of it — NEVER a bare substring. So `x.com` matches `x.com` and
+ * `m.x.com` but not `max.com`; `dev.to` matches `dev.to` but not `yourdev.to`.
+ */
+function hostMatches(host: string, needle: string): boolean {
+  return host === needle || host.endsWith('.' + needle);
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
