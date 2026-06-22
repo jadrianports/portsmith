@@ -44,6 +44,7 @@ import { ArrowLeft, ExternalLink, Eye, EyeOff, Mail, Settings, X } from 'lucide-
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { Lockup } from '@/components/brand/lockup';
 import { cmsKeys } from '@/lib/query/cms-keys';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { usePreviewSaveSignal } from '@/lib/stores/preview-save-signal';
@@ -648,8 +649,17 @@ export function EditorShell({
         }
       />
 
-      {/* ── Header bar (surface, hairline) — H1 + status + Preview + Publish ── */}
+      {/* ── Header bar (surface, hairline) — brand + H1 + status + Preview + Publish ── */}
       <header className="flex flex-wrap items-center gap-4 border-b border-border bg-surface px-4 py-3 sm:px-6">
+        {/* 32-03 (D-13): compact brand mark top-left — slots into the existing
+            header, NO redesign. Shared <Lockup> (sm-collapse to mark-only) wrapped
+            in a focus-ringed Link; the H1 + ml-auto cluster below are untouched. */}
+        <Link
+          href="/dashboard"
+          className="rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <Lockup />
+        </Link>
         <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.01em] text-foreground">
           Your portfolio
         </h1>

@@ -24,6 +24,8 @@ import { LayoutTemplate, LineChart, ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { Lockup } from '@/components/brand/lockup';
+
 const TABS = [
   { href: '/admin', label: 'Trust & Safety', Icon: ShieldAlert },
   { href: '/admin/templates', label: 'Templates', Icon: LayoutTemplate },
@@ -38,9 +40,18 @@ export function AdminNav() {
   return (
     <nav
       aria-label="Admin"
-      className="mx-auto w-full max-w-2xl px-4 pt-4 sm:px-6 lg:px-8"
+      className="mx-auto flex w-full max-w-2xl items-center gap-4 px-4 pt-4 sm:px-6 lg:px-8"
     >
-      <ul className="flex items-center gap-1 border-b border-border">
+      {/* 32-03 (D-13): compact brand mark LEFT of the tab bar — slots inline, NO
+          redesign of the tabs. Shared <Lockup> (sm-collapse) in a focus-ringed Link;
+          the tab entries + active-state copper underline below are untouched. */}
+      <Link
+        href="/admin"
+        className="rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >
+        <Lockup />
+      </Link>
+      <ul className="flex flex-1 items-center gap-1 self-end border-b border-border">
         {TABS.map(({ href, label, Icon }) => {
           // /admin is active ONLY on the exact path (so it doesn't light up under
           // /admin/templates); /admin/templates is active on its own subtree.
