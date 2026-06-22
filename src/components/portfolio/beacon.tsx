@@ -37,6 +37,10 @@ const OWN_USERNAMES_KEY = 'portsmith-own-usernames';
 /** The static marker the public page emits, read for the portfolio_id (Pattern 1A). */
 const MARKER_SELECTOR = '[data-portfolio-id]';
 const PAGE_VIEW_ENDPOINT = '/api/page-view';
+/** The outbound-click ingestion endpoint (ANLY-05 / D-09) — the /api/page-view sibling. */
+const EVENT_ENDPOINT = '/api/event';
+/** Guard so the delegated click listener is installed exactly once per document. */
+let clickListenerInstalled = false;
 
 /**
  * Fire a single page-view beacon for `pathname` (idempotent per path per session).
@@ -102,4 +106,87 @@ export function recordView(pathname: string): void {
       /* swallow — a missed view is acceptable for a beacon */
     });
   }
+}
+
+/**
+ * The outbound-anchor `destination_host` for an `<a href>` (ANLY-05 / D-10). For a
+ * `mailto:`/`tel:` link the SCHEME is sent verbatim (`mailto:`/`tel:`) so the server
+ * can bucket it as `contact`; for an http(s) link the HOST is sent. Returns `null`
+ * for a same-host (internal) link or an unparseable href — the caller skips those.
+ */
+function outboundDestinationHost(href: string): string | null {
+  // Scheme links (contact channels) — send the scheme, not a host (D-10).
+  if (href.startsWith('mailto:')) return 'mailto:';
+  if (href.startsWith('tel:')) return 'tel:';
+  try {
+    const url = new URL(href, window.location.href);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null; // not an outbound web link
+    if (url.host === window.location.host) return null; // internal navigation — not an outbound click
+    return url.host;
+  } catch {
+    return null; // malformed href — skip
+  }
+}
+
+/**
+ * Install the delegated outbound-anchor click listener ONCE (ANLY-05 / D-07/D-08).
+ * Idempotent — repeat calls (one per route-enter via the lazy import) are no-ops.
+ *
+ * A single capture-phase `document` click listener walks up from the event target to
+ * the nearest `<a href>`, computes the outbound destination host (different host, or
+ * a `mailto:`/`tel:` scheme), reads the `portfolio_id` from the SAME
+ * `[data-portfolio-id]` marker `recordView` uses, and fires a plain-JSON beacon to
+ * `/api/event`. The server derives the category (D-10) and is the only Zod gate.
+ *
+ * NO per-session dedup: a repeated outbound click is real engagement signal (unlike a
+ * page view). Fire-and-forget — a missed click is acceptable.
+ */
+export function installOutboundClickListener(): void {
+  if (clickListenerInstalled) return;
+  clickListenerInstalled = true;
+
+  document.addEventListener(
+    'click',
+    (event) => {
+      // Walk up to the nearest anchor with an href (the click may land on a child span/icon).
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest('a[href]');
+      if (!anchor) return;
+
+      const href = anchor.getAttribute('href');
+      if (!href) return;
+
+      const destinationHost = outboundDestinationHost(href);
+      if (!destinationHost) return; // internal / non-web link — not an outbound click
+
+      // The portfolio_id from the page-emitted marker (Pattern 1A). Absent → no-op.
+      const pid = document.querySelector(MARKER_SELECTOR)?.getAttribute('data-portfolio-id');
+      if (!pid) return;
+
+      const payload = {
+        portfolio_id: pid,
+        destination_host: destinationHost,
+        path: window.location.pathname,
+      };
+
+      // Fire-and-forget — sendBeacon primary (a JSON Blob carries the Content-Type),
+      // fetch(keepalive) fallback. Copied from recordView's transport (endpoint only changed).
+      const body = JSON.stringify(payload);
+      const blob = new Blob([body], { type: 'application/json' });
+      const sent =
+        typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(EVENT_ENDPOINT, blob);
+      if (!sent) {
+        void fetch(EVENT_ENDPOINT, {
+          method: 'POST',
+          keepalive: true,
+          headers: { 'content-type': 'application/json' },
+          body,
+        }).catch(() => {
+          /* swallow — a missed click is acceptable for a beacon */
+        });
+      }
+    },
+    { capture: true },
+  );
 }

@@ -38,8 +38,13 @@ export function BeaconMount() {
   useEffect(() => {
     if (!pathname) return;
     // Lazy browser-only import — the beacon logic loads in its OWN async chunk,
-    // OUTSIDE the layout's shared First Load JS (D-20/D-25).
-    void import('./beacon').then((m) => m.recordView(pathname));
+    // OUTSIDE the layout's shared First Load JS (D-20/D-25). The same lazy chunk also
+    // installs the delegated outbound-click listener (idempotent — ANLY-05/D-08), so
+    // the click capture rides off rootMainFiles too.
+    void import('./beacon').then((m) => {
+      m.installOutboundClickListener();
+      m.recordView(pathname);
+    });
   }, [pathname]);
 
   return null; // renders nothing
