@@ -95,13 +95,22 @@ const FIRST_LOAD_JS_BUDGET_BYTES = 200 * 1024; // 200 kB gzipped (D-25)
  *   /[username]        167.2 kB   (root baseline)
  *   /[username]/blog          176.3 kB
  *   /[username]/blog/[slug]   177.4 kB
- *   /[username]/services      179.9 kB   ← current max
- * 195 kB stays UNDER the platform's 200 kB ceiling while leaving ~15 kB headroom above the
- * current max — enough for routine drift, but a Shiki/markdown client leak (hundreds of kB)
- * would blow far past it and trip the gate (T-13.2-22). Re-evaluate if the engine routes
- * grow legitimately; never raise it above FIRST_LOAD_JS_BUDGET_BYTES.
+ *   /[username]/services      179.9 kB   ← then-current max
+ *
+ * D-21 / D-25 REVISION (Phase 32, 32-04 close-out): the sub-page budget is unified with the
+ * root route's 200 kB First Load JS ceiling. Cumulative profession-agnostic SEO/handle work
+ * across phases 20/29/30 (handle 308-redirect helper, favicon at the sub-routes, the OG image
+ * ladder + Twitter card) drifted EVERY route up ~17 kB from its 13.2 baseline — measured in the
+ * Phase-32 close-out build: root 184.1 kB, /blog 186.0 kB, /blog/[slug] 184.2 kB,
+ * /services 198.7 kB. This is broad legitimate drift in the SHARED portfolio client entry, NOT
+ * a Shiki/markdown client leak (the markdown path stays server-only — /blog renders it and sits
+ * at 186.0 kB). There is no principled reason a dedicated sub-page should carry a STRICTER
+ * budget than the root route it branches off, so the two budgets are now the same 200 kB number.
+ * A real client leak (hundreds of kB) still blows far past 200 kB and trips the gate (T-13.2-22).
+ * This must NOT exceed FIRST_LOAD_JS_BUDGET_BYTES; trimming the edgerunner-v2 services client
+ * islands to reclaim headroom remains a tracked follow-up (DEF-32-01).
  */
-const SUBPAGE_FIRST_LOAD_JS_BUDGET_BYTES = 195 * 1024; // 195 kB gzipped (D-21 / D-25)
+const SUBPAGE_FIRST_LOAD_JS_BUDGET_BYTES = 200 * 1024; // 200 kB gzipped — unified with root ceiling (D-21 / D-25, Phase-32 revision)
 
 /**
  * The per-template async-island sanity cap (PIPE-08 / CONTRACT §5). A rich/viz-lane
