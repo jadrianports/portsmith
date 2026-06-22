@@ -147,9 +147,21 @@ export function computeConversion(messages: number, views: number): number | nul
 }
 
 /**
+ * The max distinct destinations kept in the serialized RSC payload (CR-01 / WR-04). The
+ * card only ever displays a small slice (MAX_DESTINATIONS = 4), so a generous cap well
+ * above the display slice preserves the legitimate top list while bounding a flood of
+ * attacker-manufactured distinct hosts from inflating the serialized props.
+ */
+const MAX_TOP_DESTINATIONS = 50;
+
+/**
  * Group the windowed outbound-click rows by destination host, sorted by clicks desc
  * (ANLY-05). Mirrors {@link buildTopReferrers}'s in-TS grouping. Rows with no host are
- * skipped (the card shows named destinations only).
+ * skipped (the card shows named destinations only). The result is capped to
+ * {@link MAX_TOP_DESTINATIONS} (CR-01/WR-04): the destination host is free-form and, on
+ * the anonymous beacon, attacker-influenceable, so the unbounded distinct-host map is
+ * sliced after sorting — a flood cannot inflate the serialized payload past the cap while
+ * the legitimate top destinations are always retained.
  */
 function buildTopDestinations(rows: AnalyticsEventWindowRow[]): OwnerDestinationRow[] {
   const counts = new Map<string, number>();
@@ -160,7 +172,8 @@ function buildTopDestinations(rows: AnalyticsEventWindowRow[]): OwnerDestination
   }
   return [...counts.entries()]
     .map(([host, clicks]) => ({ host, clicks }))
-    .sort((a, b) => b.clicks - a.clicks);
+    .sort((a, b) => b.clicks - a.clicks)
+    .slice(0, MAX_TOP_DESTINATIONS);
 }
 
 /** `YYYY-MM-DD` (UTC) for a date — the per-day bucket key + the series label. */
