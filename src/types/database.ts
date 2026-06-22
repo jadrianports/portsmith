@@ -1161,6 +1161,48 @@ export type Database = {
           },
         ]
       }
+      analytics_events: {
+        Row: {
+          category: string
+          created_at: string
+          destination_host: string | null
+          id: string
+          path: string | null
+          portfolio_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          destination_host?: string | null
+          id?: string
+          path?: string | null
+          portfolio_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          destination_host?: string | null
+          id?: string
+          path?: string | null
+          portfolio_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_events_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "portfolios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analytics_events_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "public_portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           body: string
@@ -1288,6 +1330,45 @@ export type Database = {
             foreignKeyName: "blog_posts_portfolio_id_fkey"
             columns: ["portfolio_id"]
             isOneToOne: false
+            referencedRelation: "public_portfolios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      draft_shares: {
+        Row: {
+          created_at: string
+          expires_at: string
+          portfolio_id: string
+          revoked_at: string | null
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          portfolio_id: string
+          revoked_at?: string | null
+          token: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          portfolio_id?: string
+          revoked_at?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draft_shares_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: true
+            referencedRelation: "portfolios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_shares_portfolio_id_fkey"
+            columns: ["portfolio_id"]
+            isOneToOne: true
             referencedRelation: "public_portfolios"
             referencedColumns: ["id"]
           },
