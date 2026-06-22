@@ -68,6 +68,7 @@ const SUB_ROUTES: ReadonlyArray<readonly [srcRoute: string, instance: string]> =
 
 const NEXT_DIR = path.resolve('.next');
 const PRERENDER_MANIFEST = path.join(NEXT_DIR, 'prerender-manifest.json');
+const APP_PATH_ROUTES_MANIFEST = path.join(NEXT_DIR, 'app-path-routes-manifest.json');
 
 interface PrerenderManifest {
   routes: Record<
@@ -87,6 +88,27 @@ function readPrerenderManifest(): PrerenderManifest {
     );
   }
   return JSON.parse(readFileSync(PRERENDER_MANIFEST, 'utf8')) as PrerenderManifest;
+}
+
+/**
+ * The app-path → route map. A FULLY DYNAMIC (ƒ) route — one with NO
+ * `generateStaticParams` — is registered HERE (its page module maps to the public
+ * route path) but is ABSENT from the prerender-manifest entirely (it has no
+ * prerendered instances and no ISR `dynamicRoutes` entry). This is the correct place
+ * to prove a route like `/draft/[token]` is registered-yet-never-prerendered.
+ */
+function readAppPathRoutes(): Record<string, string> {
+  if (!existsSync(APP_PATH_ROUTES_MANIFEST)) {
+    throw new Error(
+      `expected build artifact not found: ${APP_PATH_ROUTES_MANIFEST}\n` +
+        '  Run `npm run build` first — this assertion reads the production ' +
+        'app-path-routes manifest and must not false-green on a missing build.',
+    );
+  }
+  return JSON.parse(readFileSync(APP_PATH_ROUTES_MANIFEST, 'utf8')) as Record<
+    string,
+    string
+  >;
 }
 
 describe('D-22 — /[username] stays ● (SSG)/ISR, never ƒ (dynamic)', () => {
@@ -287,10 +309,14 @@ describe('SHOW-04 — /explore stays ● (SSG)/ISR, never ƒ (dynamic)', () => {
  * `generateStaticParams` enumerates from public usernames), a draft token is a
  * SECRET — it MUST NOT be enumerated into `generateStaticParams`, MUST NOT cache a
  * prerendered instance (a cached draft would survive revoke — D-01), and reads
- * per-request via `supabaseAdmin` gated on the token. So in the prerender manifest
- * it appears in `dynamicRoutes` (the ƒ table) with NO concrete `/draft/<token>`
- * key in `routes` (the ● SSG/ISR table). This block is the regression guard that a
- * future edit never accidentally prerenders a draft instance.
+ * per-request via `supabaseAdmin` gated on the token. As a FULLY DYNAMIC (ƒ) route
+ * with NO `generateStaticParams`, it is registered in the app-path-routes manifest
+ * but is ABSENT from the prerender manifest entirely — no concrete `/draft/<token>`
+ * key in `routes` (the ● SSG/ISR table) AND no `/draft/[token]` key in `dynamicRoutes`
+ * (which holds only ISR-prerendered-with-fallback params; an entry there would mean a
+ * `generateStaticParams` was added and draft instances are being cached — a D-01
+ * regression). This block is the regression guard that a future edit never
+ * accidentally prerenders or ISR-caches a draft instance.
  *
  * This is a NEW, ADDITIVE block — it does NOT touch the `/[username]`, SUB_ROUTES,
  * SHARE-02, HANDLE-02, or SHOW-04 assertions above; their staying-green is the
@@ -307,7 +333,7 @@ describe('SHOW-04 — /explore stays ● (SSG)/ISR, never ƒ (dynamic)', () => {
  */
 const DRAFT_ROUTE_SRC = '/draft/[token]';
 
-describe.skip('DIST-02 — /draft/[token] is DYNAMIC (ƒ), never prerendered (RED until 33-02)', () => {
+describe('DIST-02 — /draft/[token] is DYNAMIC (ƒ), never prerendered (33-02 GREEN)', () => {
   it('does NOT prerender any concrete /draft/<token> instance (no SSG/ISR cache of a secret draft)', () => {
     const pm = readPrerenderManifest();
     const prerenderedDraftKeys = Object.keys(pm.routes ?? {}).filter((k) =>
@@ -322,12 +348,25 @@ describe.skip('DIST-02 — /draft/[token] is DYNAMIC (ƒ), never prerendered (RE
     ).toHaveLength(0);
   });
 
-  it('appears in the dynamicRoutes (ƒ) table as /draft/[token]', () => {
+  it('is registered as a fully-dynamic (ƒ) route — present in app-path-routes, absent from any prerender table', () => {
+    // Registered as a real route: its page module maps to the public /draft/[token] path.
+    const appRoutes = Object.values(readAppPathRoutes());
+    expect(
+      appRoutes,
+      `${DRAFT_ROUTE_SRC} is absent from app-path-routes-manifest — the draft route page module ` +
+        'did not register; the route does not exist in the production build.',
+    ).toContain(DRAFT_ROUTE_SRC);
+
+    // And NOT prerendered/ISR-cached: a fully-dynamic route (no generateStaticParams)
+    // must appear in NEITHER prerender table. An entry in `dynamicRoutes` would mean a
+    // generateStaticParams was added → draft instances would be ISR-cached and survive a
+    // revoke (D-01). An entry in `routes` would mean a concrete instance was prerendered.
     const pm = readPrerenderManifest();
     expect(
       Object.keys(pm.dynamicRoutes ?? {}),
-      `${DRAFT_ROUTE_SRC} is absent from prerender-manifest.dynamicRoutes — the draft route is ` +
-        'not registered as a dynamic route (it must NOT be a prerendered/static route).',
-    ).toContain(DRAFT_ROUTE_SRC);
+      `${DRAFT_ROUTE_SRC} appears in prerender-manifest.dynamicRoutes — a generateStaticParams ` +
+        'was added to the draft route, so draft instances are ISR-cached and would survive a ' +
+        'revoke (D-01). The route MUST stay fully dynamic (ƒ) with NO generateStaticParams.',
+    ).not.toContain(DRAFT_ROUTE_SRC);
   });
 });
