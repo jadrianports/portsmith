@@ -41,6 +41,7 @@ import { RegisterOwnUsername } from '@/components/dashboard/register-own-usernam
 import { EditorShell } from '@/components/editor/editor-shell';
 import { getOwnerAnalytics } from '@/lib/analytics/owner-analytics';
 import { ensurePortfolio } from '@/lib/cms/bootstrap-portfolio';
+import { portfolioQrSvg } from '@/lib/qr';
 import { getPortfolioOwnerByUsername } from '@/lib/portfolio/get-portfolio-owner';
 import { getAvailableTemplates } from '@/lib/templates/available-templates';
 import {
@@ -182,6 +183,13 @@ export default async function DashboardPage() {
   //    rather than breaking the dashboard.
   const ownerAnalytics = await getOwnerAnalytics();
 
+  // 7) 33-03 / DIST-01 (D-06): generate the public-page QR SVG SERVER-SIDE (qrcode is
+  //    `server-only`), encoding `siteUrl('/' + username)` — the PUBLIC url, never the
+  //    draft token, never the request Host. Threaded into EditorShell as a PLAIN
+  //    string prop so the QR lib stays OFF the dashboard client bundle (the Share
+  //    panel renders it as static markup + offers a Blob download).
+  const qrSvg = portfolioQrSvg(username);
+
   return (
     <>
       {/* D-06 self-view writer: registers THIS owner's username in
@@ -214,6 +222,9 @@ export default async function DashboardPage() {
         allowedTemplates={allowedTemplates}
         // 12-04 / D-P12-10: surface the one-time post-fallback "pick another" notice.
         showFallbackNotice={showFallbackNotice}
+        // 33-03 / DIST-01 (D-06): the server-generated public-page QR SVG (qrcode is
+        // server-only) — a plain string prop, so the QR lib stays off the client bundle.
+        qrSvg={qrSvg}
       />
     </>
   );

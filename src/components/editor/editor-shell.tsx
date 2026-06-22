@@ -78,6 +78,7 @@ import { MoodboardManager } from './moodboard-manager';
 import { PageIdentityForm } from './page-identity-form';
 import { ProfileForm } from './profile-form';
 import { PublishToggle } from './publish-toggle';
+import { SharePanel } from './share-panel';
 import { SectionForm, type SimpleSectionType } from './section-form';
 import { SkillsNestedManager } from './skills-nested-manager';
 import { SectionList, type EditorSection } from './section-list-row';
@@ -228,6 +229,14 @@ export interface EditorShellProps {
    * available — pick another" notice; dismissing it calls `clearTemplateFallbackNotice`.
    */
   showFallbackNotice?: boolean;
+  /**
+   * 33-03 / DIST-01 (D-06) — the server-generated QR SVG document string for the
+   * owner's PUBLIC page (`portfolioQrSvg(username)` from `src/lib/qr.ts`, rendered in
+   * the dashboard RSC). Threaded as a PLAIN string prop so the `qrcode` lib stays
+   * SERVER-ONLY (zero QR lib on this client bundle); the Share panel renders it as
+   * static markup + offers a Blob download.
+   */
+  qrSvg: string;
 }
 
 export function EditorShell({
@@ -239,6 +248,7 @@ export function EditorShell({
   currentTemplateSlug,
   allowedTemplates,
   showFallbackNotice = false,
+  qrSvg,
 }: EditorShellProps) {
   const queryClient = useQueryClient();
 
@@ -797,6 +807,14 @@ export function EditorShell({
             <Settings aria-hidden="true" className="size-3.5" />
             <span>Settings</span>
           </Link>
+
+          {/* 33-03 / D-05 — the unified Share control (DIST-01 + DIST-02 UI half).
+              A chrome disclosure popover holding the public URL + copy, the
+              downloadable server-SVG QR (qrSvg threaded in from the RSC so qrcode
+              stays off this client bundle, D-06), and the draft-share generate/revoke
+              wired to Plan 02's SHARED-A actions. Same chrome button idiom as its
+              Messages/Settings/Preview siblings; copper accent on hover/focus only. */}
+          <SharePanel username={username} qrSvg={qrSvg} />
 
           {/* Preview → the 04-07 enable route. prefetch={false} is MANDATORY:
               next/link prefetch can race/delete the draft cookie (RESEARCH

@@ -51,10 +51,10 @@ describe('DIST-01 — the public-URL contract the QR helper must encode (ACTIVE)
   });
 });
 
-// RED until Plan 33-03 ships `@/lib/qr`. Skipped (not `it.todo`) so the dynamic
-// import is not evaluated against the missing module on every run; flip to
-// `describe(` (drop `.skip`) when 33-03 lands the helper.
-describe.skip('DIST-01 — portfolioQrSvg encodes siteUrl(username) into a valid SVG (RED until 33-03)', () => {
+// GREEN as of Plan 33-03 — `@/lib/qr` now ships `portfolioQrSvg` + `portfolioQrTarget`
+// (the server-only QR generator). The `import 'server-only'` first line is a no-op in
+// the vitest (node) test env, so the dynamic import resolves the real helper here.
+describe('DIST-01 — portfolioQrSvg encodes siteUrl(username) into a valid SVG (GREEN — 33-03)', () => {
   it('exports a QR helper from @/lib/qr', async () => {
     const mod = (await import(/* @vite-ignore */ QR_MOD)) as {
       portfolioQrSvg?: (username: string) => string;
