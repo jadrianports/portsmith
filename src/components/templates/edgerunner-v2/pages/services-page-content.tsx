@@ -18,11 +18,21 @@
  *        bg-gradient-to-br from-neon-N/10 via-neon-N/20 to-transparent -> inline style
  *   3. Custom classes (font-display, font-mono-retro, text-glow-N, shadow-neon-N,
  *        text-neon-N) KEPT AS-IS (scoped in theme.css).
- *   4. framer-motion -> motion/react with initial={false} for SSR visibility.
- *   5. 'use client' required for motion/react.
+ *   4. framer-motion reveals -> shared _kit ScrollReveal (D-14, PERF-01): motion/react
+ *      is dropped OFF this island's First-Load entirely (the measured D-13 LazyMotion
+ *      attempt still shipped 198.9 kB, over the 195 kB merge bar). whileInView reveals
+ *      become <ScrollReveal> (IntersectionObserver, already bundled); the hero's load-in
+ *      is the CSS .tmpl-load-reveal class via ScrollReveal `priority` (LCP-safe).
+ *   5. 'use client' retained — ScrollReveal is a client island (useEffect/observer).
  *   6. Anchor links: /{username}#contact / /{username}#projects / /{username}/blog
  */
-import { m } from 'motion/react';
+// D-14 (PERF-01): motion/react is dropped OFF /services entirely. The measured D-13
+// LazyMotion attempt still shipped 198.9 kB First-Load (slim `m` core costs too much
+// under Turbopack — over the 195 kB merge bar), so the whileInView reveals swap to the
+// shared `_kit` ScrollReveal island (pure IntersectionObserver, already bundled, zero
+// new cost) and the hero's load-in becomes the CSS .tmpl-load-reveal class. The only
+// feel change is CSS reveal vs spring stagger. Measured by `npm run check:bundle`.
+import { ScrollReveal } from '../../_kit/scroll-reveal';
 import {
   Code2,
   Cable,
@@ -242,55 +252,45 @@ function StatusPill({
 }
 
 function Hero({ username }: { username: string }) {
+  // D-14: the hero is the LCP element — it gets the CSS-only `.tmpl-load-reveal`
+  // entrance (opacity-stable, reduced-motion-safe, paints at FCP) via ScrollReveal's
+  // `priority` path, NOT a JS opacity:0 reveal. No motion/react here.
   return (
-    <section className="relative px-6 pt-36 pb-20">
+    <ScrollReveal as="section" priority>
+      <section className="relative px-6 pt-36 pb-20">
       <div className="mx-auto max-w-4xl text-center">
-        <m.span
-          initial={false}
-          animate={{ opacity: 1, y: 0 }}
+        <span
           className="font-mono-retro text-sm uppercase tracking-[0.5em]"
           style={{ color: 'color-mix(in oklab, var(--neon-cyan) 80%, transparent)' }}
         >
           // services
-        </m.span>
+        </span>
 
-        <m.h1
-          initial={false}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05, duration: 0.6 }}
+        <h1
           className="mt-5 font-display text-4xl font-black uppercase leading-[1.05] tracking-wider text-neon-pink text-glow-pink sm:text-6xl md:text-7xl"
         >
           Build it. Ship it.
           <br />
           <span className="text-neon-cyan text-glow-cyan">Make it gnarly.</span>
-        </m.h1>
+        </h1>
 
-        <m.p
-          initial={false}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
+        <p
           className="mx-auto mt-6 max-w-2xl text-base sm:text-lg"
           style={{ color: 'color-mix(in oklab, var(--fg) 80%, transparent)' }}
         >
           Full-stack engineering, design, and weird internet automation — done end-to-end.
           No agencies. No handoffs. Just one person who has shipped this before.
-        </m.p>
+        </p>
 
-        <m.div
-          initial={false}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+        <div
           className="mt-8 flex flex-wrap items-center justify-center gap-3"
         >
           <StatusPill tone="cyan"   label="Remote worldwide"      />
           <StatusPill tone="purple" label="Edge-native"            />
           <StatusPill tone="pink"   label="2 slots open · Q3 2026" pulse />
-        </m.div>
+        </div>
 
-        <m.div
-          initial={false}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+        <div
           className="mt-10 flex flex-wrap items-center justify-center gap-4"
         >
           <a
@@ -311,9 +311,10 @@ function Hero({ username }: { username: string }) {
           >
             See projects
           </a>
-        </m.div>
+        </div>
       </div>
-    </section>
+      </section>
+    </ScrollReveal>
   );
 }
 
@@ -324,12 +325,10 @@ function ServiceCards({ username }: { username: string }) {
         {SERVICES.map((s, i) => {
           const Icon = s.icon;
           return (
-            <m.article
-              key={s.slug}
-              initial={false}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-80px' }}
-              transition={{ duration: 0.5, delay: (i % 2) * 0.08 }}
+            // D-14: whileInView reveal → shared _kit ScrollReveal (IntersectionObserver,
+            // already bundled). Stagger preserved via the per-card `delay`.
+            <ScrollReveal key={s.slug} delay={(i % 2) * 80}>
+            <article
               className="group relative flex flex-col overflow-hidden rounded-2xl border backdrop-blur-xl transition-all"
               style={{
                 ...accentBorderStyle[s.accent],
@@ -463,7 +462,8 @@ function ServiceCards({ username }: { username: string }) {
                   <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover/cta:translate-x-1" />
                 </a>
               </div>
-            </m.article>
+            </article>
+            </ScrollReveal>
           );
         })}
       </div>
@@ -495,12 +495,9 @@ function Testimonials() {
 
       <div className="grid gap-6 md:grid-cols-3">
         {TESTIMONIALS.map((t, i) => (
-          <m.figure
-            key={t.name}
-            initial={false}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-60px' }}
-            transition={{ duration: 0.5, delay: i * 0.08 }}
+          // D-14: whileInView reveal → shared _kit ScrollReveal; stagger via `delay`.
+          <ScrollReveal key={t.name} delay={i * 80}>
+          <figure
             className="flex h-full flex-col rounded-xl border backdrop-blur transition-all p-6"
             style={{
               ...accentBorderStyle[t.accent],
@@ -530,7 +527,8 @@ function Testimonials() {
                 --role &ldquo;{t.role}&rdquo;
               </div>
             </figcaption>
-          </m.figure>
+          </figure>
+          </ScrollReveal>
         ))}
       </div>
     </section>
@@ -540,10 +538,10 @@ function Testimonials() {
 function BottomCTA({ username }: { username: string }) {
   return (
     <section className="relative mx-auto max-w-5xl px-6 py-24">
-      <m.div
-        initial={false}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-60px' }}
+      {/* D-14: whileInView reveal → shared _kit ScrollReveal (ScrollReveal owns the
+          reveal wrapper; the styled card stays an inner div). */}
+      <ScrollReveal>
+      <div
         className="relative overflow-hidden rounded-2xl border p-10 text-center backdrop-blur-xl sm:p-14"
         style={{
           borderColor: 'color-mix(in oklab, var(--neon-pink) 40%, transparent)',
@@ -596,7 +594,8 @@ function BottomCTA({ username }: { username: string }) {
             </a>
           </div>
         </div>
-      </m.div>
+      </div>
+      </ScrollReveal>
     </section>
   );
 }
