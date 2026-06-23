@@ -308,6 +308,126 @@ export const goldenFixture = {
       },
     ],
   },
+  // ── 36-01 (D-16): the 2 creative-vertical types (v2.8 "Show the Work") ──────────
+  // Added so the upcoming gallery-forward `atelier` template (Phase 36) — which marks
+  // `gallery` + `case_study` as `supported:true` — renders them over the golden route,
+  // and so the conformance/parity gate exercises the masonry wrap + the case-study
+  // hide-empty path. minimal/editorial/aurora OMIT these from their specs (Partial
+  // record ⇒ unsupported) AND `goldenPortfolioData`'s GOLDEN_SECTION_ORDER does not
+  // emit them, so adding these keys does NOT change what the existing live templates
+  // render — their golden parity baselines stay byte-identical.
+  //
+  // SCHEMA (sections.ts galleryImageSchema/caseStudyImageSchema): every image carries a
+  // REQUIRED http(s) `${STORAGE}`-origin `url`, REQUIRED positive-int `width`/`height`
+  // (CLS-safe — the renderer reserves each box from the stored dims, D-07/D-14), and a
+  // REQUIRED non-empty `alt`. NO caption (D-02 — keeps gallery distinct from moodboard).
+  //
+  // The gallery `width`/`height` VARY across items (landscape 1600×1067, portrait
+  // 1080×1620, square 1200×1200, panorama 2000×900, tall 900×1350) so the masonry packs
+  // unevenly — that uneven pack is what the parity snapshot proves (D-07). case_study
+  // carries one FULLY-populated item (all meta + all three blocks + multiple images) and
+  // one MINIMAL item (title + empty blocks/meta + zero images) to exercise the per-block
+  // hide-empty path (D-11/D-16).
+  gallery: {
+    heading: 'Selected Work',
+    items: [
+      {
+        id: 'gal_01',
+        url: `${STORAGE}/portfolio-assets/gallery-01.webp`,
+        width: 1600,
+        height: 1067,
+        alt: 'Wide editorial spread photographed on a paper-white backdrop',
+      },
+      {
+        id: 'gal_02',
+        url: `${STORAGE}/portfolio-assets/gallery-02.webp`,
+        width: 1080,
+        height: 1620,
+        alt: 'Portrait product still of a ceramic vessel in soft side light',
+      },
+      {
+        id: 'gal_03',
+        url: `${STORAGE}/portfolio-assets/gallery-03.webp`,
+        width: 1200,
+        height: 1200,
+        alt: 'Square flat-lay of brand stationery on a muted neutral surface',
+      },
+      {
+        id: 'gal_04',
+        url: `${STORAGE}/portfolio-assets/gallery-04.webp`,
+        width: 2000,
+        height: 900,
+        alt: 'Panoramic installation shot of a gallery wall at golden hour',
+      },
+      {
+        id: 'gal_05',
+        url: `${STORAGE}/portfolio-assets/gallery-05.webp`,
+        width: 900,
+        height: 1350,
+        alt: 'Tall fashion frame of a model against a concrete column',
+      },
+      {
+        id: 'gal_06',
+        url: `${STORAGE}/portfolio-assets/gallery-06.webp`,
+        width: 1500,
+        height: 1000,
+        alt: 'Landscape interior of a sunlit studio with hanging prints',
+      },
+      {
+        id: 'gal_07',
+        url: `${STORAGE}/portfolio-assets/gallery-07.webp`,
+        width: 1000,
+        height: 1250,
+        alt: 'Three-quarter portrait of a sculptor at work in clay',
+      },
+    ],
+  },
+  case_study: {
+    heading: 'Case Studies',
+    items: [
+      {
+        id: 'cs_northwind',
+        title: 'Rebrand for Northwind',
+        role: 'Art Director',
+        client: 'Northwind',
+        year: '2024',
+        challenge:
+          'Northwind had grown from one café to nine, but each location had drifted into its own signage, palette, and voice. The brand read as nine small businesses, not one.',
+        process:
+          'We ran a two-week visual audit, consolidated the marks into a single wordmark with a flexible secondary lockup, and built a tight palette plus a photography direction the in-house team could shoot against without a designer present.',
+        outcome:
+          'A unified system shipped across all nine locations in six weeks. Brand-recognition surveys rose, and the in-house team now produces on-brand collateral without external design support.',
+        images: [
+          {
+            id: 'cs_northwind_a',
+            url: `${STORAGE}/portfolio-assets/cs-northwind-wordmark.webp`,
+            width: 1600,
+            height: 1000,
+            alt: 'Northwind unified wordmark in warm charcoal on cream',
+          },
+          {
+            id: 'cs_northwind_b',
+            url: `${STORAGE}/portfolio-assets/cs-northwind-signage.webp`,
+            width: 1200,
+            height: 1500,
+            alt: 'New exterior signage installed at a Northwind café location',
+          },
+          {
+            id: 'cs_northwind_c',
+            url: `${STORAGE}/portfolio-assets/cs-northwind-collateral.webp`,
+            width: 1400,
+            height: 1050,
+            alt: 'Branded cups, bags, and menu cards arranged as a flat-lay',
+          },
+        ],
+      },
+      {
+        id: 'cs_minimal',
+        title: 'Editorial layout study',
+        images: [],
+      },
+    ],
+  },
 } as const;
 
 /**

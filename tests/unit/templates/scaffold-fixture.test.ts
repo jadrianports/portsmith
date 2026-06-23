@@ -23,7 +23,7 @@ import { validateSectionContent } from '@/lib/validations';
 import { goldenFixture, goldenFixtureSections } from '../../fixtures/lovable-scaffold-golden';
 
 describe('Lovable scaffold golden fixture (PIPE-10 / D-12)', () => {
-  it('covers the 7 dev section types + the 5 marketer types (12 keys, no blog_preview)', () => {
+  it('covers the 7 dev + 5 marketer + 2 creative types (14 keys, no blog_preview)', () => {
     expect(Object.keys(goldenFixture).sort()).toEqual(
       [
         // 7 dev types (D-P7-05)
@@ -40,6 +40,9 @@ describe('Lovable scaffold golden fixture (PIPE-10 / D-12)', () => {
         'metrics',
         'moodboard',
         'services',
+        // 2 creative-vertical types (36-01 / D-16) — for the upcoming `atelier` template
+        'gallery',
+        'case_study',
       ].sort(),
     );
     // blog_preview is in the schema but the CMS never produces it in v1 — it must NOT
@@ -72,6 +75,9 @@ describe('Lovable scaffold golden fixture (PIPE-10 / D-12)', () => {
     'services',
     'moodboard',
     'certifications',
+    // 2 creative-vertical types (36-01 / D-16)
+    'gallery',
+    'case_study',
   ] as const)('golden fixture "%s" parses cleanly through the gate', (type) => {
     expect(() => validateSectionContent(type, goldenFixture[type])).not.toThrow();
   });
