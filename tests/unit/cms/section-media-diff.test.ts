@@ -145,3 +145,100 @@ describe('serverDroppedItemImageUrls — D-05 section-level + moodboard extensio
     expect(serverDroppedItemImageUrls('about', content, content)).toEqual([]);
   });
 });
+
+/**
+ * 35-01 (Phase 35, GAL-03 / D-09) — the two NET-NEW creative types.
+ *
+ *  - `gallery` is FLAT item-level (`content.items[].url`) — fits the existing walk
+ *    once `gallery: ['url']` is registered in `IMAGE_FIELDS`.
+ *  - `case_study` is the genuinely-new NESTED shape (`content.items[].images[].url`):
+ *    images live in a per-item array, so removing one image, a whole item (its nested
+ *    images), OR the whole section must each free exactly the dropped Storage objects.
+ *
+ * GAL-03 success criterion 3 is fully satisfied by these per-type tests — the nested
+ * single-image / whole-item / whole-section removal cases for case_study are mandatory.
+ */
+const GA = 'https://stack.local/storage/v1/object/public/media/uid/gallery/a.webp';
+const GB = 'https://stack.local/storage/v1/object/public/media/uid/gallery/b.webp';
+const CS_A = 'https://stack.local/storage/v1/object/public/media/uid/case/a.webp';
+const CS_B = 'https://stack.local/storage/v1/object/public/media/uid/case/b.webp';
+const CS_C = 'https://stack.local/storage/v1/object/public/media/uid/case/c.webp';
+const CS_D = 'https://stack.local/storage/v1/object/public/media/uid/case/d.webp';
+
+/** Build a gallery-shaped content with the given flat item image URLs. */
+function galleryContent(...urls: Array<string | undefined>) {
+  return {
+    heading: 'Gallery',
+    items: urls.map((url, i) => ({ id: `g${i}`, url, width: 800, height: 600, alt: `img ${i}` })),
+  };
+}
+
+/**
+ * Build a case_study-shaped content. Each tuple is one item's nested image-url list;
+ * the item carries the required `title` plus its `images[]` array.
+ */
+function caseStudyContent(...itemImageLists: Array<Array<string | undefined>>) {
+  return {
+    heading: 'Case studies',
+    items: itemImageLists.map((urls, i) => ({
+      id: `c${i}`,
+      title: `Study ${i}`,
+      images: urls.map((url, j) => ({ id: `c${i}i${j}`, url, width: 800, height: 600, alt: `img ${j}` })),
+    })),
+  };
+}
+
+describe('serverDroppedItemImageUrls — gallery (flat, GAL-03)', () => {
+  it('REPLACE: a swapped gallery image drops the prior URL', () => {
+    expect(serverDroppedItemImageUrls('gallery', galleryContent(GA), galleryContent(GB))).toEqual([GA]);
+  });
+
+  it('UNCHANGED: the same gallery image drops nothing', () => {
+    expect(serverDroppedItemImageUrls('gallery', galleryContent(GA), galleryContent(GA))).toEqual([]);
+  });
+
+  it('REMOVE-section: deleting the whole gallery (next null) drops every image', () => {
+    expect(serverDroppedItemImageUrls('gallery', galleryContent(GA, GB), null)).toEqual([GA, GB]);
+  });
+
+  it('NULL-SAFE: null / {} / missing-items gallery content yields [] (no throw)', () => {
+    expect(serverDroppedItemImageUrls('gallery', null, null)).toEqual([]);
+    expect(serverDroppedItemImageUrls('gallery', {}, {})).toEqual([]);
+    expect(serverDroppedItemImageUrls('gallery', { items: undefined }, { items: undefined })).toEqual([]);
+  });
+});
+
+describe('serverDroppedItemImageUrls — case_study (nested images, GAL-03 / D-09)', () => {
+  it('single-image REMOVE: one item images [A,B] -> [A] drops only B', () => {
+    const prior = caseStudyContent([CS_A, CS_B]);
+    const next = caseStudyContent([CS_A]);
+    expect(serverDroppedItemImageUrls('case_study', prior, next)).toEqual([CS_B]);
+  });
+
+  it('whole-ITEM REMOVE: dropping the item carrying [C,D] drops C and D', () => {
+    // prior: item0 = [A,B], item1 = [C,D]; next keeps only item0.
+    const prior = caseStudyContent([CS_A, CS_B], [CS_C, CS_D]);
+    const next = caseStudyContent([CS_A, CS_B]);
+    expect(serverDroppedItemImageUrls('case_study', prior, next)).toEqual([CS_C, CS_D]);
+  });
+
+  it('whole-SECTION REMOVE: deleting the section (next null) drops every nested image', () => {
+    const prior = caseStudyContent([CS_A, CS_B], [CS_C]);
+    expect(serverDroppedItemImageUrls('case_study', prior, null)).toEqual([CS_A, CS_B, CS_C]);
+  });
+
+  it('UNCHANGED: identical nested images drop nothing', () => {
+    const content = caseStudyContent([CS_A, CS_B], [CS_C]);
+    expect(serverDroppedItemImageUrls('case_study', content, content)).toEqual([]);
+  });
+
+  it('NULL-SAFE: null / {} / missing-items / non-array images yields [] (no throw)', () => {
+    expect(serverDroppedItemImageUrls('case_study', null, null)).toEqual([]);
+    expect(serverDroppedItemImageUrls('case_study', {}, {})).toEqual([]);
+    expect(serverDroppedItemImageUrls('case_study', { items: undefined }, { items: undefined })).toEqual([]);
+    // an item with a non-array `images` must not throw
+    expect(
+      serverDroppedItemImageUrls('case_study', { items: [{ id: 'c0', title: 'T', images: null }] }, {}),
+    ).toEqual([]);
+  });
+});

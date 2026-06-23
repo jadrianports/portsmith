@@ -49,6 +49,21 @@ const IMAGE_FIELDS: Record<string, readonly string[]> = {
   // 13.1-02 D-05: moodboard gallery images live in `content.items[].image`
   // (the same item-level shape as projects/testimonials).
   moodboard: ['image'],
+  // 35-01 D-09: gallery images live FLAT in `content.items[].url` — the same
+  // item-level shape, so the existing walk handles it once registered here.
+  gallery: ['url'],
+};
+
+/**
+ * Image arrays NESTED under each item (35-01 / GAL-03 / D-09): walk
+ * `content.items[].<array>[].<url>`. `case_study` is the one genuinely-new shape —
+ * its images live in a per-item array (not a scalar item field), so removing one
+ * image, a whole item (its nested images), or the whole section must each free the
+ * dropped objects. Mirrors the two-map style of `IMAGE_FIELDS` /
+ * `SECTION_LEVEL_IMAGE_FIELDS`. A type with no entry contributes nothing here.
+ */
+const NESTED_ITEM_IMAGE_FIELDS: Record<string, { array: string; url: string }> = {
+  case_study: { array: 'images', url: 'url' }, // content.items[].images[].url
 };
 
 /**
@@ -86,6 +101,23 @@ function imageUrlsOf(type: string, content: unknown): Set<string> {
       const record = item as Record<string, unknown>;
       for (const f of itemFields) {
         const v = record[f];
+        if (typeof v === 'string' && v.trim() !== '') urls.add(v);
+      }
+    }
+  }
+
+  // Nested per-item image arrays (35-01 D-09) — `content.items[].images[].url`.
+  // Routes case_study single-image / whole-item / whole-section removal through the
+  // SAME `urls` Set (and thus the same `serverDroppedItemImageUrls` set-diff).
+  const nested = NESTED_ITEM_IMAGE_FIELDS[type];
+  if (nested && Array.isArray(items)) {
+    for (const item of items) {
+      if (typeof item !== 'object' || item === null) continue;
+      const arr = (item as Record<string, unknown>)[nested.array];
+      if (!Array.isArray(arr)) continue;
+      for (const img of arr) {
+        if (typeof img !== 'object' || img === null) continue;
+        const v = (img as Record<string, unknown>)[nested.url];
         if (typeof v === 'string' && v.trim() !== '') urls.add(v);
       }
     }
