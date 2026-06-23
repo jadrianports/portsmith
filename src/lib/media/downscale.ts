@@ -55,16 +55,24 @@ export function longestEdgeDims(
   return { width, height };
 }
 
-/** A decoded, raw-pixel source plus the EXIF orientation flag (1-8) to bake on draw. */
+/** A decoded source plus the EXIF orientation flag (1-8) and whether the engine
+ *  already baked it (so the draw step does not double-rotate). */
 export interface OrientedSource {
-  /** The decoded raw-pixel source (no orientation applied yet — we bake it on draw). */
+  /** The decoded source — already EXIF-oriented iff `alreadyOriented` is true. */
   source: CanvasImageSource;
-  /** The DISPLAY width (already accounts for the orientation swap). */
+  /** The DISPLAY width (accounts for any orientation swap). */
   width: number;
-  /** The DISPLAY height (already accounts for the orientation swap). */
+  /** The DISPLAY height (accounts for any orientation swap). */
   height: number;
   /** The EXIF orientation flag (1-8); 1 when absent / not a JPEG. */
   orientation: number;
+  /**
+   * True when the decode engine ALREADY applied the EXIF orientation to the bitmap
+   * pixels (Chrome ~111+/FF/Safari16 honor `imageOrientation:'from-image'`). When
+   * true `downscaleToWebp` draws straight (identity transform); when false it bakes
+   * the rotation itself from `orientation` (the iOS<16 / engine-ignores fallback).
+   */
+  alreadyOriented: boolean;
 }
 
 /** EXIF orientation values that swap the width/height axes (90°/270° rotations). */
@@ -151,23 +159,131 @@ function readOrientationFromTiff(view: DataView, tiffStart: number): number {
 }
 
 /**
+ * Read the RAW (encoded, pre-rotation) pixel dims straight from a JPEG's SOF0/SOF2
+ * frame header — the deterministic ground truth used to detect whether the decode
+ * engine already baked the EXIF orientation (it is independent of any decode path).
+ * Returns `null` for a non-JPEG or a malformed/short buffer (the caller then trusts
+ * the WHATWG `from-image` default). Scoped to the frame header only — NOT a full
+ * decoder (RESEARCH "Don't Hand-Roll").
+ */
+async function readJpegRawDims(
+  file: File,
+): Promise<{ width: number; height: number } | null> {
+  try {
+    const buf = await file.arrayBuffer();
+    const view = new DataView(buf);
+    if (view.byteLength < 2 || view.getUint16(0) !== 0xffd8) return null; // SOI
+
+    let offset = 2;
+    while (offset + 4 <= view.byteLength) {
+      const marker = view.getUint16(offset);
+      if ((marker & 0xff00) !== 0xff00) return null; // lost marker sync
+      // Standalone markers (RSTn / SOI / EOI / TEM) carry no length segment.
+      if (marker === 0xffd8 || marker === 0xffd9 || (marker >= 0xffd0 && marker <= 0xffd7)) {
+        offset += 2;
+        continue;
+      }
+      const size = view.getUint16(offset + 2);
+      if (size < 2) return null;
+      // SOFn frame headers: SOF0-3 / SOF5-7 / SOF9-11 / SOF13-15 (exclude DHT/JPG/DAC).
+      const sofn =
+        (marker >= 0xffc0 && marker <= 0xffc3) ||
+        (marker >= 0xffc5 && marker <= 0xffc7) ||
+        (marker >= 0xffc9 && marker <= 0xffcb) ||
+        (marker >= 0xffcd && marker <= 0xffcf);
+      if (sofn) {
+        // SOF payload: [precision:1][height:2][width:2] right after the length word.
+        if (offset + 9 > view.byteLength) return null;
+        const height = view.getUint16(offset + 5);
+        const width = view.getUint16(offset + 7);
+        if (width < 1 || height < 1) return null;
+        return { width, height };
+      }
+      if (marker === 0xffda) return null; // SOS — scan data; no frame header found
+      offset += 2 + size;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Decode `file` to a raw-pixel `CanvasImageSource` and read its EXIF orientation
  * flag. Returns the DISPLAY dims (already accounting for a 90°/270° axis swap) and
  * the orientation flag so `downscaleToWebp` can bake the rotation during the draw.
  *
- * Uses `createImageBitmap(file)` WITHOUT the `imageOrientation` option (so the bitmap
- * carries the raw, un-rotated pixels and is never double-rotated) and our own
- * `readJpegOrientation` as the deterministic orientation source of truth.
+ * ENGINE-INDEPENDENT strategy (Pitfall 2 — the silent-no-op trap): the WHATWG
+ * default for `imageOrientation` changed to `'from-image'` (Chrome ~111+/FF/
+ * Safari16), so a modern engine AUTO-orients the bitmap; iOS<16 leaves it raw. We
+ * cannot feature-detect the option (an unknown option does not throw). Instead we
+ * decode BOTH `'from-image'` and `'none'` and compare their dims:
+ *   - If they DIFFER, the engine honors orientation → the `from-image` bitmap is
+ *     already display-oriented; use its own dims + an identity draw (alreadyOriented).
+ *   - If they MATCH, the engine ignored both (truly raw pixels) → we bake the
+ *     rotation ourselves from the `readJpegOrientation` flag (the iOS<16 fallback).
+ * `readJpegOrientation` (dependency-free byte-reader) is the orientation flag source
+ * of truth for the manual-bake branch.
  */
 export async function decodeOriented(file: File): Promise<OrientedSource> {
   const orientation = await readJpegOrientation(file);
-  const bitmap = await createImageBitmap(file);
   const swap = orientationSwapsAxes(orientation);
-  // DISPLAY dims: swap axes for the 90°/270° orientations so longestEdgeDims +
-  // exceedsPixelCap + the emitted {width,height} all reason about the visible image.
-  const width = swap ? bitmap.height : bitmap.width;
-  const height = swap ? bitmap.width : bitmap.height;
-  return { source: bitmap, width, height, orientation };
+
+  const fromImage = await createImageBitmap(file, { imageOrientation: 'from-image' });
+
+  // An axis-swapping orientation is the cheap discriminator: if the engine honored
+  // `from-image`, a landscape-raw / portrait-display source comes back with swapped
+  // dims relative to a forced-raw decode. Only decode the raw probe when the flag
+  // could swap axes (orientations 5-8) — for 1-4 the dims are identical either way
+  // and we rely on the flag for the (rare) mirror/180 manual bake.
+  // Ground truth for the engine-honored discriminator: the RAW encoded pixel dims
+  // read straight from the JPEG SOF0 frame header (independent of ANY decode). The
+  // `{imageOrientation:'none'}` probe is NOT reliable across engines (some Chromium
+  // builds still return display-oriented dims for `'none'`), so the SOF0 bytes are
+  // the only deterministic raw reference (Pitfall 2 — the silent-no-op trap).
+  const rawDims = await readJpegRawDims(file);
+
+  // Did the engine ALREADY bake the orientation into the `from-image` bitmap?
+  // For a swap orientation (5-8) the display dims are the raw axes swapped; the
+  // engine honored orientation iff `fromImage` matches that swapped shape (and does
+  // NOT match the raw shape). For a non-swap orientation the dims are identical
+  // either way, so the bitmap is usable as-is and only a mirror/180 needs a bake.
+  let alreadyOriented: boolean;
+  if (rawDims && swap) {
+    const matchesSwapped =
+      fromImage.width === rawDims.height && fromImage.height === rawDims.width;
+    const matchesRaw =
+      fromImage.width === rawDims.width && fromImage.height === rawDims.height;
+    // Honored iff the engine produced the swapped (display) shape and NOT the raw one.
+    // (When raw is square both match — treat as honored: an identity draw is correct.)
+    alreadyOriented = matchesSwapped || !matchesRaw;
+  } else {
+    // No SOF0 dims (non-JPEG / malformed) or a non-swap orientation: the WHATWG
+    // default is `from-image`, so a modern engine has already oriented the bitmap.
+    // For orientations 2/3/4 (mirror/180) the dims don't change, so we still draw
+    // straight — `from-image` baked the flip/rotation on every supporting engine,
+    // and the iOS<16 raw-pixel case for those is a vanishingly rare non-swap edge.
+    alreadyOriented = true;
+  }
+
+  if (alreadyOriented) {
+    // The engine baked it: draw the from-image bitmap straight (identity draw).
+    return {
+      source: fromImage,
+      width: fromImage.width,
+      height: fromImage.height,
+      orientation,
+      alreadyOriented: true,
+    };
+  }
+
+  // The engine ignored orientation (raw pixels) — we bake it ourselves on draw. The
+  // from-image bitmap holds the raw landscape pixels; report the DISPLAY (swapped)
+  // dims so longestEdgeDims / exceedsPixelCap / the emitted {width,height} all reason
+  // about the visible image.
+  const width = swap ? fromImage.height : fromImage.width;
+  const height = swap ? fromImage.width : fromImage.height;
+  return { source: fromImage, width, height, orientation, alreadyOriented: false };
 }
 
 /**
@@ -231,16 +347,20 @@ export async function downscaleToWebp(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high'; // mirrors the existing getCroppedCanvas opt
 
-  // The destination RAW dims (pre-rotation) the scaled draw fills. For a 90°/270°
-  // orientation the canvas axes are swapped relative to the raw bitmap, so the raw
-  // draw rect is the canvas dims with axes swapped back.
-  const swap = orientationSwapsAxes(oriented.orientation);
-  const rawW = swap ? height : width;
-  const rawH = swap ? width : height;
-
-  applyOrientationTransform(ctx, oriented.orientation, rawW, rawH);
-  // Scaled draw: raw source → the full (pre-rotation) destination rect.
-  ctx.drawImage(oriented.source, 0, 0, rawW, rawH);
+  if (oriented.alreadyOriented) {
+    // The decode engine baked the EXIF orientation into the source pixels — draw it
+    // straight to the (display-oriented) canvas. NO manual transform (double-rotate).
+    ctx.drawImage(oriented.source, 0, 0, width, height);
+  } else {
+    // The engine left the pixels raw — bake the rotation ourselves. For a 90°/270°
+    // orientation the canvas axes are swapped relative to the raw source, so the raw
+    // draw rect is the canvas dims with axes swapped back.
+    const swap = orientationSwapsAxes(oriented.orientation);
+    const rawW = swap ? height : width;
+    const rawH = swap ? width : height;
+    applyOrientationTransform(ctx, oriented.orientation, rawW, rawH);
+    ctx.drawImage(oriented.source, 0, 0, rawW, rawH);
+  }
 
   const blob = await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob(

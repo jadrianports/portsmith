@@ -29,6 +29,7 @@ function orientedFixture(width = 4000, height = 3000): OrientedSource {
     width,
     height,
     orientation: 1,
+    alreadyOriented: true,
   };
 }
 
