@@ -78,6 +78,10 @@ const VALID_KINDS = new Set<UploadKind>([
   // UNCHANGED — no new bypass added.
   'favicon',
   'og',
+  // 34-01 (MEDIA-04 / D-05): the batch gallery image kind. `isImageKind` (`!== 'resume'`)
+  // auto-routes it to the UNCHANGED webp-only ALLOWED_IMAGE_MIME sniff → byte-ceiling →
+  // quota-trigger path — no new bypass, no other route logic touched.
+  'gallery',
   'resume',
 ]);
 
