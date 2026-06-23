@@ -49,6 +49,43 @@ the hard ceiling pauses the project or starts billing.
 
 ---
 
+## Galleries & egress (v2.8)
+
+> **Context.** The v2.8 "Show the Work" milestone adds batch image galleries (Phase 34–36).
+> Galleries raise pressure on **both** monitored levers above: **Storage** (row 2 — more
+> uploaded bytes per user) and **Egress/bandwidth** (row 3 — more image bytes served from the
+> public `/[username]` pages). This subsection records how that pressure is bounded; it adds
+> **no new in-app guard** (D-11) and **does not duplicate** the Thresholds table — the same
+> storage (~800 MB / 1 GB) and egress (~4 GB / 5 GB Supabase) trip lines apply unchanged.
+
+**In-product levers (the cost is bounded at the source, not by a new tripwire):**
+
+- **2000px longest-edge clamp** *(this milestone — Phase 34 config + Plan 02 client downscale).*
+  Gallery picks are downscaled client-side to a 2000px longest edge and stored as a single small
+  WebP, so a multi-megapixel phone/DSLR original never lands at full size. This caps both the
+  per-image stored bytes and the per-image egress.
+- **Lazy-loading** *(Phase 36 — the creative gallery template).* Gallery images render lazily so a
+  visitor only pulls the images actually scrolled into view, bounding egress per page view rather
+  than serving every gallery image on first paint.
+
+**Per-user storage lever — the 65 MiB cap.** The per-user storage budget is raised 25 → **65 MiB**
+this milestone (D-10, migration 031, enforced by the atomic BEFORE-INSERT quota trigger). That cap
+is the per-user **storage** lever: a single user's galleries can never push their footprint past
+65 MiB, so storage growth stays linear in active users and is bounded per head.
+
+**No per-user egress signal — by design.** There is deliberately **no per-user egress tripwire**.
+Egress is not cheaply attributable per user on $0 infra (matching the FND-06 precedent at the top of
+this runbook — the alerts are project-wide, not per-user). Egress is covered by the existing
+**project-wide** Supabase egress threshold (row 3) plus the in-product levers above (clamp +
+lazy-load), not by a new per-user mechanism.
+
+**"Set where possible" (MEDIA-05) is already satisfied.** The MEDIA-05 "set a guard where possible"
+obligation is met by the **existing** Supabase usage-notification step below (the billing-email
+alerts in *Configuration steps → Supabase*) — galleries add no new alert, they ride the storage +
+egress alerts already configured there.
+
+---
+
 ## Configuration steps
 
 ### Supabase (Billing / Usage / Alerts)
