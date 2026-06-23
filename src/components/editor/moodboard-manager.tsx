@@ -26,7 +26,7 @@
  *
  * D-16 STORAGE NUDGE (co-located near the uploader): when the shell passes
  * `isUnsupported`, a muted, non-blocking caption renders the LOCKED copy near the
- * gallery uploader — an unrendered image still counts toward the 25 MiB quota.
+ * gallery uploader — an unrendered image still counts toward the 65 MiB quota.
  *
  * WHOLE-SECTION WRITE (Pitfall 7): every gallery/palette op rebuilds the WHOLE
  * `{ heading, subheading?, items: [...], palette?: [...] }` content and routes through
@@ -104,7 +104,7 @@ const REORDER_ERROR =
   'We couldn’t save the new order — it’s been put back. Please try again.';
 /** D-16 LOCKED nudge copy (UI-SPEC §6 / Copywriting) — muted, non-blocking. */
 const STORAGE_NUDGE =
-  'This image won’t show on your current template — it still counts toward your 25 MiB storage.';
+  'This image won’t show on your current template — it still counts toward your 65 MiB storage.';
 const HEX_HINT = 'Enter a hex like #7C3AED';
 /** ~2.2s saved-&-live beat hold (UI-SPEC Surface 4 / Motion "saved & live"). */
 const SAVED_BEAT_MS = 2200;

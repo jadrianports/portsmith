@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * StorageMeter (05-UI-SPEC §4, D-09) — the display-only "X / 25 MB" usage meter.
+ * StorageMeter (05-UI-SPEC §4, D-09; cap raised D-10) — the display-only "X / 65 MB" usage meter.
  *
  * READ-ONLY by construction (threat register T-05-22): it READS the protected,
  * trigger-maintained `profiles.storage_used_bytes` and NEVER writes it. There is no
