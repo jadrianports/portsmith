@@ -393,6 +393,84 @@ export const certificationsContentSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Creative-vertical soft-enum types (35-01, CMS-08 — NO migration)
+// ---------------------------------------------------------------------------
+//
+// The two NET-NEW creative section types for the visual-creative vertical (v2.8
+// "Show the Work"): `gallery` (a clean photo wall) and `case_study` (one project
+// told as a story). Same CMS-08 soft-enum idiom as `skills` and the five marketer
+// types — each is purely a new schema here + a key in `sectionContentSchemas`; the
+// `validateSectionContent` gate, the `SectionType` union, and the `@/lib/validations`
+// barrel pick them up automatically. `sections.type` is TEXT (no CHECK); `content`
+// is schemaless JSONB. Zero Postgres migration.
+//
+// DIVERGENCE from the moodboard/marketer image items: gallery & case_study images
+// are STORED objects emitted by the Phase-34 GalleryUploader, never optional draft
+// slots — so each image carries a REQUIRED http(s) `url` (the CR-01 stored-XSS gate,
+// NOT the empty-optional variant), REQUIRED positive-int `width`/`height` (the
+// uploader always emits them; CLS-safe rendering in Phase-36), and a REQUIRED
+// non-empty `alt` (alt rule #4 — a plain `.trim().min(1)`, not the conditional
+// `altTextOk` refine, since the image is never absent). NO caption (D-02 — keeps
+// gallery distinct from moodboard).
+
+/**
+ * GalleryImage — one stored gallery image (D-02/D-05). `url` is http(s)-gated
+ * (CR-01 stored-XSS); `width`/`height` are REQUIRED positive ints (the Phase-34
+ * GalleryUploader emit always carries them, and the Phase-36 renderer needs them to
+ * reserve space CLS-free); `alt` is REQUIRED non-empty (alt rule #4 — the image IS
+ * the work, never an empty draft slot). NO caption (D-02).
+ */
+export const galleryImageSchema = z.object({
+  id: z.string().min(1),
+  url: z.url({ protocol: /^https?$/, error: 'Must be an http(s) URL' }),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  alt: z.string().trim().min(1, { error: 'Alt text is required' }),
+});
+
+export const galleryContentSchema = z.object({
+  heading: z.string().max(100).optional(),
+  items: z.array(galleryImageSchema).max(40), // GAL-01 quota/DoS cap (T-35-DOS)
+});
+
+/**
+ * CaseStudyImage — identical shape to `galleryImageSchema` (REQUIRED http(s) url +
+ * positive-int dims + non-empty alt). These are the NESTED images under each
+ * case-study item (`content.items[].images[]`).
+ */
+export const caseStudyImageSchema = z.object({
+  id: z.string().min(1),
+  url: z.url({ protocol: /^https?$/, error: 'Must be an http(s) URL' }),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  alt: z.string().trim().min(1, { error: 'Alt text is required' }),
+});
+
+/**
+ * CaseStudyItem — one project told as a story (D-05). `title` is the LONE required
+ * field; `role`/`client`/`year` are optional meta (`year` free-form like
+ * `educationItemSchema.year`); `challenge`/`process`/`outcome` are the three optional
+ * narrative blocks — each a SINGLE text block (D-05, `process` is NOT a step array).
+ * `images` is the NESTED per-item array, capped at 5 (GAL-02 / D-06).
+ */
+export const caseStudyItemSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1).max(150), // the ONE required field (D-05)
+  role: z.string().max(120).optional(),
+  client: z.string().max(120).optional(),
+  year: z.string().max(60).optional(), // free-form label, like educationItemSchema.year
+  challenge: z.string().max(2000).optional(),
+  process: z.string().max(2000).optional(), // a SINGLE text block, NOT a step array (D-05)
+  outcome: z.string().max(2000).optional(),
+  images: z.array(caseStudyImageSchema).max(5), // GAL-02 per-item cap (T-35-DOS) — the NESTED array (D-06)
+});
+
+export const caseStudyContentSchema = z.object({
+  heading: z.string().max(100).optional(),
+  items: z.array(caseStudyItemSchema).max(12), // Claude's-discretion cap (D-04/D-07; T-35-DOS)
+});
+
+// ---------------------------------------------------------------------------
 // Soft-enum registry + the gate function
 // ---------------------------------------------------------------------------
 
@@ -418,6 +496,11 @@ export const sectionContentSchemas = {
   services: servicesContentSchema,
   moodboard: moodboardContentSchema,
   certifications: certificationsContentSchema,
+  // 35-01: the two creative-vertical types (v2.8 "Show the Work"). Additive,
+  // profession-agnostic, NO Postgres migration (CMS-08) — same one-line-per-type
+  // idiom as `skills` / the marketer types. The closed soft-enum set is now 15.
+  gallery: galleryContentSchema,
+  case_study: caseStudyContentSchema,
 } as const;
 
 /** The currently-known section types (derived from the registry keys). */
@@ -470,3 +553,10 @@ export type MetricsContent = z.infer<typeof metricsContentSchema>;
 export type ServicesContent = z.infer<typeof servicesContentSchema>;
 export type MoodboardContent = z.infer<typeof moodboardContentSchema>;
 export type CertificationsContent = z.infer<typeof certificationsContentSchema>;
+
+// 35-01 — creative-vertical item + content types.
+export type GalleryImage = z.infer<typeof galleryImageSchema>;
+export type GalleryContent = z.infer<typeof galleryContentSchema>;
+export type CaseStudyImage = z.infer<typeof caseStudyImageSchema>;
+export type CaseStudyItem = z.infer<typeof caseStudyItemSchema>;
+export type CaseStudyContent = z.infer<typeof caseStudyContentSchema>;
