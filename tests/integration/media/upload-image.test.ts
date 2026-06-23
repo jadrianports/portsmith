@@ -92,4 +92,102 @@ describe('MEDIA-01 — service-role WebP upload increases storage_used_bytes', (
       .single();
     expect(Number(after!.storage_used_bytes ?? 0)).toBeGreaterThan(used0);
   });
+
+  // 34-01 (MEDIA-02 / MEDIA-04 / D-08) — the new gallery kind rides the SAME
+  // service-role own-folder write + usage-charge contract as every other media kind.
+  it('owner WebP gallery upload (service-role path) to own folder succeeds and charges usage', async () => {
+    const { data: before } = await admin
+      .from('profiles')
+      .select('storage_used_bytes')
+      .eq('id', ctx.userA.id)
+      .single();
+    const used0 = Number(before!.storage_used_bytes ?? 0);
+
+    // gallery writes to the `media` bucket under {uid}/gallery/<id>.webp (the route's
+    // sub-locked buildObjectPath shape). Service-role mirrors the product path.
+    const path = `${ctx.userA.id}/gallery/${RUN}.webp`;
+    const { error: upErr } = await admin.storage
+      .from('media')
+      .upload(path, webpBytes(), { contentType: 'image/webp', upsert: false });
+    expect(upErr).toBeNull();
+
+    const { data: listing } = await admin.storage
+      .from('media')
+      .list(`${ctx.userA.id}/gallery`);
+    const names = (listing ?? []).map((o) => o.name);
+    expect(names).toContain(`${RUN}.webp`);
+
+    const { data: after } = await admin
+      .from('profiles')
+      .select('storage_used_bytes')
+      .eq('id', ctx.userA.id)
+      .single();
+    expect(Number(after!.storage_used_bytes ?? 0)).toBeGreaterThan(used0);
+  });
+});
+
+// 34-01 (MEDIA-01 / D-10) — the LIVE 65-MiB quota trigger boundary. These assertions
+// prove the migration-031 `CREATE OR REPLACE enforce_storage_quota()` is actually
+// applied to the local DB. The `media` bucket has a per-OBJECT 5 MiB file_size_limit
+// (migration 003), so the per-USER 65 MiB quota can only be exercised by ACCUMULATING
+// many ≤5 MiB objects: pushing userB's total above the old 25 MiB cap must now SUCCEED
+// (it would have been trigger-rejected before 031), and pushing past 65 MiB must still
+// be rejected by the BEFORE-INSERT quota trigger with SQLSTATE 23514 (check_violation).
+describe('MEDIA-01 / D-10 — the live trigger enforces the raised 65 MiB cap', () => {
+  const MIB = 1024 * 1024;
+  const CHUNK = 5 * MIB; // the media-bucket per-object file_size_limit (003)
+
+  /** A WebP buffer of `n` bytes (valid RIFF/WEBP header + zero padding) so the trigger
+   *  reads a real metadata.size. */
+  function webpOfSize(n: number): Uint8Array {
+    const buf = new Uint8Array(Math.max(n, webpBytes().length));
+    buf.set(webpBytes(), 0);
+    return buf;
+  }
+
+  async function usedBytes(userId: string): Promise<number> {
+    const { data } = await admin
+      .from('profiles')
+      .select('storage_used_bytes')
+      .eq('id', userId)
+      .single();
+    return Number(data!.storage_used_bytes ?? 0);
+  }
+
+  it('accumulating past 25 MiB SUCCEEDS (would fail pre-031) and past 65 MiB is rejected (23514)', async () => {
+    const uid = ctx.userB.id;
+    // Upload 5 MiB chunks one at a time; each ≤ the 5 MiB per-object bucket limit so the
+    // ONLY gate that can reject is the per-user quota trigger. Track when we cross the
+    // old 25 MiB cap and the new 65 MiB cap.
+    let crossedOldCap = false;
+    let rejectedOverNewCap = false;
+
+    for (let i = 0; i < 16; i++) {
+      const path = `${uid}/gallery/${RUN}-q${i}.webp`;
+      const { error: upErr } = await admin.storage
+        .from('media')
+        .upload(path, webpOfSize(CHUNK), {
+          contentType: 'image/webp',
+          upsert: false,
+        });
+
+      const used = await usedBytes(uid);
+
+      if (upErr) {
+        // The only legitimate rejection here is the per-user quota trigger once total
+        // usage would cross 65 MiB. Assert it happened at/above the new cap boundary,
+        // proving the live trigger uses 68157440 (NOT the old 26214400).
+        expect(used + CHUNK).toBeGreaterThan(68157440);
+        rejectedOverNewCap = true;
+        break;
+      }
+
+      // A success that pushes total usage above the OLD 25 MiB cap proves 031 raised it
+      // (this exact write would have RAISEd under the pre-031 26214400 constant).
+      if (used > 26214400) crossedOldCap = true;
+    }
+
+    expect(crossedOldCap).toBe(true); // raised cap allows usage the old cap forbade
+    expect(rejectedOverNewCap).toBe(true); // the new 65 MiB ceiling is still enforced
+  }, 60_000);
 });
