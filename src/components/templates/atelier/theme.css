@@ -1,0 +1,320 @@
+/*
+ * Scoped theme tokens for the `atelier` template — "Atelier" (36-02), a FAITHFUL 1:1
+ * clone of the dark-editorial gallery-wall Lovable export (`lovable-exports/atelier/`).
+ * The export ships a near-black canvas, an acid-green accent, Bebas Neue display + a
+ * neutral sans body, film grain, and SHARP corners (radius 0). This file reproduces the
+ * export's `:root` palette EXACTLY, re-expressed in the scoped 18-token vocabulary.
+ *
+ * DARK-ONLY (D-05): the export ships DARK as the ONLY canvas — no light mode, no toggle
+ * in its Nav. There is NO `[data-template-theme='dark']` inversion block here and
+ * `index.tsx` does NOT mount the `_kit` ThemeToggle. Atelier ships exactly what the
+ * export ships: one dark editorial canvas.
+ *
+ * TWO-LAYER UI ISOLATION (CTPL-04, SHARED-D): this file declares the template's OWN
+ * tokens scoped to the `.tmpl-atelier` root. It shares NOTHING with the platform-chrome
+ * tokens in `src/app/globals.css` (Evergreen/Copper, CMS-only) AND NOTHING with any other
+ * template's tokens. No reference to any chrome `--color-*` property; no chrome UI font
+ * (Inter is forbidden inside a template — atelier's body face is Archivo, bound via
+ * next/font in `fonts.ts`). Every other atelier file reads `var(--token)` — this file is
+ * the SOLE token source and the ONLY place hardcoded hex lives in the template.
+ *
+ * AA NOTE: the foreground `#f2f2f0` on the near-black `#0a0a0b` computes ~18:1 (PASS). The
+ * muted `#8a8a86` on `#0a0a0b` computes ~7.4:1 (PASS body). The acid-green `#c8ff00` is
+ * used for kickers/links/accents (large/decorative) and as a fill behind the near-black
+ * `--accent-fg` (`#0a0a0b`) — that pairing is ~16:1 (PASS). Body/heading text uses `--fg`,
+ * never the accent, so no essential text depends on a low-contrast pairing.
+ */
+
+.tmpl-atelier {
+  /* Surfaces — the export's dark editorial canvas. */
+  --bg: #0a0a0b; /* page canvas — near-black */
+  --surface: #0d0d0f; /* elevated card (export --card) */
+  --surface-muted: #141417; /* inset fills, image placeholders (export --muted) */
+
+  /* Foreground — warm off-white ink + a muted grey for meta. */
+  --fg: #f2f2f0; /* primary text (export --foreground) */
+  --muted-fg: #8a8a86; /* lead/meta/dates/captions (export --muted-foreground) */
+
+  /* Borders — the export's two hairline alphas (decorative, low-contrast by design —
+     WCAG 1.4.11 exempt). `--border` = export --border; `--border-strong` = the export's
+     slightly-stronger `--hairline`. */
+  --border: rgba(242, 242, 240, 0.08);
+  --border-strong: rgba(242, 242, 240, 0.12);
+
+  /* Accent — the ONE acid green, used for kickers, links, accent marks, CTA fills. */
+  --accent: #c8ff00; /* acid green (export --accent) */
+  --accent-fg: #0a0a0b; /* near-black ink ON the accent fill (export --accent-foreground) */
+  --ring: #c8ff00; /* focus ring = accent */
+
+  /* Functional semantic colors (NOT part of the accent budget). The export has no
+     success token; `--destructive` is the export's `#ff4d3d`. `--success` is a muted
+     green that clears AA on the dark ground (~8:1). */
+  --success: #5fcf93;
+  --destructive: #ff4d3d; /* export --destructive */
+
+  /* SHARED report-dialog COMPLETE-VALUE tokens: the SAME `<ReportDialog>` island mounts
+     under atelier and reads THESE per-template tokens (the island carries NO hardcoded
+     hex). Atelier = the sharp acid-on-black identity: a solid acid top-hairline, a flat
+     near-black backdrop scrim, and an acid ring. */
+  --tmpl-modal-hairline: var(--accent);
+  --tmpl-modal-backdrop: color-mix(in srgb, var(--bg) 82%, transparent);
+  --tmpl-modal-shadow: 0 0 0 1px var(--accent), 0 18px 44px -22px rgba(0, 0, 0, 0.6);
+  --tmpl-modal-cta-shadow: 0 8px 28px -12px rgba(200, 255, 0, 0.28);
+
+  /* Radius — the export's `--radius: 0` (SHARP corners, the editorial signature). The
+     four required radius tokens are all 0 except `--radius-full` (kept for any pill/dot
+     affordance the shared islands need — the export itself never rounds content). */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-full: 9999px;
+
+  /* Gallery masonry column count (D-07/D-14). A template-PRIVATE extra (NOT one of the 18
+     required tokens). The columns step up at the breakpoints below to mirror the export's
+     `columns-1 sm:columns-2 lg:columns-3 xl:columns-4` headline wall. */
+  --atelier-gallery-cols: 1;
+  --atelier-gap: 16px;
+
+  /* The template owns its full-bleed canvas (no chrome gutter behind the scroll). */
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+
+  /* SELF-CONTAINED BODY FONT (CTPL-04 two-layer isolation). Anchor the template ROOT to
+     its OWN body face (Archivo, `--font-body`, injected onto this same element via
+     `fontVars` in index.tsx) so every `ch`/`em` measure resolves against the template's
+     own font, independent of any host root (NOT the chrome Inter). Display headings stay
+     explicitly set on their own elements (`--font-display`). */
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The export's `::selection` uses the accent (acid green ground, near-black ink). */
+.tmpl-atelier ::selection {
+  background-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+/* Smooth in-page scroll (the export's `html { scroll-behavior: smooth }`), scoped. */
+.tmpl-atelier {
+  scroll-behavior: smooth;
+}
+
+/* ============================================================================
+ * RESPONSIVE GALLERY COLUMNS — mirrors the export's
+ * `columns-1 sm:columns-2 lg:columns-3 xl:columns-4` headline wall via the private
+ * `--atelier-gallery-cols` token (read by gallery.tsx's `columns`). Stepped at the same
+ * breakpoints so the masonry packs identically to the export.
+ * ========================================================================== */
+@media (min-width: 640px) {
+  .tmpl-atelier {
+    --atelier-gallery-cols: 2;
+  }
+}
+@media (min-width: 1024px) {
+  .tmpl-atelier {
+    --atelier-gallery-cols: 3;
+  }
+}
+@media (min-width: 1280px) {
+  .tmpl-atelier {
+    --atelier-gallery-cols: 4;
+  }
+}
+
+/* ============================================================================
+ * SECTION HAIRLINES + CONTENT SHELL. The export draws a `border-t border-[--hairline]`
+ * between every section; `index.tsx` tags each non-hero section so this rule applies the
+ * top hairline. The shell is the export's `max-w-[1600px]` centered column with the
+ * `px-6 md:px-10` gutter.
+ * ========================================================================== */
+.tmpl-atelier [data-section-type]:not([data-section-type='hero']) {
+  border-top: 1px solid var(--border-strong);
+}
+
+.tmpl-atelier .tmpl-shell {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 1600px;
+  margin-inline: auto;
+  padding-inline: clamp(1.5rem, 5vw, 2.5rem);
+}
+
+/* The atelier reading measure for long-form prose. */
+.tmpl-atelier .tmpl-measure {
+  max-width: 48rem;
+}
+
+/* About spread — the export's `md:col-span-4` portrait / `md:col-span-8` copy split.
+   Single-column stacked on mobile (the grid spans default to `span 12`); at the md
+   breakpoint the portrait takes 4 columns and the copy takes 8 (with the export's top
+   gutter on the copy column). */
+@media (min-width: 768px) {
+  .tmpl-atelier .tmpl-about-portrait {
+    grid-column: span 4 !important;
+  }
+  .tmpl-atelier .tmpl-about-body {
+    grid-column: span 8 !important;
+    padding-top: 48px;
+  }
+  .tmpl-atelier .tmpl-contact-left {
+    grid-column: span 6 !important;
+  }
+  .tmpl-atelier .tmpl-contact-right {
+    grid-column: span 6 !important;
+  }
+}
+
+/* ============================================================================
+ * ABOVE-THE-FOLD HERO LOAD-REVEAL (TMPL-04 LCP). The Hero masthead is the LCP element and
+ * is ALWAYS in view, so it must NOT be gated by the JS IntersectionObserver opacity:0
+ * reveal. The Hero wrapper (`.tmpl-load-reveal`, rendered STATIC server-side by
+ * ScrollReveal's `priority` branch) paints at its FINAL position from frame 1 — ZERO
+ * entrance motion, CLS = 0. (Identical contract to aurora/minimal/editorial; the export's
+ * framer-motion hero entrance is DROPPED — the kit ScrollReveal + CSS replace it.)
+ * ========================================================================== */
+.tmpl-atelier .tmpl-load-reveal {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+/* ============================================================================
+ * FILM GRAIN OVERLAY — the export's signature `grain-overlay` utility, reproduced 1:1
+ * (fixed full-viewport, pointer-events:none, opacity .06, mix-blend overlay, the same
+ * inline-SVG fractal-noise data URI). Scoped to `.tmpl-atelier .tmpl-grain`. A static
+ * decorative layer (not motion — reduced-motion exempt).
+ * ========================================================================== */
+.tmpl-atelier .tmpl-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* ============================================================================
+ * LINKS — the export's accent hover (text shifts to acid green; mailto/social links get
+ * an acid underline). Scoped, pure-CSS (no client JS).
+ * ========================================================================== */
+.tmpl-atelier .tmpl-link {
+  color: var(--fg);
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+.tmpl-atelier .tmpl-link:hover {
+  color: var(--accent);
+}
+
+/* The export's gallery tile hover — a slow 1.03 scale on the image (group-hover). */
+.tmpl-atelier .tmpl-gallery-tile img {
+  transition: transform 1200ms ease;
+}
+.tmpl-atelier .tmpl-gallery-tile:hover img {
+  transform: scale(1.03);
+}
+
+/* ============================================================================
+ * Contact — form-field focus ring + the live-submit spinner/success classes. The Contact
+ * section hosts the LIVE `<ContactForm>` island (template-agnostic). That island reads
+ * scoped `var(--token)` + the SHARED class hooks below — so this template MUST define them
+ * scoped to `.tmpl-atelier` (the acid focus ring).
+ * ========================================================================== */
+.tmpl-atelier .tmpl-contact-field {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.tmpl-atelier .tmpl-contact-field:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tmpl-atelier .tmpl-contact-spinner {
+    animation: tmpl-atelier-contact-spin 0.7s linear infinite;
+  }
+}
+
+@keyframes tmpl-atelier-contact-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================================
+ * Report dialog — the shared `<ReportDialog>` island mounts in the atelier FOOTER under
+ * the `.tmpl-atelier` root, so it needs THESE scoped hooks (referenced by name). The
+ * close button gets the acid `:focus-visible` ring; the entrance is a flat fade (the
+ * sharp editorial vibe — no scale/translate flourish).
+ * ========================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+  .tmpl-atelier .tmpl-modal-backdrop-enter {
+    animation: tmpl-atelier-modal-backdrop-in 140ms ease-out 1;
+  }
+  .tmpl-atelier .tmpl-project-modal-enter {
+    animation: tmpl-atelier-modal-in 160ms ease-out 1;
+  }
+}
+
+@keyframes tmpl-atelier-modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tmpl-atelier-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tmpl-atelier .tmpl-modal-close {
+  transition:
+    color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.tmpl-atelier .tmpl-modal-close:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.tmpl-atelier .tmpl-modal-close:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+}
+
+/* ============================================================================
+ * Reduced-motion contract (HARD requirement — mirrors aurora/minimal/editorial). Under
+ * `prefers-reduced-motion: reduce`, ALL animation/transition inside the template is
+ * zeroed; content is NEVER hidden behind motion (the scroll-reveal island also
+ * short-circuits to fully-visible, and the `.tmpl-reveal` CSS fallback forces the
+ * revealed state). The static film grain (not motion) remains. Scoped to
+ * `.tmpl-atelier *`.
+ * ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .tmpl-atelier *,
+  .tmpl-atelier *::before,
+  .tmpl-atelier *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  .tmpl-atelier .tmpl-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
