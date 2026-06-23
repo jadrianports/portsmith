@@ -36,12 +36,14 @@ import {
   Briefcase,
   ChartNoAxesColumn,
   FolderKanban,
+  GalleryHorizontalEnd,
   GraduationCap,
   HandHelping,
   Images,
   LoaderCircle,
   Mail,
   Newspaper,
+  NotebookPen,
   PanelTop,
   Quote,
   User,
@@ -133,6 +135,21 @@ const PICKER_ENTRIES: readonly PickerEntry[] = [
     title: 'Moodboard / Gallery',
     blurb: 'A captioned image gallery, with an optional color palette.',
     Icon: Images,
+  },
+  {
+    // 35-02 / D-01: a clean photo wall — DISTINCT from moodboard (no captions, no
+    // palette) and from projects (no titles/links). EDIT-ALL: shown to every user.
+    type: 'gallery',
+    title: 'Gallery',
+    blurb: 'A clean photo wall — just the images, no captions.',
+    Icon: GalleryHorizontalEnd,
+  },
+  {
+    // 35-02 / D-05: one project told as a story (Challenge → Process → Outcome).
+    type: 'case_study',
+    title: 'Case study',
+    blurb: 'Tell one project as a story: challenge, process, outcome.',
+    Icon: NotebookPen,
   },
   {
     type: 'certifications',

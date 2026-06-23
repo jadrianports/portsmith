@@ -1,7 +1,7 @@
 /**
  * addable-section-types — the ADDABLE_SECTION_TYPES allowlist (D-02 / Pitfall 6).
  *
- * The 13 FORM-HAVING soft-enum types a user may add via the Add-section picker — all
+ * The 15 FORM-HAVING soft-enum types a user may add via the Add-section picker — all
  * the registered types (`sectionContentSchemas`, `@/lib/validations/sections`). As of
  * 13.2-06 / D-16 `blog_preview` is INCLUDED: it gained its BlogPreviewForm (heading +
  * shown-count) in the blog engine, so it is now a form-having, addable type like the
@@ -21,10 +21,11 @@
  */
 
 /**
- * The 13 addable (form-having) section types — all the registered soft-enum types,
- * including `blog_preview` (13.2-06 / D-16). Kept in registry order for a stable
- * picker list. A crafted `addSectionAction('not_a_real_type')` is refused by this
- * allowlist before any DB access.
+ * The 15 addable (form-having) section types — all the registered soft-enum types,
+ * including `blog_preview` (13.2-06 / D-16) and the v2.8 creative types `gallery` +
+ * `case_study` (35-02 / D-08). Kept in registry order for a stable picker list. A
+ * crafted `addSectionAction('not_a_real_type')` is refused by this allowlist before
+ * any DB access.
  */
 export const ADDABLE_SECTION_TYPES = [
   'hero',
@@ -38,6 +39,8 @@ export const ADDABLE_SECTION_TYPES = [
   'metrics',
   'services',
   'moodboard',
+  'gallery',
+  'case_study',
   'certifications',
   'blog_preview',
 ] as const;
