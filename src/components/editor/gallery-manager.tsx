@@ -140,19 +140,35 @@ export function buildGalleryContent(
   return content;
 }
 
-/** Read the initial editor images from the section's persisted content (KEEP/mint ids). */
+/** A positive-integer dimension, mirroring `galleryImageSchema` (`z.number().int().positive()`). */
+function posIntDim(v: unknown): boolean {
+  return typeof v === 'number' && Number.isInteger(v) && v > 0;
+}
+
+/**
+ * Read the initial editor images from the section's persisted content (KEEP/mint ids).
+ * WR-02 (35-REVIEW): PRUNE any persisted image whose `url`/dims are not server-valid
+ * (blank url, or non-positive-int width/height) rather than fabricating a `0` the schema
+ * is guaranteed to reject — a corrupt/legacy row would otherwise silently wedge the whole
+ * section against the next save (every rebuild re-emits the bad image). Corrupt rows are
+ * dropped, mirroring how a blank `id` is re-minted; the SERVER re-parse stays the gate.
+ */
 function toEditorImages(initialContent: Record<string, unknown>): GalleryEditorImage[] {
   const raw = Array.isArray(initialContent.items) ? initialContent.items : [];
-  return raw.map((i) => {
+  const out: GalleryEditorImage[] = [];
+  for (const i of raw) {
     const it = (i ?? {}) as Record<string, unknown>;
-    return {
+    const url = typeof it.url === 'string' ? it.url : '';
+    if (url === '' || !posIntDim(it.width) || !posIntDim(it.height)) continue; // corrupt → prune
+    out.push({
       id: typeof it.id === 'string' && it.id !== '' ? it.id : nanoid(),
-      url: typeof it.url === 'string' ? it.url : '',
-      width: typeof it.width === 'number' ? it.width : 0,
-      height: typeof it.height === 'number' ? it.height : 0,
+      url,
+      width: it.width as number,
+      height: it.height as number,
       alt: typeof it.alt === 'string' ? it.alt : '',
-    };
-  });
+    });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

@@ -192,6 +192,68 @@ describe('D-20 — isSaveableSnapshot (skip-invalid structural pre-check, no Zod
     };
     expect(isSaveableSnapshot('metrics', both)).toBe(true);
   });
+
+  // ── Regression: the two creative types (35-02 / 35-REVIEW CR-01) ──
+  // gallery + case_study are item-bearing (`content.items[]`) but use DIFFERING image
+  // field-names (gallery flat `url`/`alt`; case_study NESTED `items[].images[].{url,alt}`).
+  // Before the per-type probe extension they were absent from ITEM_BEARING and fell
+  // through to `return true`, so a fresh upload (blank required alt/title) fired a
+  // guaranteed-to-fail POST and flipped the section to `state='error'` — the exact
+  // "whole section type silently un-saveable / doomed POST" failure these cases pin.
+
+  it('CR-01 (gallery): a freshly-uploaded image with a blank alt is NOT saveable (no doomed POST)', () => {
+    // galleryImageSchema requires a non-empty `alt` — a card uploaded but alt-less must
+    // be SKIPPED, not POSTed (the managers' documented skip-until-alt contract).
+    const altLess = {
+      items: [{ id: 'g1', url: 'https://x/y.webp', width: 800, height: 600, alt: '' }],
+    };
+    expect(isSaveableSnapshot('gallery', altLess)).toBe(false);
+
+    // Once the alt is filled the snapshot is server-valid → saveable.
+    const withAlt = {
+      items: [{ id: 'g1', url: 'https://x/y.webp', width: 800, height: 600, alt: 'A sunset' }],
+    };
+    expect(isSaveableSnapshot('gallery', withAlt)).toBe(true);
+
+    // An empty gallery (no items yet) is server-valid (items.max(40), no min) → saveable.
+    expect(isSaveableSnapshot('gallery', { items: [] })).toBe(true);
+  });
+
+  it('CR-01 (case_study): a blank-titled item OR an alt-less nested image is NOT saveable', () => {
+    // title is the LONE required per-item field (caseStudyItemSchema) — a fresh blank
+    // shell item must be skipped, never POSTed.
+    const blankTitle = { items: [{ id: 'c1', title: '', images: [] }] };
+    expect(isSaveableSnapshot('case_study', blankTitle)).toBe(false);
+
+    // A titled item whose NESTED image has a url but blank alt is still doomed
+    // (caseStudyImageSchema requires alt) — the images[] url⇒alt walker must catch it.
+    const altLessNested = {
+      items: [
+        {
+          id: 'c1',
+          title: 'Redesign',
+          images: [{ id: 'i1', url: 'https://x/y.webp', width: 800, height: 600, alt: '' }],
+        },
+      ],
+    };
+    expect(isSaveableSnapshot('case_study', altLessNested)).toBe(false);
+
+    // A titled item with no images (images optional/empty) is server-valid → saveable.
+    const titleOnly = { items: [{ id: 'c1', title: 'Redesign', images: [] }] };
+    expect(isSaveableSnapshot('case_study', titleOnly)).toBe(true);
+
+    // A titled item whose nested image is alt-complete is saveable.
+    const fullyComplete = {
+      items: [
+        {
+          id: 'c1',
+          title: 'Redesign',
+          images: [{ id: 'i1', url: 'https://x/y.webp', width: 800, height: 600, alt: 'Before' }],
+        },
+      ],
+    };
+    expect(isSaveableSnapshot('case_study', fullyComplete)).toBe(true);
+  });
 });
 
 // D-06 — out-of-order FLUSH-ordering stale-drop via a MOCK-SAVER seam.

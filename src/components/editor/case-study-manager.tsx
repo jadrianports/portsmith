@@ -185,19 +185,34 @@ export function buildCaseStudyContent(
   return content;
 }
 
-/** Read the initial nested images of one item (KEEP/mint ids). */
+/** A positive-integer dimension, mirroring `caseStudyImageSchema` (`z.number().int().positive()`). */
+function posIntDim(v: unknown): boolean {
+  return typeof v === 'number' && Number.isInteger(v) && v > 0;
+}
+
+/**
+ * Read the initial nested images of one item (KEEP/mint ids).
+ * WR-02 (35-REVIEW): PRUNE any persisted image whose `url`/dims are not server-valid
+ * (blank url, or non-positive-int width/height) rather than fabricating a `0` the schema
+ * is guaranteed to reject — a corrupt/legacy row would otherwise silently wedge the whole
+ * section against the next save. The SERVER re-parse stays the gate.
+ */
 function toEditorImages(raw: unknown): CaseStudyEditorImage[] {
   const arr = Array.isArray(raw) ? raw : [];
-  return arr.map((i) => {
+  const out: CaseStudyEditorImage[] = [];
+  for (const i of arr) {
     const it = (i ?? {}) as Record<string, unknown>;
-    return {
+    const url = typeof it.url === 'string' ? it.url : '';
+    if (url === '' || !posIntDim(it.width) || !posIntDim(it.height)) continue; // corrupt → prune
+    out.push({
       id: typeof it.id === 'string' && it.id !== '' ? it.id : nanoid(),
-      url: typeof it.url === 'string' ? it.url : '',
-      width: typeof it.width === 'number' ? it.width : 0,
-      height: typeof it.height === 'number' ? it.height : 0,
+      url,
+      width: it.width as number,
+      height: it.height as number,
       alt: typeof it.alt === 'string' ? it.alt : '',
-    };
-  });
+    });
+  }
+  return out;
 }
 
 /** Read the initial editor items from the section's persisted content (KEEP/mint ids). */

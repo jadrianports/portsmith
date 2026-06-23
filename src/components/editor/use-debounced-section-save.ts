@@ -139,6 +139,11 @@ function filled(v: unknown): boolean {
  *   - moodboard:      (none)               (moodboardImageSchema — only `id` + the
  *                       alt-when-image refine; a text-/image-less gallery slot is
  *                       SERVER-VALID, so it must pass the probe — CR-02)
+ *   - gallery:        (none)               (galleryImageSchema — each item IS an image;
+ *                       gated by the flat url⇒alt rule below, 35-02 / GAL-01)
+ *   - case_study:     `title`              (caseStudyItemSchema — the LONE required
+ *                       per-item text; its NESTED images gated by the images[] url⇒alt
+ *                       walker below, 35-02 / GAL-02 / D-05)
  *
  * CONSERVATIVE DEFAULT (CLAUDE.md "skip only what the server is CERTAIN to reject"):
  * a type WITHOUT an entry here defaults to no required text keys → its items pass on
@@ -154,6 +159,8 @@ const REQUIRED_TEXT_KEYS: Record<string, readonly string[]> = {
   certifications: ['title'],
   education: ['degree', 'school'],
   moodboard: [], // gallery item: only the alt-when-image rule gates it (CR-02).
+  gallery: [], // 35-02: each item IS an image — gated by the flat url⇒alt rule (GAL-01).
+  case_study: ['title'], // 35-02: title is the LONE required per-item text (D-05); nested images gated separately (GAL-02).
 };
 
 /** Item-bearing types whose content lives in a `content.items[]` array. */
@@ -183,6 +190,25 @@ function itemIsStructurallyComplete(item: unknown, type: string): boolean {
   // by this alt rule — such items legitimately carry no primary text.
   if (filled(it.image) && !filled(it.image_alt)) return false;
   if (filled(it.avatar) && !filled(it.avatar_alt)) return false;
+
+  // Gallery (35-02 / GAL-01): each item IS a native-aspect image — a REQUIRED http(s)
+  // `url` paired with a REQUIRED `alt` (galleryImageSchema). A freshly-uploaded card
+  // carries a url but a still-blank alt → doomed until the alt is typed (CR-01). The
+  // `url`/`alt` field-names differ from the `image`/`image_alt` pair above, and no other
+  // item-bearing type uses a bare `url`, so this is scoped to `gallery`.
+  if (type === 'gallery' && filled(it.url) && !filled(it.alt)) return false;
+
+  // Case study (35-02 / GAL-02 / D-06): each NESTED image (`items[].images[]`) carries a
+  // REQUIRED http(s) `url` + REQUIRED `alt` (caseStudyImageSchema). Any nested image with
+  // a url but a blank alt makes the whole snapshot doomed (CR-01). The required `title`
+  // is enforced by REQUIRED_TEXT_KEYS below.
+  if (type === 'case_study' && Array.isArray(it.images)) {
+    for (const img of it.images) {
+      if (!img || typeof img !== 'object') continue;
+      const im = img as LooseContent;
+      if (filled(im.url) && !filled(im.alt)) return false;
+    }
+  }
 
   // Then EVERY required text key for this type must be filled (AND — a half-filled
   // item like a metric with `label` but no `value` is doomed and is skipped, IN-02).

@@ -186,15 +186,27 @@ function titleFor(type: string, content: ContentRecord): string {
 
 /** Whether a section has real content yet (drives the rail status dot). */
 function hasContentFor(type: string, content: ContentRecord): boolean {
-  // Item-based families + moodboard/gallery/case_study (all items[]) are "filled" once
-  // they have ≥1 item; the seeded heading-only row reads as empty (D-21 "started, not
-  // done"). 35-02: gallery + case_study join the items[]-aware set.
-  if (
-    ITEM_TYPES.has(type) ||
-    type === 'moodboard' ||
-    type === 'gallery' ||
-    type === 'case_study'
-  ) {
+  // case_study (35-02 / WR-03): a freshly-added item is a fully-BLANK shell (empty
+  // required `title`, no images) that the server rejects and never persists — so an
+  // item-count test would light the rail dot "filled" while the server holds zero case
+  // studies. Gate on a real persisted value (≥1 item with a non-empty title), mirroring
+  // the about/skills field-value checks below rather than bare array length.
+  if (type === 'case_study') {
+    return (
+      Array.isArray(content.items) &&
+      content.items.some(
+        (it) =>
+          !!it &&
+          typeof it === 'object' &&
+          typeof (it as Record<string, unknown>).title === 'string' &&
+          ((it as Record<string, unknown>).title as string).trim().length > 0,
+      )
+    );
+  }
+  // Item-based families + moodboard/gallery (all items[]) are "filled" once they have ≥1
+  // item; the seeded heading-only row reads as empty (D-21 "started, not done"). 35-02:
+  // gallery joins the items[]-aware set (a gallery item only exists after a real upload).
+  if (ITEM_TYPES.has(type) || type === 'moodboard' || type === 'gallery') {
     return Array.isArray(content.items) && content.items.length > 0;
   }
   if (type === 'about') return typeof content.bio === 'string' && content.bio.trim().length > 0;
