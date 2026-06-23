@@ -41,29 +41,57 @@ export type UploadKind =
   // existing webp-only + quota-trigger upload path (no migration, no new bypass).
   | 'favicon'
   | 'og'
+  // 34-01 (MEDIA-02 / D-04): the no-crop batch gallery image kind. A `crop:'maxEdge'`
+  // union variant on the `media` bucket — the client downscales to 2000px longest-edge,
+  // the route + quota trigger gate it through the UNCHANGED webp-only image path.
+  | 'gallery'
   | 'resume';
 
 /** A user-writable Storage bucket (migration 003). */
 export type UploadBucket = 'avatars' | 'media' | 'resumes';
 
-export interface ImageSlotConfig {
+/** Fields every slot variant shares (D-04 discriminated-union base). */
+interface BaseSlotConfig {
   bucket: UploadBucket;
   context: string;
-  /** Fixed crop aspect ratio (D-03). */
-  aspect: number;
-  /** Retina target pixel size for the single stored WebP (D-05). */
-  target: { width: number; height: number };
   /** Per-request byte ceiling (defense-in-depth with the bucket cap). */
   ceiling: number;
 }
 
-export interface FileSlotConfig {
-  bucket: UploadBucket;
-  context: string;
-  ceiling: number;
+/** The six fixed-aspect image slots (avatar/project/testimonial/moodboard/favicon/og).
+ *  Discriminated by `crop:'fixed'`; carries the fixed crop aspect + retina target (D-03/D-05). */
+export interface FixedImageSlotConfig extends BaseSlotConfig {
+  crop: 'fixed';
+  /** Fixed crop aspect ratio (D-03). */
+  aspect: number;
+  /** Retina target pixel size for the single stored WebP (D-05). */
+  target: { width: number; height: number };
 }
 
-export type UploadSlotConfig = ImageSlotConfig | FileSlotConfig;
+/** The no-crop gallery image slot (D-04 / MEDIA-02). Discriminated by `crop:'maxEdge'`;
+ *  the client downscales the original to `maxEdge` on its longest edge — no fixed aspect. */
+export interface GalleryImageSlotConfig extends BaseSlotConfig {
+  crop: 'maxEdge';
+  /** Longest-edge clamp for the client downscale (D-03). */
+  maxEdge: number;
+}
+
+/** The résumé (raw file) slot. Discriminated by `crop:'none'`. */
+export interface FileSlotConfig extends BaseSlotConfig {
+  crop: 'none';
+}
+
+/**
+ * Back-compat alias: the fixed-aspect image variant kept its historical name so
+ * `image-uploader.tsx:174`'s `UPLOAD_KINDS[kind] as ImageSlotConfig` cast (it reads
+ * `aspect`/`target`/`ceiling`) compiles untouched after the union reshape.
+ */
+export type ImageSlotConfig = FixedImageSlotConfig;
+
+export type UploadSlotConfig =
+  | FixedImageSlotConfig
+  | GalleryImageSlotConfig
+  | FileSlotConfig;
 
 /**
  * Per-slot upload specs. Image slots (avatar/project/testimonial) carry the fixed
@@ -71,6 +99,7 @@ export type UploadSlotConfig = ImageSlotConfig | FileSlotConfig;
  */
 export const UPLOAD_KINDS: Record<UploadKind, UploadSlotConfig> = {
   avatar: {
+    crop: 'fixed',
     bucket: 'avatars',
     context: 'avatar',
     aspect: 1,
@@ -78,6 +107,7 @@ export const UPLOAD_KINDS: Record<UploadKind, UploadSlotConfig> = {
     ceiling: IMAGE_CEILING_BYTES,
   },
   project: {
+    crop: 'fixed',
     bucket: 'media',
     context: 'project',
     aspect: 16 / 9,
@@ -85,6 +115,7 @@ export const UPLOAD_KINDS: Record<UploadKind, UploadSlotConfig> = {
     ceiling: IMAGE_CEILING_BYTES,
   },
   testimonial: {
+    crop: 'fixed',
     bucket: 'media',
     context: 'testimonial',
     aspect: 1,
@@ -96,6 +127,7 @@ export const UPLOAD_KINDS: Record<UploadKind, UploadSlotConfig> = {
   // bucket `media` so the BEFORE-INSERT 25 MiB quota trigger (migration 009) gates it
   // unchanged. `ceiling: IMAGE_CEILING_BYTES` is per-request defense-in-depth.
   moodboard: {
+    crop: 'fixed',
     bucket: 'media',
     context: 'moodboard',
     aspect: 1,
@@ -106,6 +138,7 @@ export const UPLOAD_KINDS: Record<UploadKind, UploadSlotConfig> = {
   // 256×256 retina target; bucket `media` so the BEFORE-INSERT quota trigger gates it
   // unchanged. `ceiling: IMAGE_CEILING_BYTES` is per-request defense-in-depth.
   favicon: {
+    crop: 'fixed',
     bucket: 'media',
     context: 'favicon',
     aspect: 1,
@@ -115,13 +148,27 @@ export const UPLOAD_KINDS: Record<UploadKind, UploadSlotConfig> = {
   // 29-02 (D-05 / META-04): the social-share OG card slot. The canonical 1.91:1
   // aspect at the 1200×630 target; same `media` bucket + quota-trigger path.
   og: {
+    crop: 'fixed',
     bucket: 'media',
     context: 'og',
     aspect: 1.91,
     target: { width: 1200, height: 630 },
     ceiling: IMAGE_CEILING_BYTES,
   },
+  // 34-01 (MEDIA-02 / D-04 / D-08): the no-crop batch gallery image slot. Unlike the
+  // fixed-aspect kinds it carries NO aspect/target — the client downscales the original
+  // to `maxEdge` (2000px, D-03) on its longest edge, preserving the native aspect. Rides
+  // the `media` bucket so the BEFORE-INSERT quota trigger gates it unchanged; the route's
+  // per-request `ceiling: IMAGE_CEILING_BYTES` still caps the small stored WebP at 5 MiB.
+  gallery: {
+    crop: 'maxEdge',
+    bucket: 'media',
+    context: 'gallery',
+    maxEdge: 2000,
+    ceiling: IMAGE_CEILING_BYTES,
+  },
   resume: {
+    crop: 'none',
     bucket: 'resumes',
     context: 'resume',
     ceiling: RESUME_CEILING_BYTES,
@@ -143,8 +190,9 @@ export const MAX_UPLOAD_CEILING = Math.max(
   ...Object.values(UPLOAD_KINDS).map((k) => k.ceiling),
 );
 
-/** Per-user storage cap (D-09). 25 MiB = 26214400 bytes. */
-export const QUOTA_BYTES = 25 * 1024 * 1024;
+/** Per-user storage cap (D-09; raised D-10 / MEDIA-01). 65 MiB = 68157440 bytes.
+ *  MUST match the SQL `quota` CONSTANT in migration 031 (the linkage test guards it). */
+export const QUOTA_BYTES = 65 * 1024 * 1024;
 
 /**
  * Derived `kind → bucket` lookup the route + delete helper share. Single source of
@@ -157,8 +205,19 @@ export const kindToBucket: Record<UploadKind, UploadBucket> = {
   moodboard: UPLOAD_KINDS.moodboard.bucket,
   favicon: UPLOAD_KINDS.favicon.bucket,
   og: UPLOAD_KINDS.og.bucket,
+  gallery: UPLOAD_KINDS.gallery.bucket,
   resume: UPLOAD_KINDS.resume.bucket,
 };
+
+/**
+ * Client-only pre-downscale original-file ceiling for gallery picks (D-06).
+ * 40 MiB covers virtually all phone/DSLR JPEG/PNG originals. This is NOT a route
+ * ceiling — the upload route never sees the original file; only the small downscaled
+ * WebP (≤ the per-kind `IMAGE_CEILING_BYTES`) ever reaches the route. The gallery
+ * uploader rejects an over-this original BEFORE decoding/downscaling it (a memory-
+ * pressure + UX speed-bump, not a security authority).
+ */
+export const GALLERY_ORIGINAL_CEILING_BYTES = 40 * 1024 * 1024; // 41943040
 
 /**
  * Pure quota predicate (MEDIA-03). True when accepting `incoming` more bytes on top
@@ -189,7 +248,7 @@ export function exceedsPixelCap(width: number, height: number): boolean {
  * StorageMeter pure math (D-09 / B-10 / B-11)
  *
  * The display-only `storage-meter.tsx` component reads the protected, trigger-
- * maintained `storage_used_bytes` (NEVER writes it) and renders "X / 25 MB". Its
+ * maintained `storage_used_bytes` (NEVER writes it) and renders "X / 65 MB". Its
  * DECISION math lives here — pure, `node`-unit-testable, and the single source of
  * truth for the three threshold boundaries — so the component is a thin renderer.
  * ──────────────────────────────────────────────────────────────────────────── */
@@ -225,17 +284,18 @@ export function meterFillRatio(used: number): number {
 }
 
 /**
- * The truthful "X / 25 MB" readout (Copywriting Contract). Whole MB render as an
+ * The truthful "X / 65 MB" readout (Copywriting Contract). Whole MB render as an
  * integer; a sub-MB upload shows ONE decimal so a tiny image is never shown
- * misleadingly as "0 / 25 MB". The denominator is always the 25 MB cap.
+ * misleadingly as "0 / 65 MB". The denominator is always the cap (derived from
+ * QUOTA_BYTES, so it auto-tracks D-10's raise — no hardcoded number here).
  *
- * WR-06: the decimal is FLOORED, not rounded — rounding 24.96 MB up to "25 / 25 MB"
+ * WR-06: the decimal is FLOORED, not rounded — rounding e.g. 64.96 MB up to "65 / 65 MB"
  * read as "full" while `meterState` was still 'approaching' (an internally
  * contradictory display). Flooring reserves the exact cap figure for genuinely
  * at/over-cap usage; a real upload still floors to a visible 0.1 minimum.
  */
 export function formatStorageReadout(used: number): string {
-  const capMb = Math.round(QUOTA_BYTES / (1024 * 1024)); // 25
+  const capMb = Math.round(QUOTA_BYTES / (1024 * 1024)); // 65
   const safe = Number.isFinite(used) && used > 0 ? used : 0;
   const usedMbRaw = safe / (1024 * 1024);
   // Whole MB → integer; otherwise one FLOORED decimal (never rounds up to the cap;
