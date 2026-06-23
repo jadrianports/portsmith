@@ -11,9 +11,9 @@ import { describe, expect, it } from 'vitest';
 
 import { QUOTA_BYTES, wouldExceedQuota } from '@/lib/media/upload-config';
 
-describe('QUOTA_BYTES (D-09)', () => {
-  it('is exactly 25 MiB', () => {
-    expect(QUOTA_BYTES).toBe(26_214_400);
+describe('QUOTA_BYTES (D-09; raised D-10 / MEDIA-01)', () => {
+  it('is exactly 65 MiB', () => {
+    expect(QUOTA_BYTES).toBe(68_157_440);
   });
 });
 
@@ -33,6 +33,7 @@ describe('wouldExceedQuota — pre-upload boundary', () => {
   });
 
   it('rejects a large upload that blows past the cap', () => {
-    expect(wouldExceedQuota(20 * 1024 * 1024, 10 * 1024 * 1024)).toBe(true);
+    // 60 + 10 = 70 MiB > the 65 MiB cap (D-10).
+    expect(wouldExceedQuota(60 * 1024 * 1024, 10 * 1024 * 1024)).toBe(true);
   });
 });

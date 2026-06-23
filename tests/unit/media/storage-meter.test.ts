@@ -66,22 +66,22 @@ describe('meterFillRatio (clamped 0..1)', () => {
   });
 });
 
-describe('formatStorageReadout ("X / 25 MB", truthful + tnum-ready)', () => {
-  it('always ends in the 25 MB denominator', () => {
-    expect(formatStorageReadout(0)).toMatch(/\/\s*25 MB$/);
-    expect(formatStorageReadout(QUOTA_BYTES)).toMatch(/\/\s*25 MB$/);
+describe('formatStorageReadout ("X / 65 MB", truthful + tnum-ready)', () => {
+  it('always ends in the 65 MB denominator (raised D-10 / MEDIA-01)', () => {
+    expect(formatStorageReadout(0)).toMatch(/\/\s*65 MB$/);
+    expect(formatStorageReadout(QUOTA_BYTES)).toMatch(/\/\s*65 MB$/);
   });
 
   it('renders whole-MB usage without a misleading 0', () => {
-    expect(formatStorageReadout(12 * MB)).toBe('12 / 25 MB');
+    expect(formatStorageReadout(12 * MB)).toBe('12 / 65 MB');
   });
 
   it('rounds sub-MB usage to one decimal so a tiny upload is not shown as 0', () => {
-    // 512 KiB = 0.5 MB — must not read "0 / 25 MB".
-    expect(formatStorageReadout(512 * 1024)).toBe('0.5 / 25 MB');
+    // 512 KiB = 0.5 MB — must not read "0 / 65 MB".
+    expect(formatStorageReadout(512 * 1024)).toBe('0.5 / 65 MB');
   });
 
   it('shows the cap figure at/over the cap', () => {
-    expect(formatStorageReadout(QUOTA_BYTES)).toBe('25 / 25 MB');
+    expect(formatStorageReadout(QUOTA_BYTES)).toBe('65 / 65 MB');
   });
 });
