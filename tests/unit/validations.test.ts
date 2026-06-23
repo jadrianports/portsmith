@@ -204,7 +204,7 @@ describe('section item schemas', () => {
 // ===========================================================================
 
 describe('section content schemas', () => {
-  it('registry has all 13 known section types (8 base + 5 marketer-vertical, 11-04 Step C1)', () => {
+  it('registry has all 15 known section types (8 base + 5 marketer-vertical + 2 creative, 35-01)', () => {
     expect(Object.keys(sectionContentSchemas).sort()).toEqual(
       [
         // 8 base types
@@ -222,6 +222,9 @@ describe('section content schemas', () => {
         'metrics',
         'moodboard',
         'services',
+        // 2 creative-vertical types (35-01, GAL-01/GAL-02) — additive, no Postgres migration (CMS-08)
+        'case_study',
+        'gallery',
       ].sort(),
     );
   });
