@@ -71,8 +71,10 @@ import type { AllowedTemplate } from '@/lib/templates/available-templates';
 
 import { BlogPanel } from './blog-panel';
 import { BlogPreviewForm } from './blog-preview-form';
+import { CaseStudyManager } from './case-study-manager';
 import { CompletenessChecklist } from './completeness-checklist';
 import { ContactSocialsForm } from './contact-socials-form';
+import { GalleryManager } from './gallery-manager';
 import { ItemManager, type ItemSectionType } from './item-card';
 import { MoodboardManager } from './moodboard-manager';
 import { PageIdentityForm } from './page-identity-form';
@@ -149,6 +151,8 @@ const SECTION_TITLES: Record<string, string> = {
   metrics: 'Metrics',
   services: 'Services',
   moodboard: 'Moodboard / Gallery',
+  gallery: 'Gallery',
+  case_study: 'Case study',
   certifications: 'Certifications',
   blog_preview: 'Blog teaser',
 };
@@ -182,9 +186,15 @@ function titleFor(type: string, content: ContentRecord): string {
 
 /** Whether a section has real content yet (drives the rail status dot). */
 function hasContentFor(type: string, content: ContentRecord): boolean {
-  // Item-based families + moodboard's gallery (items[]) are "filled" once they have
-  // ≥1 item; the seeded heading-only row reads as empty (D-21 "started, not done").
-  if (ITEM_TYPES.has(type) || type === 'moodboard') {
+  // Item-based families + moodboard/gallery/case_study (all items[]) are "filled" once
+  // they have ≥1 item; the seeded heading-only row reads as empty (D-21 "started, not
+  // done"). 35-02: gallery + case_study join the items[]-aware set.
+  if (
+    ITEM_TYPES.has(type) ||
+    type === 'moodboard' ||
+    type === 'gallery' ||
+    type === 'case_study'
+  ) {
     return Array.isArray(content.items) && content.items.length > 0;
   }
   if (type === 'about') return typeof content.bio === 'string' && content.bio.trim().length > 0;
@@ -1623,6 +1633,39 @@ function SectionPanel({
           {SECTION_TITLES[type] ?? type}
         </h2>
         <MoodboardManager
+          sectionId={sectionId}
+          initialContent={content}
+          username={username}
+          isUnsupported={isUnsupported}
+        />
+      </div>
+    );
+  } else if (type === 'gallery') {
+    // 35-02 / GAL-01: the clean photo-wall manager (batch GalleryUploader + reorderable
+    // alt-gated images). EDIT-ALL (D-08) — mounts regardless of the active template; the
+    // D-16 storage nudge renders near the uploader when unsupported.
+    form = (
+      <div className="flex flex-col gap-4">
+        <h2 className="text-base font-semibold text-foreground">
+          {SECTION_TITLES[type] ?? type}
+        </h2>
+        <GalleryManager
+          sectionId={sectionId}
+          initialContent={content}
+          username={username}
+          isUnsupported={isUnsupported}
+        />
+      </div>
+    );
+  } else if (type === 'case_study') {
+    // 35-02 / GAL-02: the "tell one project as a story" manager (reorderable item cards
+    // each with narrative fields + a nested per-item GalleryUploader). EDIT-ALL (D-08).
+    form = (
+      <div className="flex flex-col gap-4">
+        <h2 className="text-base font-semibold text-foreground">
+          {SECTION_TITLES[type] ?? type}
+        </h2>
+        <CaseStudyManager
           sectionId={sectionId}
           initialContent={content}
           username={username}
