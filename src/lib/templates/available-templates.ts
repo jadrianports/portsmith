@@ -1,7 +1,10 @@
 /**
  * getAvailableTemplates — the GATE-02 allowed-list (D-P12-14): the templates the
  * caller may use, resolved at the DATA LAYER (RLS), not merely hidden in the UI.
- * Returns `public ∪ granted-to-me` as `{ slug, restricted }[]`.
+ * Returns `public ∪ granted-to-me` as `{ slug, restricted, category }[]` — `category`
+ * rides alongside `restricted` as PLAIN serializable display-grouping metadata (D-02,
+ * TCAT-01/03), the single DB source of truth, with a `'general'` safe-degrade. It is
+ * grouping-only and does NOT change the allowed-list set.
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
  * │ READ BOUNDARY (mirrors reports.ts, LOAD-BEARING):                            │
@@ -46,11 +49,25 @@ import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 export interface AllowedTemplate {
   slug: string;
   restricted: boolean;
+  /**
+   * The template's profession category (dev / marketer / creative / video / general).
+   * Display-only GROUPING metadata (TCAT-01/03) — it rides this read as a PLAIN
+   * serializable prop exactly like `restricted`, the single DB source of truth (D-02).
+   * A null/unknown value safe-degrades to `'general'` (the `slugForTemplateId`
+   * `?? '<default>'` idiom), so no allowed card is ever dropped. It does NOT touch the
+   * allowed-list (GATE-02) logic — categorization re-buckets already-allowed rows only.
+   */
+  category: string;
 }
 
 /** The raw embedded-template shape Supabase returns on the grant read before flatten. */
 interface GrantRow {
-  templates: { slug: string; visibility: string; is_active: boolean } | null;
+  templates: {
+    slug: string;
+    visibility: string;
+    is_active: boolean;
+    category: string | null;
+  } | null;
 }
 
 /**
@@ -73,7 +90,7 @@ export async function getAvailableTemplates(): Promise<AllowedTemplate[]> {
   //    select`, is_active=true). These are `restricted = false`.
   const { data: pub, error: pubError } = await supabase
     .from('templates')
-    .select('slug, visibility')
+    .select('slug, visibility, category')
     .eq('is_active', true)
     .eq('visibility', 'public');
   if (pubError) return [];
@@ -83,22 +100,25 @@ export async function getAvailableTemplates(): Promise<AllowedTemplate[]> {
   //    visibility/is_active so a granted active-restricted template carries the mark.
   const { data: granted, error: grantError } = await supabase
     .from('template_grants')
-    .select('templates(slug, visibility, is_active)');
+    .select('templates(slug, visibility, is_active, category)');
   if (grantError) return [];
 
-  // Build a slug→restricted map: public first (restricted=false). A granted
+  // Build a slug→{restricted, category} map: public first (restricted=false). A granted
   // active-restricted template adds restricted=true. A slug already present as public
-  // stays false (public wins — it is not an exclusive thing to hold).
-  const out = new Map<string, boolean>();
+  // stays false (public wins — it is not an exclusive thing to hold). `category` rides
+  // alongside `restricted` as the single DB source of truth (D-02); a null/missing value
+  // safe-degrades to 'general' HERE at the data layer (the `slugForTemplateId` idiom), so
+  // no allowed card is ever dropped and the picker never sees an un-categorized slug.
+  const out = new Map<string, { restricted: boolean; category: string }>();
   for (const t of pub ?? []) {
-    out.set(t.slug, false);
+    out.set(t.slug, { restricted: false, category: t.category ?? 'general' });
   }
   for (const g of (granted ?? []) as unknown as GrantRow[]) {
     const t = g.templates;
     if (t?.is_active && t.visibility === 'restricted' && !out.has(t.slug)) {
-      out.set(t.slug, true);
+      out.set(t.slug, { restricted: true, category: t.category ?? 'general' });
     }
   }
 
-  return [...out].map(([slug, restricted]) => ({ slug, restricted }));
+  return [...out].map(([slug, { restricted, category }]) => ({ slug, restricted, category }));
 }
