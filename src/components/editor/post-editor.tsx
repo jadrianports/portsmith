@@ -59,9 +59,11 @@ import { useUIStore } from '@/lib/stores/uiStore';
 
 import { ImageUploader } from './image-uploader';
 import {
+  MarkdownToolbar,
   linkTransform,
   prefixLinesTransform,
   wrapOrInsertTransform,
+  type ToolbarCommand,
 } from './markdown-toolbar';
 import { SaveStatus } from './save-status';
 import { useGuardedNavigate, useRegisterActiveSave } from './unsaved-guard';
@@ -383,6 +385,42 @@ export function PostEditor({
     applyTransform((value, start, end) => linkTransform(value, start, end));
   }, [applyTransform]);
 
+  /**
+   * The pinned `onCommand(kind)` toolbar contract (38-01): map each of the 7 locked
+   * commands to the matching seam helper. Wrap kinds (bold/italic/code) →
+   * `wrapOrInsert`; line-prefix kinds (h2 `## `, list `- `, quote `> `) →
+   * `prefixLines` (note H2 is a line-prefix, NOT a wrap); `link` → the `[text](url)`
+   * template. Every branch flows through `applyTransform` → the UNCHANGED save path.
+   */
+  const onToolbarCommand = useCallback(
+    (kind: ToolbarCommand) => {
+      switch (kind) {
+        case 'bold':
+          wrapOrInsert('**', '**', 'bold text');
+          break;
+        case 'italic':
+          wrapOrInsert('*', '*', 'italic text');
+          break;
+        case 'code':
+          wrapOrInsert('`', '`', 'code');
+          break;
+        case 'h2':
+          prefixLines('## ', 'Heading');
+          break;
+        case 'list':
+          prefixLines('- ', 'List item');
+          break;
+        case 'quote':
+          prefixLines('> ', 'Quote');
+          break;
+        case 'link':
+          insertLink();
+          break;
+      }
+    },
+    [wrapOrInsert, prefixLines, insertLink],
+  );
+
   /** Insert `![alt](url)` at the textarea cursor (D-20 upload-and-insert). Now a thin
    *  caller of the shared seam — the inserted markup + post-markup cursor are unchanged. */
   const insertImageMarkdown = useCallback(
@@ -638,6 +676,13 @@ export function PostEditor({
              cursor-insert), styled with chrome tokens. D-19: deliberately swappable
              — only this element couples to the cursor; the save path is field-only. */
           <div role="tabpanel" className="flex flex-col gap-3">
+            {/* 38-02 / MDED-01/MDED-02: the Markdown formatting toolbar + cheatsheet,
+                mounted in the Write tab ONLY, ABOVE the textarea and SEPARATE from the
+                "Insert an image" card below (D-08). Disabled in lockstep with the
+                textarea (`inputsDisabled`) so a command can never mutate a body that is
+                about to be replaced by the open-time hydrate. Every command routes
+                through `onToolbarCommand` → the shared seam → the UNCHANGED save path. */}
+            <MarkdownToolbar onCommand={onToolbarCommand} disabled={inputsDisabled} />
             <label htmlFor={bodyId} className="sr-only">
               Post body (Markdown)
             </label>
