@@ -105,12 +105,26 @@ const FIRST_LOAD_JS_BUDGET_BYTES = 200 * 1024; // 200 kB gzipped (D-25)
  * /services 198.7 kB. This is broad legitimate drift in the SHARED portfolio client entry, NOT
  * a Shiki/markdown client leak (the markdown path stays server-only — /blog renders it and sits
  * at 186.0 kB). There is no principled reason a dedicated sub-page should carry a STRICTER
- * budget than the root route it branches off, so the two budgets are now the same 200 kB number.
- * A real client leak (hundreds of kB) still blows far past 200 kB and trips the gate (T-13.2-22).
- * This must NOT exceed FIRST_LOAD_JS_BUDGET_BYTES; trimming the edgerunner-v2 services client
- * islands to reclaim headroom remains a tracked follow-up (DEF-32-01).
+ * budget than the root route it branches off, so the two budgets were unified at 200 kB.
+ * A real client leak (hundreds of kB) still blows far past this and trips the gate (T-13.2-22).
+ *
+ * PHASE-36 REVISION (36-04 close-out, founder-decided 2026-06-24): bumped to 210 kB — but ONLY
+ * for the dedicated SUB-PAGES, NOT the root. Registering the 5th template (`atelier`) inflated the
+ * shared `(portfolio)` route-group chunk ~+6.8 kB via a Turbopack splitChunks reshuffle (a
+ * previously-lazy island promoted into route-level first-load when the 5th template's
+ * client-reference graph entered). That tipped the two edgerunner-v2 dedicated sub-pages
+ * (/blog/[slug] 202.7 kB, /services 205.1 kB) just over 200 — they were already at the ceiling
+ * (195.9 / 198.3) pre-atelier. The founder template's MULTI-PAGE routes legitimately carry the
+ * page-shell client islands (subpage navbar, footer, ⌘K hint) that the single-scroll root does
+ * not, so a slightly higher sub-page ceiling is principled. The clean component-level lazy-load
+ * levers are exhausted in-phase (Turnstile + ReportDialog split off first-load reclaimed ~25 kB →
+ * root /[username] is 180.8 kB, still well under 200; motion + ⌘K palette already lazy; markdown
+ * server-only). Chasing the last few kB would mean uncertain Turbopack chunk-split surgery, so the
+ * gate is made honest instead. A real client leak (hundreds of kB) still trips far past 210.
+ * NOTE: this is now ABOVE FIRST_LOAD_JS_BUDGET_BYTES (root 200) by design — the sub-pages carry
+ * more legitimate UI than the root. See 36-VERIFICATION.md + the phase 36 deferred-items.md.
  */
-const SUBPAGE_FIRST_LOAD_JS_BUDGET_BYTES = 200 * 1024; // 200 kB gzipped — unified with root ceiling (D-21 / D-25, Phase-32 revision)
+const SUBPAGE_FIRST_LOAD_JS_BUDGET_BYTES = 210 * 1024; // 210 kB gzipped — dedicated sub-pages only (Phase-36 revision; root stays 200)
 
 /**
  * The per-template async-island sanity cap (PIPE-08 / CONTRACT §5). A rich/viz-lane
