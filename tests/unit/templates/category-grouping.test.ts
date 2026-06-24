@@ -94,4 +94,46 @@ describe('groupAllowedByCategory (TCAT-02 — curated re-bucket + empty-category
   it('an empty input emits no groups at all', () => {
     expect(groupAllowedByCategory([])).toEqual([]);
   });
+
+  // WR-02 (37-REVIEW): an allowed item whose category matches no curated key must NOT be
+  // dropped — it is swept into `general`. Total items in === total items out.
+  it('sweeps an unknown-category allowed item into `general` (no silent drop)', () => {
+    const withUnknown: Allowed[] = [
+      { slug: 'minimal', restricted: false, category: 'dev' },
+      { slug: 'mystery', restricted: false, category: 'develper' }, // typo → orphan
+    ];
+    const groups = groupAllowedByCategory(withUnknown);
+    const general = groups.find((g) => g.key === 'general');
+    // The orphan lands in `general`...
+    expect(general?.items.map((i) => i.slug)).toContain('mystery');
+    // ...and is NOT dropped: total items across all groups === fixture length.
+    const total = groups.reduce((n, g) => n + g.items.length, 0);
+    expect(total).toBe(withUnknown.length);
+  });
+
+  it('appends an orphan AFTER `general`s native members (stable: natives first, then orphans)', () => {
+    const mixed: Allowed[] = [
+      { slug: 'editorial', restricted: false, category: 'general' }, // native general
+      { slug: 'mystery', restricted: false, category: 'develper' }, // orphan
+    ];
+    const groups = groupAllowedByCategory(mixed);
+    const general = groups.find((g) => g.key === 'general');
+    expect(general?.items.map((i) => i.slug)).toEqual(['editorial', 'mystery']);
+  });
+
+  it('CREATES the `general` group when it has zero natives but ≥1 orphan, and still skips empty `video`', () => {
+    const noNativeGeneral: Allowed[] = [
+      { slug: 'minimal', restricted: false, category: 'dev' },
+      { slug: 'mystery', restricted: false, category: 'develper' }, // orphan, no native general
+    ];
+    const groups = groupAllowedByCategory(noNativeGeneral);
+    const ks = keys(groups);
+    // `general` is created at its curated position purely to hold the orphan...
+    expect(ks).toEqual(['dev', 'general']);
+    expect(groups.find((g) => g.key === 'general')?.items.map((i) => i.slug)).toEqual([
+      'mystery',
+    ]);
+    // ...and the empty-category skip still holds (no `video`).
+    expect(ks).not.toContain('video');
+  });
 });

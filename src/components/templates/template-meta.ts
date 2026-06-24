@@ -158,13 +158,31 @@ export interface AllowedCategoryGroup<T> {
  * takes the STABLE subset of `allowed` whose `category` matches — preserving the existing
  * public-first-then-granted within-group order. It re-buckets ONLY the array passed in;
  * it NEVER reads a full catalog, so it can never surface an un-allowed template (TCAT-03).
+ *
+ * NO-DROP INVARIANT (WR-02): an allowed item whose `category` matches NONE of the curated
+ * keys (a typo like 'develper', or an unseeded-but-non-null soft-enum value) is swept into
+ * the `general` group rather than silently dropped — total items in === total items out.
+ * Orphans are APPENDED after `general`'s natively-categorized members (stable: natives
+ * first, then orphans in input order); the `general` group is CREATED at its curated
+ * position if it has zero natives but ≥1 orphan. The empty-category skip is UNCHANGED — a
+ * curated key with zero natives AND zero orphans (e.g. `video`) still emits no group.
  */
 export function groupAllowedByCategory<T extends { category: string }>(
   allowed: T[],
 ): AllowedCategoryGroup<T>[] {
+  const known = new Set(categoryGroups.map((g) => g.key));
+  // Allowed items whose category matches no curated key — to be swept into `general`
+  // (WR-02 no-drop), preserving input order.
+  const orphans = allowed.filter((a) => !known.has(a.category));
+
   const groups: AllowedCategoryGroup<T>[] = [];
   for (const { key } of categoryGroups) {
     const items = allowed.filter((a) => a.category === key);
+    // Fold orphans into `general`: append after its native members (creating the group
+    // even when it has zero natives but ≥1 orphan).
+    if (key === 'general' && orphans.length > 0) {
+      items.push(...orphans);
+    }
     if (items.length > 0) {
       groups.push({ key, label: categoryLabel(key), items });
     }
