@@ -134,6 +134,45 @@ export function categoryLabel(category: string): string {
 }
 
 /**
+ * One non-empty category group the pickers render: the curated `key`/`label` plus the
+ * subset of allowed items that carry that `category`. Generic over the item shape so BOTH
+ * the dashboard picker's inline `{ slug; restricted; category }` and the server
+ * `AllowedTemplate` satisfy it WITHOUT a shared type import (preserving D-25 — no server
+ * value-import dragged onto the client picker chunk).
+ */
+export interface AllowedCategoryGroup<T> {
+  key: string;
+  label: string;
+  items: T[];
+}
+
+/**
+ * Re-bucket the ALREADY-ALLOWED template set (`getAvailableTemplates()` →
+ * `AllowedTemplate[]`, or the picker's inline allowed shape) into the curated category
+ * order for grouped display (TCAT-02, D-01/D-03/D-04). The SINGLE new branch of the
+ * phase lives here, once: a category is emitted ONLY when `items.length > 0`, so an empty
+ * category (e.g. `video`, until its template ships) renders no header.
+ *
+ * PURE + zod-free + registry-free (this module must not pull zod/`next/dynamic` onto a
+ * client chunk — D-25). It iterates the curated `categoryGroups` order and, for each,
+ * takes the STABLE subset of `allowed` whose `category` matches — preserving the existing
+ * public-first-then-granted within-group order. It re-buckets ONLY the array passed in;
+ * it NEVER reads a full catalog, so it can never surface an un-allowed template (TCAT-03).
+ */
+export function groupAllowedByCategory<T extends { category: string }>(
+  allowed: T[],
+): AllowedCategoryGroup<T>[] {
+  const groups: AllowedCategoryGroup<T>[] = [];
+  for (const { key } of categoryGroups) {
+    const items = allowed.filter((a) => a.category === key);
+    if (items.length > 0) {
+      groups.push({ key, label: categoryLabel(key), items });
+    }
+  }
+  return groups;
+}
+
+/**
  * Resolve a slug to its display metadata, falling back to a humanized form of the slug
  * for an unknown one (the safe degrade — never `undefined` into the UI). Used by the
  * template picker/card + the PreviewBanner confirm copy.
