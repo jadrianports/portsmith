@@ -58,6 +58,11 @@ import { cmsKeys } from '@/lib/query/cms-keys';
 import { useUIStore } from '@/lib/stores/uiStore';
 
 import { ImageUploader } from './image-uploader';
+import {
+  linkTransform,
+  prefixLinesTransform,
+  wrapOrInsertTransform,
+} from './markdown-toolbar';
 import { SaveStatus } from './save-status';
 import { useGuardedNavigate, useRegisterActiveSave } from './unsaved-guard';
 import { useDebouncedPostSave } from './use-debounced-post-save';
@@ -308,25 +313,88 @@ export function PostEditor({
     queueSave({ title: next });
   }
 
-  /** Insert `![alt](url)` at the textarea cursor (D-20 upload-and-insert). */
-  const insertImageMarkdown = useCallback(
-    (url: string, alt: string) => {
-      const md = `![${alt}](${url})`;
+  /**
+   * The ONE cursor-insert primitive (38-01 / D-03..D-06): apply a pure text
+   * transform that maps `(value, selStart, selEnd)` → `{ next, selStart, selEnd }`,
+   * commit it through the SAME couplings the image-insert already used — `setBody`,
+   * `scheduleSave({ ...buildContent(), body_md: next })` (the UNCHANGED save path),
+   * and a `requestAnimationFrame` focus + selection restore. Every toolbar command
+   * and the image-insert below flow through this single seam, so the save coupling,
+   * the cursor handling, and the focus restore live in exactly one place.
+   */
+  const applyTransform = useCallback(
+    (transform: (value: string, selStart: number, selEnd: number) => {
+      next: string;
+      selStart: number;
+      selEnd: number;
+    }) => {
       const el = bodyRef.current;
       const start = el?.selectionStart ?? body.length;
       const end = el?.selectionEnd ?? body.length;
-      const next = body.slice(0, start) + md + body.slice(end);
-      setBody(next);
-      scheduleSave({ ...buildContent(), body_md: next });
-      // Restore focus + place the cursor just after the inserted markup.
+      const result = transform(body, start, end);
+      setBody(result.next);
+      scheduleSave({ ...buildContent(), body_md: result.next });
+      // Restore focus + the transform's chosen selection (a cursor when start===end).
       requestAnimationFrame(() => {
         if (!el) return;
         el.focus();
-        const pos = start + md.length;
-        el.setSelectionRange(pos, pos);
+        el.setSelectionRange(result.selStart, result.selEnd);
       });
     },
     [body, scheduleSave, buildContent],
+  );
+
+  /**
+   * Wrap-or-placeholder (D-03): when a selection exists, wrap it as
+   * `before + selected + after` (the cursor lands after the wrapped run); when the
+   * selection is empty, insert `before + placeholder + after` and SELECT the inner
+   * `placeholder` so the next keystroke replaces it. Used by bold/italic/inline-code.
+   */
+  const wrapOrInsert = useCallback(
+    (before: string, after: string, placeholder: string) => {
+      applyTransform((value, start, end) =>
+        wrapOrInsertTransform(value, start, end, before, after, placeholder),
+      );
+    },
+    [applyTransform],
+  );
+
+  /**
+   * Line-prefix (D-04): prefix EACH line touched by the selection with `marker`
+   * (list `- `, quote `> `). With an empty selection, insert a single
+   * `marker + placeholder` line and select `placeholder`. H2 is just `## ` with a
+   * `Heading` placeholder (D-05 — one heading level, no picker).
+   */
+  const prefixLines = useCallback(
+    (marker: string, placeholder: string) => {
+      applyTransform((value, start, end) =>
+        prefixLinesTransform(value, start, end, marker, placeholder),
+      );
+    },
+    [applyTransform],
+  );
+
+  /**
+   * Link template (D-06): insert `[text](url)` with NO `window.prompt`. When text is
+   * selected it becomes the label (`[selected](url)`) and the `url` segment is
+   * preselected; with no selection the `text` segment is preselected.
+   */
+  const insertLink = useCallback(() => {
+    applyTransform((value, start, end) => linkTransform(value, start, end));
+  }, [applyTransform]);
+
+  /** Insert `![alt](url)` at the textarea cursor (D-20 upload-and-insert). Now a thin
+   *  caller of the shared seam — the inserted markup + post-markup cursor are unchanged. */
+  const insertImageMarkdown = useCallback(
+    (url: string, alt: string) => {
+      const md = `![${alt}](${url})`;
+      applyTransform((value, start, end) => {
+        const next = value.slice(0, start) + md + value.slice(end);
+        const pos = start + md.length;
+        return { next, selStart: pos, selEnd: pos };
+      });
+    },
+    [applyTransform],
   );
 
   // When the ImageUploader reports a successful upload (a non-empty URL + its
