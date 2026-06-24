@@ -55,7 +55,10 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { Alert } from '@/components/ui/alert';
 import { switchTemplateAction } from '@/lib/cms/switch-template-action';
-import { resolveTemplateMeta } from '@/components/templates/template-meta';
+import {
+  groupAllowedByCategory,
+  resolveTemplateMeta,
+} from '@/components/templates/template-meta';
 import type { AllowedTemplate } from '@/lib/templates/available-templates';
 
 /** Copy (UI-SPEC Surface 2 + § Per-step coaching reassurance). */
@@ -144,22 +147,37 @@ export function TemplateStep({ username, currentSlug, allowed }: TemplateStepPro
     <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
       {/* ── Region 1: the gallery (the control) ── */}
       <div className="flex flex-col gap-3 lg:w-1/2">
-        <ul
+        {/* The wizard-local gallery, GROUPED by category (37-02 / TCAT-02, D-04 — mirror
+            the dashboard picker's treatment over the local TemplateOption grid via the
+            SAME shared helper). `groupAllowedByCategory` re-buckets ONLY the allowed set
+            into curated order and DROPS empty categories, so no empty header renders
+            (video stays hidden). All wizard state/interaction is unchanged. */}
+        <div
           aria-label="Choose a template"
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+          role="group"
+          className="flex flex-col gap-4"
         >
-          {allowed.map(({ slug, restricted }) => (
-            <li key={slug} className="flex">
-              <TemplateOption
-                slug={slug}
-                isSelected={slug === selectedSlug}
-                restricted={restricted}
-                disabled={switching}
-                onSelect={() => onPick(slug)}
-              />
-            </li>
+          {groupAllowedByCategory(allowed).map(({ key, label, items }) => (
+            <div key={key} className="flex flex-col gap-2">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                {label}
+              </h3>
+              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {items.map(({ slug, restricted }) => (
+                  <li key={slug} className="flex">
+                    <TemplateOption
+                      slug={slug}
+                      isSelected={slug === selectedSlug}
+                      restricted={restricted}
+                      disabled={switching}
+                      onSelect={() => onPick(slug)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
         {error ? <Alert variant="error">{error}</Alert> : null}
       </div>
 
