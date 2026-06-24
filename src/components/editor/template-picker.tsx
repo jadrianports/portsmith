@@ -28,7 +28,10 @@
 // '@/components/templates/registry' (a registry import drags zod into this client
 // chunk — see template-meta.ts / D-25). The `allowed` slugs + `restricted` flags are
 // PLAIN serializable props from the server (no zod), so nothing here needs the registry.
-import { resolveTemplateMeta } from '@/components/templates/template-meta';
+import {
+  groupAllowedByCategory,
+  resolveTemplateMeta,
+} from '@/components/templates/template-meta';
 
 import { TemplateCard } from './template-card';
 
@@ -38,9 +41,12 @@ export interface TemplatePickerProps {
   /**
    * 12-04 / GATE-02 — the data-layer allowed-list (`public ∪ granted-to-me`), resolved
    * by the dashboard RSC. One card is rendered per allowed slug; `restricted` drives the
-   * "Exclusive" marker (D-P12-09). PLAIN serializable data — no zod, no registry import.
+   * "Exclusive" marker (D-P12-09); `category` drives the per-category grouping (37-02).
+   * PLAIN serializable data — no zod, no registry import (the inline shape is
+   * re-declared here, NOT imported from the server `AllowedTemplate`, to keep the picker
+   * chunk free of any server value-import — D-25).
    */
-  allowed: { slug: string; restricted: boolean }[];
+  allowed: { slug: string; restricted: boolean; category: string }[];
   /** When true, render the loading skeleton instead of the cards. */
   loading?: boolean;
 }
@@ -84,27 +90,39 @@ export function TemplatePicker({ currentSlug, allowed, loading = false }: Templa
           ))}
         </ul>
       ) : (
-        // The gallery: 1 col mobile → 2 cols tablet → 2–3 cols desktop, md/lg gutters.
-        // ONE card per ALLOWED slug (GATE-02 — no locked/upsell cards); current marked;
-        // granted-restricted carries the "Exclusive" marker (D-P12-09). Display copy is
-        // looked up from the zod-free `resolveTemplateMeta` (never registry.ts / D-25).
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
-          {allowed.map(({ slug, restricted }) => {
-            const meta = resolveTemplateMeta(slug);
-            return (
-              <li key={slug} className="flex">
-                <TemplateCard
-                  slug={slug}
-                  name={meta.name}
-                  description={meta.description}
-                  thumbnailAlt={meta.thumbnailAlt}
-                  isCurrent={slug === currentSlug}
-                  restricted={restricted}
-                />
-              </li>
-            );
-          })}
-        </ul>
+        // The gallery, GROUPED by category (37-02 / TCAT-02). Cards within a group:
+        // 1 col mobile → 2 cols tablet → 2–3 cols desktop. ONE card per ALLOWED slug
+        // (GATE-02 — no locked/upsell cards); current marked; granted-restricted carries
+        // the "Exclusive" marker (D-P12-09). Display copy is looked up from the zod-free
+        // `resolveTemplateMeta` (never registry.ts / D-25). `groupAllowedByCategory`
+        // re-buckets ONLY the allowed set into curated order and DROPS empty categories,
+        // so no empty header can render (this is how `video` stays hidden — TCAT-02).
+        <div className="flex flex-col gap-6">
+          {groupAllowedByCategory(allowed).map(({ key, label, items }) => (
+            <div key={key} className="flex flex-col gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                {label}
+              </h3>
+              <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+                {items.map(({ slug, restricted }) => {
+                  const meta = resolveTemplateMeta(slug);
+                  return (
+                    <li key={slug} className="flex">
+                      <TemplateCard
+                        slug={slug}
+                        name={meta.name}
+                        description={meta.description}
+                        thumbnailAlt={meta.thumbnailAlt}
+                        isCurrent={slug === currentSlug}
+                        restricted={restricted}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
       )}
     </section>
   );
