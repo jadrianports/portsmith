@@ -88,6 +88,52 @@ export const templateMeta: Record<string, TemplateMeta> = {
 };
 
 /**
+ * One entry in the curated category GROUP order (TCAT-02, D-03). `key` is the soft-enum
+ * `templates.category` value (`getAvailableTemplates()` → `AllowedTemplate.category`);
+ * `label` is the plain-language group header the pickers render. CHROME display copy —
+ * zod-free, registry-free (this module must NOT pull zod/`next/dynamic` onto a client
+ * chunk — D-25), no `.tmpl-*` styling.
+ */
+export interface CategoryGroup {
+  key: string;
+  label: string;
+}
+
+/**
+ * The FIXED curated group order the dashboard picker + onboarding gallery iterate (D-03):
+ * Developer → Creative → Marketer → General, plus a reserved Video slot. There is NO
+ * per-card category badge — the group HEADER names the category (D-03), so a chip would be
+ * redundant in the grouped layout.
+ *
+ * The `video` slot is DEFINED here (its label reserved) but renders only when its category
+ * is non-empty: Plan 02 filters groups by the ALLOWED-LIST, so `video` stays hidden until
+ * a video-category template ships (SEED-001, next milestone) — exactly the mechanism that
+ * keeps an empty group out of the UI.
+ */
+export const categoryGroups: CategoryGroup[] = [
+  { key: 'dev', label: 'Developer' },
+  { key: 'creative', label: 'Creative' },
+  { key: 'marketer', label: 'Marketer' },
+  { key: 'general', label: 'General' },
+  { key: 'video', label: 'Video' },
+];
+
+/** Lookup map derived from the curated order — internal to `categoryLabel`. */
+const categoryLabelByKey: Record<string, string> = Object.fromEntries(
+  categoryGroups.map((g) => [g.key, g.label]),
+);
+
+/**
+ * Resolve a category key to its plain-language label, degrading an unknown/null key to the
+ * `general` label (belt-and-suspenders with the data-layer `'general'` fallback in
+ * `getAvailableTemplates()`) — mirrors `resolveTemplateMeta`'s safe degrade so the UI never
+ * sees a raw key or `undefined`.
+ */
+export function categoryLabel(category: string): string {
+  return categoryLabelByKey[category] ?? categoryLabelByKey.general;
+}
+
+/**
  * Resolve a slug to its display metadata, falling back to a humanized form of the slug
  * for an unknown one (the safe degrade — never `undefined` into the UI). Used by the
  * template picker/card + the PreviewBanner confirm copy.
