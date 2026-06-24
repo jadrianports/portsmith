@@ -30,6 +30,7 @@
     "gate:blog-prod": "node scripts/gate-blog-prod-parity.mjs",
     "gate:budget": "npm run check:bundle",
     "lighthouse": "lhci autorun",
+    "lighthouse:atelier": "lhci autorun --config=lighthouserc.cjs",
     "smoke:prod": "playwright test --config playwright.prod.config.ts",
     "preview:template": "tsx scripts/preview-template.ts"
   },

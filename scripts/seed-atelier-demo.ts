@@ -67,10 +67,17 @@ try {
   // dotenv not installed / unavailable — rely on the ambient process env.
 }
 
-// The only sanctioned external image origin (mirrors the golden fixture's `${STORAGE}`):
-// the project's own Supabase Storage public bucket. The renderer's `isHttpImageSrc`
-// host-guard rejects any other origin, so every seeded `url` MUST be this origin.
-const STORAGE = 'https://supabase.portsmith.example/storage/v1/object/public';
+// The only sanctioned image origin: the project's own Supabase Storage public bucket
+// (`NEXT_PUBLIC_SUPABASE_URL` origin). The renderer's `isHttpImageSrc` host-guard (D-08
+// host-lock, `src/lib/safe-image.ts`) rejects ANY other origin at RENDER time, so every
+// seeded `url` MUST be on this exact origin or the gallery filters it out and renders zero
+// images — which would make the D-15 ~40-image perf proof vacuous (Plan 04, Rule 1 fix).
+// The object PATHS are placeholders (they 404), but each still renders as a CLS-safe
+// `next/image unoptimized` box — and D-15 measures the PAYLOAD SHAPE (count × CLS-safe
+// boxes + lazy loading), not the pixels of these specific files (see this file's header).
+const STORAGE = `${new URL(
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://127.0.0.1:54321',
+).origin}/storage/v1/object/public`;
 
 // The atelier template UUID (D-13) — pinned in `registry.ts` TEMPLATE_UUIDS and seeded by
 // migration `032_seed_atelier_template.sql` (Plan 02). The seed resolves the template by
