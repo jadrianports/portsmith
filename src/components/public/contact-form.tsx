@@ -44,8 +44,21 @@
  */
 import { useEffect, useRef, useState } from 'react';
 
-import { TurnstileWidget } from '@/components/auth/turnstile-widget';
+import dynamic from 'next/dynamic';
+
 import { safeHref } from '@/lib/safe-url';
+
+// Lazily-loaded — `@marsidev/react-turnstile` is ~30 kB gz and, statically imported, it
+// rode into the `/[username]` route's SHARED first-load chunk (this form is a client
+// component referenced by every template's contact section). It only ever renders once
+// `armed` (viewport/focus-armed below), so a `next/dynamic` import keeps the widget OUT
+// of first load until then — the reclaim that let the 5th template (`atelier`) fit under
+// the ≤200 kB invariant (36-04 / D-22/D-25). `ssr: false` is correct (client-only widget,
+// never in the SSG HTML). `npm run check:bundle` is the regression catch.
+const TurnstileWidget = dynamic(
+  () => import('@/components/auth/turnstile-widget').then((m) => m.TurnstileWidget),
+  { ssr: false },
+);
 
 /** Shared field-label style (mono, muted, uppercase) — verbatim from contact.tsx. */
 const labelStyle: React.CSSProperties = {
