@@ -30,12 +30,14 @@
  *   editorial     theme.css:67  `#c8381f` (vermilion)
  *   aurora        theme.css:62  `#d6336c` (rose-magenta)
  *   edgerunner-v2 theme.css:66→26 `var(--neon-pink)` = `oklch(0.72 0.30 350)` → resolved `#ff2d95`
+ *   atelier       theme.css:45  `#c8ff00` (acid green)
  */
 export const SLUG_ACCENT: Record<string, string> = {
   minimal: '#ff2d95',
   editorial: '#c8381f',
   aurora: '#d6336c',
   'edgerunner-v2': '#ff2d95',
+  atelier: '#c8ff00',
 };
 
 /**
