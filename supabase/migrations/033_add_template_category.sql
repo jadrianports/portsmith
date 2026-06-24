@@ -29,7 +29,10 @@
 -- re-apply; the label UPDATEs set the same values each run (re-running is a no-op).
 -- We label ONLY the 5 live rows: minimal=dev, editorial=general, aurora=marketer,
 -- edgerunner-v2=dev, atelier=creative. The retired v1 `edgerunner` slug was DELETEd
--- in migration 018, so it is intentionally NOT labeled here.
+-- in migration 018, so it is intentionally NOT labeled here. The trailing guard
+-- (WR-01) is a READ-ONLY fresh-apply check — it RAISEs if an expected slug matched
+-- zero rows and was left at the `'general'` default; on an already-categorized DB it
+-- passes silently (a no-op), so it is safe to re-apply.
 --
 -- FORWARD migration (apply via `supabase migration up`, NEVER `db reset` — a reset
 -- drops seed data + platform role grants). Regenerate `src/types/database.ts` after
@@ -44,3 +47,20 @@ UPDATE templates SET category = 'general'  WHERE slug = 'editorial';
 UPDATE templates SET category = 'marketer' WHERE slug = 'aurora';
 UPDATE templates SET category = 'dev'      WHERE slug = 'edgerunner-v2';
 UPDATE templates SET category = 'creative' WHERE slug = 'atelier';
+
+-- FRESH-APPLY GUARD (WR-01). A `WHERE slug = …` that matches zero rows is a SILENT
+-- success in Postgres — a misspelled/retired/not-yet-seeded slug would be left at the
+-- `'general'` DEFAULT with NO error, mis-grouping that template. Fail LOUD instead:
+-- count the expected live rows still stuck at `'general'` (excluding `editorial`, which
+-- is intentionally `'general'`) and RAISE if any remain. READ-ONLY + idempotent — on an
+-- already-correctly-labeled DB the count is 0 and this block is a no-op.
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM templates
+   WHERE slug IN ('minimal','editorial','aurora','edgerunner-v2','atelier')
+     AND category = 'general' AND slug <> 'editorial';
+  IF n > 0 THEN
+    RAISE EXCEPTION 'Phase 37: % expected template row(s) left uncategorized (slug missing at apply time)', n;
+  END IF;
+END $$;
