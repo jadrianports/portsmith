@@ -1902,6 +1902,7 @@ export type Database = {
       }
       templates: {
         Row: {
+          category: string
           created_at: string
           description: string | null
           id: string
@@ -1915,6 +1916,7 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          category?: string
           created_at?: string
           description?: string | null
           id?: string
@@ -1928,6 +1930,7 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          category?: string
           created_at?: string
           description?: string | null
           id?: string
