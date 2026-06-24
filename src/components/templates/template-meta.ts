@@ -78,6 +78,13 @@ export const templateMeta: Record<string, TemplateMeta> = {
     thumbnailAlt:
       'Edgerunner V2 template preview — dark synthwave canvas with neon pink and cyan accents, animated city backdrop, and terminal HUD',
   },
+  atelier: {
+    name: 'Atelier',
+    description:
+      'A dark, image-first editorial single-scroll — a gallery wall, case studies, and oversized type with an acid-green accent.',
+    thumbnailAlt:
+      'Atelier template preview — near-black editorial canvas with a masonry gallery wall, oversized condensed uppercase type, and an acid-green accent',
+  },
 };
 
 /**

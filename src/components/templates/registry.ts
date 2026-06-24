@@ -25,6 +25,7 @@ import { minimalSpec, type TemplateSpec } from './minimal/spec';
 import { editorialSpec } from './editorial/spec';
 import { auroraSpec } from './aurora/spec';
 import { edgerunnerV2Spec } from './edgerunner-v2/spec';
+import { atelierSpec } from './atelier/spec';
 
 /**
  * The slug → template map. The lazy import yields the template's default export
@@ -56,6 +57,13 @@ export const templateRegistry: Record<string, ComponentType<{ data: PortfolioDat
   // the export's EXACT class names (text-glow-pink, holo-panel, font-mono-retro, etc.)
   // scoped under .tmpl-edgerunner-v2 — verified hero-first before full section build.
   'edgerunner-v2': dynamic(() => import('./edgerunner-v2')),
+  // 36-02 / CTPL-01: the `atelier` ("Atelier") gallery-forward creative template — a
+  // faithful 1:1 clone of the dark-editorial Lovable export (v2.8 "Show the Work"). A
+  // PLAIN LITERAL `dynamic(() => import('./atelier'))` (its folder is `atelier/`) —
+  // required for proper per-template code-splitting. NEVER `{ ssr: false }`
+  // (build-forbidden on a Server-Component entry). Image-first: it supports the 3
+  // creative types (gallery/case_study/moodboard) the other templates do not.
+  atelier: dynamic(() => import('./atelier')),
   // Three.js / CLIENT-only templates (later) live inside a Client Component and may
   // use `{ ssr: false }` THERE — never on a Server-Component template entry above.
 };
@@ -94,6 +102,10 @@ const TEMPLATE_UUIDS = {
   // reuse it for a future template (the next free literal is …0006).
   // edgerunner-v2: bar-for-bar faithful clone (UUID …0005)
   'edgerunner-v2': '00000000-0000-4000-8000-000000000005',
+  // 36-02 / D-13: the `atelier` template — the next free pinned literal (…0004 retired,
+  // …0005 = edgerunner-v2). It MUST equal the 032 seed migration's UUID exactly or
+  // `slugForTemplateId` can't resolve and the public read falls back to minimal.
+  atelier: '00000000-0000-4000-8000-000000000006',
 } as const;
 
 /** The inverse map (UUID → slug), derived from {@link TEMPLATE_UUIDS}. */
@@ -133,6 +145,7 @@ export const specRegistry: Record<string, TemplateSpec> = {
   aurora: auroraSpec,
   // edgerunner (v1) deregistered — see the tombstone note in templateRegistry above (D-21).
   'edgerunner-v2': edgerunnerV2Spec,
+  atelier: atelierSpec,
 };
 
 /**
