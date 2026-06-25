@@ -38,6 +38,7 @@ export const SLUG_ACCENT: Record<string, string> = {
   aurora: '#d6336c',
   'edgerunner-v2': '#ff2d95',
   atelier: '#c8ff00',
+  blueprint: '#2563eb', // blueprint blue (theme.css --accent)
 };
 
 /**
