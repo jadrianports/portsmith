@@ -67,6 +67,14 @@ export const ALLOWED_IMPORT_SPECIFIERS = [
   // The React runtime.
   'react',
   'react-dom',
+  // The CMS-Markdown blog engine's component-map contract. A page-capable template (D-14)
+  // declares its OWN blog prose primitives (`pages/blog/prose.tsx`) typed against
+  // react-markdown's `Components` (`import type` — ERASED at compile, zero runtime weight) and
+  // passes them to the SHARED server-only `renderMarkdown` pipeline. react-markdown is a core
+  // sanctioned dep (package.json); a VALUE import that leaked onto a client bundle is caught
+  // separately by `check:bundle` (≤200 kB). Allowlisted so the security canary passes the
+  // known-good page-capable templates (D-P10-03: the added line IS the reviewable change).
+  'react-markdown',
   // The sanctioned JSON-LD helper (the producer of `personLdScriptHtml`).
   '@/lib/seo/person-jsonld',
   // The type-only contract surfaces (erased at compile — zero runtime weight).

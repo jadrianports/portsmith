@@ -26,6 +26,7 @@ import { editorialSpec } from './editorial/spec';
 import { auroraSpec } from './aurora/spec';
 import { edgerunnerV2Spec } from './edgerunner-v2/spec';
 import { atelierSpec } from './atelier/spec';
+import { blueprintSpec } from './blueprint/spec';
 
 /**
  * The slug → template map. The lazy import yields the template's default export
@@ -64,6 +65,11 @@ export const templateRegistry: Record<string, ComponentType<{ data: PortfolioDat
   // (build-forbidden on a Server-Component entry). Image-first: it supports the 3
   // creative types (gallery/case_study/moodboard) the other templates do not.
   atelier: dynamic(() => import('./atelier')),
+  // blueprint: faithful 1:1 clone of the dark "engineering bench" Lovable export — the first
+  // PUBLIC page-capable template (opts into /blog via spec.pages). A PLAIN LITERAL `dynamic(() =>
+  // import('./blueprint'))` (its folder is `blueprint/`) — per-template code-splitting. NEVER
+  // `{ ssr: false }` (build-forbidden on a Server-Component entry).
+  blueprint: dynamic(() => import('./blueprint')),
   // Three.js / CLIENT-only templates (later) live inside a Client Component and may
   // use `{ ssr: false }` THERE — never on a Server-Component template entry above.
 };
@@ -106,6 +112,9 @@ const TEMPLATE_UUIDS = {
   // …0005 = edgerunner-v2). It MUST equal the 032 seed migration's UUID exactly or
   // `slugForTemplateId` can't resolve and the public read falls back to minimal.
   atelier: '00000000-0000-4000-8000-000000000006',
+  // blueprint: the next free pinned literal (…0007). It MUST equal the seed migration's UUID
+  // exactly or `slugForTemplateId` can't resolve and the public read falls back to minimal.
+  blueprint: '00000000-0000-4000-8000-000000000007',
 } as const;
 
 /** The inverse map (UUID → slug), derived from {@link TEMPLATE_UUIDS}. */
@@ -146,6 +155,7 @@ export const specRegistry: Record<string, TemplateSpec> = {
   // edgerunner (v1) deregistered — see the tombstone note in templateRegistry above (D-21).
   'edgerunner-v2': edgerunnerV2Spec,
   atelier: atelierSpec,
+  blueprint: blueprintSpec,
 };
 
 /**

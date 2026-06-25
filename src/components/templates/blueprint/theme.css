@@ -1,0 +1,335 @@
+/*
+ * Scoped theme tokens for the `blueprint` template — a FAITHFUL 1:1 clone of the dark
+ * "engineering bench" / oscilloscope Lovable export (`lovable-exports/blueprint/`). The
+ * export ships a near-black GitHub-dark canvas, a SINGLE blueprint-blue accent (#2563eb), a
+ * blueprint-grid texture, right-angle "PCB trace" hairlines, and a mono-label instrument
+ * voice. This file reproduces the export's `@theme` palette EXACTLY, re-expressed in the
+ * scoped 18-token contract vocabulary.
+ *
+ * DARK-ONLY (operator decision): the export forces dark — no light mode, no toggle in its
+ * StickyNav. There is NO `[data-template-theme='dark']` inversion block and `index.tsx` does
+ * NOT mount the `_kit` ThemeToggle; `data-template-theme` is pinned to `dark` and the FOUC
+ * `themeInitScript('dark')` only asserts the dark canvas pre-paint.
+ *
+ * TWO-LAYER UI ISOLATION (CTPL-04, SHARED-D): every token is scoped to the `.tmpl-blueprint`
+ * root. It shares NOTHING with the platform-chrome tokens (`src/app/(chrome)/globals.css`,
+ * Evergreen/Copper) NOR with the `(portfolio)` root layout tokens (`portfolio.css`) NOR with
+ * any other template. No chrome `--color-*` reference; no chrome font (Inter is forbidden —
+ * blueprint's body face is IBM Plex Sans, bound via next/font in `fonts.ts`). Every other
+ * blueprint file reads `var(--token)`; this file is the SOLE token source + the only place
+ * hardcoded hex lives.
+ *
+ * AA NOTE (matches the export): `--fg` #e6edf3 on `--bg` #0d1117 ≈ 15:1 (PASS). `--muted-fg`
+ * #8b949e on #0d1117 ≈ 6.3:1 (PASS body/secondary). The blueprint-blue `--accent` #2563eb is
+ * used for eyebrows/links/rules/borders/CTA fills; on the accent fill the ink is `--accent-fg`
+ * #fff (#fff on #2563eb ≈ 5.1:1, PASS). Body/heading text uses `--fg`, never the accent.
+ */
+
+.tmpl-blueprint {
+  /* Surfaces — the export's GitHub-dark canvas. */
+  --bg: #0d1117; /* page canvas — near-black (export --color-background) */
+  --surface: #161b22; /* elevated card (export --color-surface) */
+  --surface-muted: #1c2430; /* inset fills, code chips, image placeholders (export --color-surface-2) */
+
+  /* Foreground — soft off-white ink + a muted slate for meta/secondary. */
+  --fg: #e6edf3; /* primary text (export --color-foreground) */
+  --muted-fg: #8b949e; /* meta / dates / captions / secondary (export --color-muted) */
+
+  /* Borders — the export's two hairline greys. */
+  --border: #2a313c; /* default hairline (export --color-border) */
+  --border-strong: #3a424f; /* stronger hairline (export --color-border-strong) */
+
+  /* Accent — the ONE blueprint blue, used for eyebrows, links, rules, borders, CTA fills. */
+  --accent: #2563eb; /* blueprint blue (export --color-accent) — FILLS / borders / rules / the
+                        white-on-accent "core" pill (where #2563eb keeps ≥4.5:1 vs white ink) */
+  --accent-fg: #ffffff; /* white ink ON the accent fill (the "core" pill, hero CTA hover) */
+  --ring: #2563eb; /* focus ring = accent */
+  /* AA-safe accent for small accent TEXT on the dark canvas (a11y, WCAG 1.4.3): the export's
+     #2563eb on #0d1117 is only 3.66:1 at 12px (FAIL). A slightly brighter blueprint blue clears
+     4.5:1 (≈5.7:1 on --bg) while reading as the same accent — used for eyebrows, links, pills,
+     markers, and every small accent text. Fills/borders stay --accent (above). */
+  --accent-text: #4d8bf0;
+
+  /* Functional semantic colors (NOT part of the single-accent budget). The export has no
+     success/destructive tokens; these GitHub-dark-family hexes match the palette and clear AA
+     on the near-black ground. */
+  --success: #3fb950; /* GitHub green (~8.6:1 on --bg) */
+  --destructive: #f85149; /* GitHub red (~5.3:1 on --bg) */
+
+  /* Template-PRIVATE accent extras (NOT among the 18 required tokens) — the export's
+     `--color-accent-soft` + `--color-accent-glow`, used for hover glows + the hero radial. */
+  --accent-soft: #1d4ed8;
+  --accent-glow: rgba(37, 99, 235, 0.35);
+
+  /* SHARED report-dialog COMPLETE-VALUE tokens: the SAME `<ReportDialog>` island mounts under
+     blueprint (footer) + the `<ContactForm>` focus ring read THESE per-template tokens (the
+     islands carry NO hardcoded hex). Blueprint = the blue-on-near-black instrument identity. */
+  --tmpl-modal-hairline: var(--accent);
+  --tmpl-modal-backdrop: color-mix(in srgb, var(--bg) 85%, transparent);
+  --tmpl-modal-shadow: 0 0 0 1px var(--accent), 0 18px 44px -22px rgba(0, 0, 0, 0.6);
+  --tmpl-modal-cta-shadow: 0 8px 28px -12px var(--accent-glow);
+  /* The live <ContactForm> submit-button glow — blueprint blue (the shared default is minimal's
+     magenta; this scoped override gives the button a blueprint-blue glow, no cross-template bleed). */
+  --tmpl-contact-cta-shadow: 0 8px 28px -12px var(--accent-glow);
+
+  /* Radius — the export's `--radius-sm:4px / md:6px / lg:10px` scale (rounded corners are the
+     instrument-panel signature, unlike atelier's sharp 0). */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 9999px;
+
+  /* The template owns its full-bleed canvas (overrides the (portfolio) root layout body bg). */
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+
+  /* SELF-CONTAINED BODY FONT (CTPL-04 two-layer isolation): anchor the root to its OWN body
+     face (IBM Plex Sans, `--font-body`, injected via `fontVars` in index.tsx) so every ch/em
+     measure resolves against the template's font, never the chrome Inter. Headings/mono set
+     their own face inline (`--font-display` / `--font-mono`). */
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headings take the geometric display face (the export's base `h1,h2,h3,h4` rule:
+   font-display + tight tracking + --fg). Saves setting fontFamily inline on every heading. */
+.tmpl-blueprint h1,
+.tmpl-blueprint h2,
+.tmpl-blueprint h3,
+.tmpl-blueprint h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+
+/* Scoped mono utility — every place the export used `font-mono`. Defined explicitly (NOT the
+   global `font-mono` Tailwind utility) so the mono face resolves to the template's JetBrains
+   Mono regardless of whether the chrome registers a `--font-mono` @theme token. */
+.tmpl-blueprint .bp-mono {
+  font-family: var(--font-mono);
+}
+
+/* The export's `::selection` — blueprint-blue ground, white ink. */
+.tmpl-blueprint ::selection {
+  background-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+/* Global focus-visible ring (the export's `:where(a,button,…):focus-visible` rule), scoped. */
+.tmpl-blueprint :where(a, button, [role='button'], input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ============================================================================
+ * BLUEPRINT GRID TEXTURE — the export's `bench-grid` / `bench-grid-fine` utilities (thin
+ * oscilloscope grid behind the hero + as faint section texture). Reproduced 1:1, scoped.
+ * Static decorative layers (not motion — reduced-motion exempt).
+ * ========================================================================== */
+.tmpl-blueprint .bp-bench-grid {
+  background-image:
+    linear-gradient(to right, #1c2430 1px, transparent 1px),
+    linear-gradient(to bottom, #1c2430 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+.tmpl-blueprint .bp-bench-grid-fine {
+  background-image:
+    linear-gradient(to right, rgba(28, 36, 48, 0.6) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(28, 36, 48, 0.6) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* ============================================================================
+ * INTERACTION STATES (cannot be inline). The export's hover/group-hover/focus effects,
+ * reproduced 1:1 and scoped. Color comes from the tokens above.
+ * ========================================================================== */
+
+/* Generic accent text-link hover (nav, "All notes", verify, source links). */
+.tmpl-blueprint .bp-link {
+  transition: color 160ms ease;
+}
+.tmpl-blueprint .bp-link:hover {
+  color: var(--accent-text);
+}
+/* A muted link that brightens to --fg on hover (résumé link, "Source", footer). */
+.tmpl-blueprint .bp-link-muted {
+  transition: color 160ms ease;
+}
+.tmpl-blueprint .bp-link-muted:hover {
+  color: var(--fg);
+}
+
+/* The hero CTA — outline-accent that FILLS on hover with a blue glow (export 1:1). */
+.tmpl-blueprint .bp-cta {
+  transition:
+    background-color 200ms ease,
+    color 200ms ease,
+    box-shadow 200ms ease;
+}
+.tmpl-blueprint .bp-cta:hover {
+  background-color: var(--accent);
+  color: var(--accent-fg);
+  box-shadow: 0 0 30px -5px var(--accent-glow);
+}
+.tmpl-blueprint .bp-cta:hover .bp-cta-arrow {
+  transform: translateX(4px);
+}
+.tmpl-blueprint .bp-cta-arrow {
+  transition: transform 200ms ease;
+}
+
+/* Project / blog cards — lift + accent border + blue drop-glow; image scales on group-hover
+   (the export's `hover:-translate-y-1 hover:border-accent/60 hover:shadow-[…]`). */
+.tmpl-blueprint .bp-card {
+  transition:
+    transform 300ms ease,
+    border-color 300ms ease,
+    box-shadow 300ms ease;
+}
+.tmpl-blueprint .bp-card:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow: 0 8px 32px -12px var(--accent-glow);
+}
+.tmpl-blueprint .bp-card-img {
+  transition: transform 500ms ease;
+}
+.tmpl-blueprint .bp-card:hover .bp-card-img {
+  transform: scale(1.03);
+}
+/* Blog-card title brightens to accent on card hover. */
+.tmpl-blueprint .bp-card:hover .bp-card-title {
+  color: var(--accent-text);
+}
+
+/* Service cards — subtle border-accent + surface lift on hover. */
+.tmpl-blueprint .bp-service {
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease;
+}
+.tmpl-blueprint .bp-service:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background-color: color-mix(in srgb, var(--surface) 70%, var(--bg));
+}
+
+/* StickyNav scrolled state is server-static (always-on subtle backdrop) — see index.tsx note.
+   The brand mark + anchor links use `.bp-link` above. */
+
+/* Contact mailto — oversized mono link that shifts to accent on hover (export 1:1). */
+.tmpl-blueprint .bp-mailto {
+  transition: color 200ms ease;
+}
+.tmpl-blueprint .bp-mailto:hover {
+  color: var(--accent-text);
+}
+
+/* ============================================================================
+ * LIVE CONTACT FORM ISLAND — the template-agnostic `<ContactForm>` mounts here and reads
+ * these scoped class hooks (the blue focus ring + the submit spinner). Blueprint MUST define
+ * them scoped (mirrors atelier).
+ * ========================================================================== */
+.tmpl-blueprint .tmpl-contact-field {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.tmpl-blueprint .tmpl-contact-field:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tmpl-blueprint .tmpl-contact-spinner {
+    animation: tmpl-blueprint-contact-spin 0.7s linear infinite;
+  }
+}
+@keyframes tmpl-blueprint-contact-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================================
+ * REPORT DIALOG — the shared `<ReportDialog>` island mounts in the blueprint FOOTER under the
+ * `.tmpl-blueprint` root, so it needs THESE scoped hooks (referenced by name). Blue focus
+ * ring; a flat fade entrance (the instrument-panel vibe).
+ * ========================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+  .tmpl-blueprint .tmpl-modal-backdrop-enter {
+    animation: tmpl-blueprint-modal-backdrop-in 140ms ease-out 1;
+  }
+  .tmpl-blueprint .tmpl-project-modal-enter {
+    animation: tmpl-blueprint-modal-in 160ms ease-out 1;
+  }
+}
+@keyframes tmpl-blueprint-modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes tmpl-blueprint-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.tmpl-blueprint .tmpl-modal-close {
+  transition:
+    color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.tmpl-blueprint .tmpl-modal-close:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+.tmpl-blueprint .tmpl-modal-close:focus-visible {
+  outline: none;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+}
+
+/* ============================================================================
+ * ABOVE-THE-FOLD HERO LOAD-REVEAL (TMPL-04 LCP). The Hero is the LCP element + always in
+ * view, so it must NOT be gated by the JS opacity:0 reveal. The Hero wrapper
+ * (`.tmpl-load-reveal`, rendered STATIC server-side by ScrollReveal's `priority` branch)
+ * paints at its final position from frame 1 — ZERO entrance motion, CLS = 0. (The export's
+ * framer-motion hero entrance is DROPPED; the in-section motion fades are render-visible.)
+ * ========================================================================== */
+.tmpl-blueprint .tmpl-load-reveal {
+  opacity: 1;
+  transform: none;
+  animation: none;
+}
+
+/* ============================================================================
+ * REDUCED-MOTION CONTRACT (HARD requirement — mirrors aurora/atelier/minimal/editorial).
+ * Under `prefers-reduced-motion: reduce` ALL animation/transition inside the template is
+ * zeroed; content is NEVER hidden behind motion (the scroll-reveal island short-circuits to
+ * visible, and the `.tmpl-reveal` CSS fallback forces the revealed state). Scoped to
+ * `.tmpl-blueprint *`.
+ * ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .tmpl-blueprint *,
+  .tmpl-blueprint *::before,
+  .tmpl-blueprint *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .tmpl-blueprint .tmpl-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

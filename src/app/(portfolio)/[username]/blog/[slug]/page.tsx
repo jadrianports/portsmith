@@ -36,6 +36,9 @@ import {
   BlogPostContent,
   type KeepReadingItem,
 } from '@/components/templates/edgerunner-v2/pages/blog/blog-post-content';
+import { BlueprintPageShell } from '@/components/templates/blueprint/pages/page-shell';
+import { BlueprintBlogPostContent } from '@/components/templates/blueprint/pages/blog/blog-post-content';
+import { blueprintProseComponents } from '@/components/templates/blueprint/pages/blog/prose';
 import { subRouteRobots, resolveFaviconIcons } from '@/lib/seo/public-metadata';
 import { shareImageUrl } from '@/lib/og/og-image-url';
 import { blogPostingLdScriptHtml } from '@/lib/seo/blogposting-jsonld';
@@ -147,6 +150,30 @@ export default async function BlogPostPage({
   if (!portfolioId) notFound();
   const post = await getPublishedPostBySlug(portfolioId, slug);
   if (!post) notFound();
+
+  // Per-template blog UI dispatch (additive — edgerunner-v2 stays the default path below).
+  if (data.templateSlug === 'blueprint') {
+    const brand = (data.profile.display_name ?? data.profile.username ?? username).trim();
+    // Blueprint's OWN engineering-bench prose primitives drive the shared markdown pipeline.
+    const bpBody = <MarkdownRenderer source={post.body_md ?? ''} components={blueprintProseComponents} />;
+    return (
+      <>
+        <JsonLd html={blogPostingLdScriptHtml(post, data, username)} />
+        <BlueprintPageShell data={data}>
+          <BlueprintBlogPostContent
+            username={username}
+            brand={brand}
+            slug={slug}
+            title={post.title ?? 'Untitled'}
+            tags={Array.isArray(post.tags) ? post.tags.filter((t): t is string => typeof t === 'string') : []}
+            displayDate={post.display_date}
+            readingTime={post.reading_time}
+            body={bpBody}
+          />
+        </BlueprintPageShell>
+      </>
+    );
+  }
 
   // Render the Markdown body SERVER-SIDE through the single shared pipeline (D-09).
   // The element is threaded into the client shell as a slot (server-in-client).

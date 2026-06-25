@@ -361,7 +361,11 @@ export function ContactForm({ portfolioId, emailPublic }: ContactFormProps) {
           fontFamily: 'var(--font-body)',
           fontWeight: 600,
           fontSize: '16px',
-          boxShadow: '0 8px 28px -12px rgba(255,45,149,0.38)',
+          // Per-template CTA glow. Defaults to the original magenta so EVERY existing template
+          // renders byte-identically (the fallback resolves to the exact prior value — no
+          // baseline churn); a template that wants its OWN accent glow (e.g. blueprint's blue)
+          // defines `--tmpl-contact-cta-shadow` scoped under its root.
+          boxShadow: 'var(--tmpl-contact-cta-shadow, 0 8px 28px -12px rgba(255,45,149,0.38))',
         }}
       >
         {submitting ? (

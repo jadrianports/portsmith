@@ -85,6 +85,13 @@ export const templateMeta: Record<string, TemplateMeta> = {
     thumbnailAlt:
       'Atelier template preview — near-black editorial canvas with a masonry gallery wall, oversized condensed uppercase type, and an acid-green accent',
   },
+  blueprint: {
+    name: 'Blueprint',
+    description:
+      'A dark "engineering bench" single-scroll — a blueprint-grid canvas, mono channel labels, PCB-trace dividers, and a single blueprint-blue accent. Includes a built-in blog.',
+    thumbnailAlt:
+      'Blueprint template preview — near-black GitHub-dark canvas with a faint blueprint grid, mono uppercase labels, and a single blueprint-blue accent',
+  },
 };
 
 /**
