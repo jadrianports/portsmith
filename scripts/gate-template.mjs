@@ -148,6 +148,18 @@ function main() {
     );
   }
 
+  // GATE_SKIP_PARITY (CI scoping): gate:parity compares golden SCREENSHOTS, which differ by
+  // PLATFORM (the baselines were captured on Windows; CI renders on Linux → font antialiasing
+  // diffs). It runs LOCALLY on every pre-push gate; CI skips it (set in ci.yml) until the
+  // baselines are captured Linux-side / dockerized. Conformance + a11y (deterministic) still run.
+  const skipParity = process.env.GATE_SKIP_PARITY === '1';
+  if (skipParity) {
+    console.log(
+      '[gate:template] NOTE: GATE_SKIP_PARITY=1 — skipping gate:parity (platform-specific golden ' +
+        'screenshots); runs locally pre-push.',
+    );
+  }
+
   // TIER 0 — tsc --noEmit FIRST (W5: CICD-01 names tsc; cheapest fail-fast).
   let tier = runFailFast('TIER 0 — type-check (W5)', [
     ['tsc --noEmit (W5 — CICD-01 named gate)', 'npx tsc --noEmit'],
@@ -192,11 +204,16 @@ function main() {
   allFailed.push(...tier.failed);
 
   // TIER 4 — RENDER gates (Playwright boots/reuses `npm run dev` per playwright.config webServer).
-  tier = runAggregate('TIER 4 — render gates', [
+  // conformance + a11y are deterministic (axe / DOM assertions); parity is platform-specific
+  // screenshots → skipped under GATE_SKIP_PARITY (runs locally pre-push).
+  const tier4Gates = [
     ['gate:conformance (PIPE-05 + neg-control)', 'npm run gate:conformance'],
     ['gate:a11y (axe serious/critical + B1 neg-control)', 'npm run gate:a11y'],
-    ['gate:parity (PIPE-11 golden-fixture parity)', 'npm run gate:parity'],
-  ]);
+  ];
+  if (!skipParity) {
+    tier4Gates.push(['gate:parity (PIPE-11 golden-fixture parity)', 'npm run gate:parity']);
+  }
+  tier = runAggregate('TIER 4 — render gates', tier4Gates);
   allFailed.push(...tier.failed);
 
   // TIER 5 — PRODUCTION-SERVED gate (debug blog-posts-empty-prod-build / 13.2-07 hardening).
