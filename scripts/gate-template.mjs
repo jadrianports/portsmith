@@ -134,6 +134,20 @@ function main() {
 
   const allFailed = [];
 
+  // GATE_SKIP_FOUNDER_DATA (CI scoping decision): two gates — `route-table-ssg` (Tier 3) and
+  // `gate:blog-prod` (Tier 5) — assert the FOUNDER's seeded portfolio + blog posts are
+  // prerendered. That data comes from `npm run seed:founder`, which seeds GITIGNORED content the
+  // public repo / CI cannot run. So in CI we skip exactly those two (set in ci.yml); they keep
+  // running LOCALLY (this flag OFF by default) as the pre-push check. Every OTHER gate is
+  // founder-independent (fixtures / no DB) and runs in CI unchanged.
+  const skipFounderGates = process.env.GATE_SKIP_FOUNDER_DATA === '1';
+  if (skipFounderGates) {
+    console.log(
+      '[gate:template] NOTE: GATE_SKIP_FOUNDER_DATA=1 — skipping the 2 founder-data gates ' +
+        '(route-table-ssg + gate:blog-prod); they run locally pre-push. All other gates run.',
+    );
+  }
+
   // TIER 0 — tsc --noEmit FIRST (W5: CICD-01 names tsc; cheapest fail-fast).
   let tier = runFailFast('TIER 0 — type-check (W5)', [
     ['tsc --noEmit (W5 — CICD-01 named gate)', 'npx tsc --noEmit'],
@@ -162,13 +176,19 @@ function main() {
   if (tier.failed.length) return finish(allFailed);
 
   // TIER 3 — BUILD-ARTIFACT gates: reuse the Tier-2 build (--skip-build, NO double build).
-  tier = runAggregate('TIER 3 — build-artifact gates', [
+  // `check:bundle` is founder-independent (it measures the prerendered route shell). The
+  // `route-table-ssg` SSG-invariant gate asserts the FOUNDER's prerendered blog instances, so it
+  // is skipped under GATE_SKIP_FOUNDER_DATA (runs locally pre-push).
+  const tier3Gates = [
     ['check:bundle --skip-build (≤200kB gz + ●SSG/ISR + async cap)', 'npm run check:bundle -- --skip-build'],
-    [
+  ];
+  if (!skipFounderGates) {
+    tier3Gates.push([
       'route-table-ssg (D-22 SSG/ISR invariant)',
       'npx vitest run --project unit tests/build/route-table-ssg.test.ts',
-    ],
-  ]);
+    ]);
+  }
+  tier = runAggregate('TIER 3 — build-artifact gates', tier3Gates);
   allFailed.push(...tier.failed);
 
   // TIER 4 — RENDER gates (Playwright boots/reuses `npm run dev` per playwright.config webServer).
@@ -185,10 +205,18 @@ function main() {
   // NO double build) under `next start` and asserts the founder's blog routes serve the 3
   // seeded posts (not the empty state). Runs LAST: it rebinds port 3000, so it must follow the
   // dev-server render tier. Requires the local Supabase stack UP + `npm run seed:founder`.
-  tier = runAggregate('TIER 5 — production-served gate', [
-    ['gate:blog-prod (D-22 production blog render — stale-prerender lockout)', 'npm run gate:blog-prod -- --skip-build'],
-  ]);
-  allFailed.push(...tier.failed);
+  if (skipFounderGates) {
+    console.log('\n========== TIER 5 — production-served gate ==========');
+    console.log(
+      '[gate:template] ⊘ SKIPPED (GATE_SKIP_FOUNDER_DATA=1) — gate:blog-prod renders the ' +
+        "founder's seeded /blog (npm run seed:founder, gitignored content CI can't run). Runs locally pre-push.",
+    );
+  } else {
+    tier = runAggregate('TIER 5 — production-served gate', [
+      ['gate:blog-prod (D-22 production blog render — stale-prerender lockout)', 'npm run gate:blog-prod -- --skip-build'],
+    ]);
+    allFailed.push(...tier.failed);
+  }
 
   return finish(allFailed);
 }

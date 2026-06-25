@@ -91,9 +91,13 @@ jobs:
       # Build-artifact gates: now that `.next/` exists they evaluate a REAL build.
       # route-table-ssg (D-22 SSG/ISR proof) reads .next/prerender-manifest.json;
       # check:bundle reuses the build just produced (`--skip-build`, no double build).
-      - name: Run build-artifact gates (D-22 SSG proof + bundle budget)
+      # `route-table-ssg.test.ts` asserts the FOUNDER's prerendered blog instances
+      # (jadrianports + npm-run-seed:founder posts) — gitignored content CI can't seed, so it's
+      # excluded here and runs LOCALLY pre-push (the B-scoping decision). The other build tests
+      # (landing-ssg, preview-bridge-chunk) + check:bundle are founder-independent.
+      - name: Run build-artifact gates (bundle budget + founder-independent SSG checks)
         run: |
-          npx vitest run --project unit tests/build
+          npx vitest run --project unit tests/build --exclude '**/route-table-ssg.test.ts'
           npm run check:bundle -- --skip-build
 
       - name: Assert service-role key absent from client bundle
@@ -186,9 +190,14 @@ jobs:
       # `next build` (Tier 2) BEFORE the build-artifact + render gates (D-P10-01a),
       # so no separate build step is needed here. Map the public env onto the
       # NEXT_PUBLIC_* names Next reads at build + dev time (same mapping as `test`).
-      - name: Run gate:template umbrella (tsc -> static -> next build -> build-artifact -> render)
+      # GATE_SKIP_FOUNDER_DATA=1 skips the 2 founder-data gates (route-table-ssg + gate:blog-prod)
+      # that need `npm run seed:founder` (gitignored content CI can't run). Every other tier —
+      # tsc / security / isolation / registry / build / bundle / conformance / a11y / parity —
+      # is founder-independent and runs here. Those 2 run LOCALLY pre-push (the B-scoping decision).
+      - name: Run gate:template umbrella (founder-independent tiers)
         run: npm run gate:template
         env:
+          GATE_SKIP_FOUNDER_DATA: '1'
           NEXT_PUBLIC_SUPABASE_URL: ${{ env.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
