@@ -1,0 +1,27 @@
+-- =============================================================================
+-- 036_grant_anon_templates.sql
+--
+-- CI-GREEN FIX (anon half of the db-reset grant restore — completes 035). 035 restored the
+-- base grants `supabase db reset` drops for `authenticated` + `service_role`, but `anon`
+-- ALSO lost the platform-default SELECT on the `templates` LOOKUP table — which anon reads
+-- DIRECTLY (the picker / allowed-list `getAvailableTemplates()` is an anon read of the base
+-- `templates` table, NOT a `public_*` view). Without it, anon reads 42501 (permission denied
+-- for table templates), failing `rls-no-anon-insert` ("anon CAN read the active minimal
+-- template") + `template-grants-rls` ("allowed-list: B reaches public only") in CI.
+--
+-- WHY THIS IS SAFE (unlike the tenant base tables, anon is NOT broadly granted):
+--   • `templates` is a SHARED catalog, NOT tenant data — columns are slug/name/description/
+--     visibility/category/spec/thumbnail; nothing sensitive (no email/role/etc.).
+--   • RLS gates the ROWS: the `"templates public select"` policy (migration 004) restricts anon
+--     to `visibility = 'public'` rows, so a restricted/exclusive template is still hidden from
+--     anon — granting table SELECT only restores the CAPABILITY the platform default implied;
+--     the policy is the actual gate, unchanged.
+--   • This is the SAME pattern 033's comment notes ("the `templates` table is ALREADY
+--     platform-granted") — that platform grant is exactly what `db reset` drops, re-asserted here.
+--
+-- `authenticated` + `service_role` already have it via 035's `ON ALL TABLES`; this adds the
+-- missing `anon` SELECT only. Idempotent + a no-op on prod (the grant was never dropped there).
+-- FORWARD migration (apply via `supabase migration up`).
+-- =============================================================================
+
+GRANT SELECT ON public.templates TO anon;
