@@ -41,6 +41,19 @@ scripts/seed/aurora-content.ts
 scripts/seed/minimal-content.ts
 scripts/seed/editorial-content.ts
 
+# CI-GREEN FIX: the seed SCRIPTS + content tests that IMPORT the gitignored real/demo
+# content above. They are local-only ops tooling (run with `npm run seed:*` where the
+# content exists on disk). Keeping them tracked but their content gitignored left the
+# PUBLIC repo with dangling imports → `tsc --noEmit` (the CI gate) failed for 10+ days.
+# Untracked here so the public typecheck is green; they still typecheck + run LOCALLY.
+# The committed `.example.ts` files remain the discoverable public contract.
+scripts/seed-founder-portfolio.ts
+scripts/seed-aurora-demo.ts
+scripts/seed-editorial-demo.ts
+scripts/seed-minimal-demo.ts
+tests/unit/seed/founder-content.test.ts
+tests/unit/scripts/demo-fixtures.test.ts
+
 # raw Lovable exports (Phase 11 / D-P11-07) — LOCAL only; heavy dep trees + third-party design.
 # The committed artifacts are the template output folder, <slug>-source.png, and INGEST-MANIFEST.md.
 lovable-exports/
