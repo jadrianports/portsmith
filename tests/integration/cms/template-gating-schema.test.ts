@@ -16,10 +16,10 @@
 //     semantics: a round-trip INSERT/SELECT of a grant works, and a DUPLICATE
 //     INSERT of the same `(template_id, user_id)` CONFLICTS (the natural key
 //     prevents duplicate grants structurally — RESEARCH Rec 2).
-//   - Seed state (D-P12-03/04/05): editorial `visibility='public'`, minimal +
-//     aurora `visibility='restricted'`, and a founder→minimal grant row present
-//     (derived by 013 from the portfolio that points at minimal — never a
-//     hardcoded username; RESEARCH Rec 6).
+//   - Seed state: editorial `visibility='public'` (D-P12-03); aurora `visibility='restricted'`
+//     (D-P12-05). NOTE: minimal was restricted under 013 (B) but migration 015 step 4 flipped
+//     it back to PUBLIC (the founder moved to the exclusive edgerunner-v2), so minimal is a
+//     public starter now and the restricted exemplars are aurora + edgerunner-v2.
 //
 // ── WHY RED NOW (and tsc stays 0) ─────────────────────────────────────────────
 // TODAY there is NO `visibility` column and NO `template_grants` table — so every
@@ -82,7 +82,7 @@ describe('GATE-01 — templates.visibility + template_grants schema/seed (GREENE
     }
   });
 
-  it('seed: editorial=public, minimal & aurora=restricted (D-P12-03/04/05)', async () => {
+  it('seed: editorial & minimal=public, aurora=restricted (D-P12-03 + migration 015 step 4)', async () => {
     const bySlug = async (slug: string): Promise<string | undefined> => {
       const { data } = await admin
         .from('templates')
@@ -91,9 +91,12 @@ describe('GATE-01 — templates.visibility + template_grants schema/seed (GREENE
         .single();
       return (data as { visibility?: string } | null)?.visibility;
     };
-    // RED now: no `visibility` column → these reads error / return undefined.
+    // editorial is public (D-P12-03). minimal was restricted under the Phase-12 gate
+    // (013 step B), then migration 015 step 4 FLIPPED it back to PUBLIC ("minimal is now
+    // a curated PUBLIC template") when edgerunner-v2 became the founder's exclusive — so
+    // the restricted exemplars are now aurora + edgerunner-v2, NOT minimal.
     expect(await bySlug('editorial')).toBe('public');
-    expect(await bySlug('minimal')).toBe('restricted');
+    expect(await bySlug('minimal')).toBe('public');
     expect(await bySlug('aurora')).toBe('restricted');
   });
 
@@ -127,15 +130,11 @@ describe('GATE-01 — templates.visibility + template_grants schema/seed (GREENE
     expect(dup.error).not.toBeNull();
   });
 
-  it('seed: a founder→minimal grant row is present (derived from the minimal portfolio)', async () => {
-    // 013 grants every portfolio currently on minimal — the founder (the only
-    // account on minimal; new accounts default to editorial). Assert at least one
-    // grant row exists for the minimal template.
-    // RED now: no `template_grants` relation → error / zero rows.
-    const { data } = await admin
-      .from('template_grants')
-      .select('template_id, user_id')
-      .eq('template_id', MINIMAL_UUID);
-    expect((data ?? []).length).toBeGreaterThan(0);
-  });
+  // RETIRED (migration 015 step 4): the original "seed: a founder→minimal grant row is
+  // present" case asserted 013(C)'s derived founder→minimal grant. That grant is now
+  // VESTIGIAL — migration 015 moved the founder OFF minimal onto edgerunner-v2 and flipped
+  // minimal → PUBLIC, so a fresh DB (no founder seed) has NO founder→minimal grant, and a
+  // grant on a public template is meaningless anyway. The composite-PK round-trip above
+  // already proves the template_grants insert/select/uniqueness contract. The live
+  // founder→exclusive grant is exercised by the edgerunner/aurora gating tests instead.
 });

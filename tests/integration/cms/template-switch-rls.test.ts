@@ -44,9 +44,11 @@ const RUN = crypto.randomUUID().slice(0, 8);
 // Has NO `templates` row until the 07-03 (008) migration seeds it.
 const EDITORIAL_UUID = '00000000-0000-4000-8000-000000000002';
 
-// 12-01 GATE-03 extension: the pinned minimal UUID (restricted under the Phase-12
-// gate, seeded by 013). MUST equal registry.ts TEMPLATE_UUIDS.minimal.
-const MINIMAL_UUID = '00000000-0000-4000-8000-000000000001';
+// 12-01 GATE-03 extension. minimal (…0001) was restricted under the Phase-12 gate but
+// migration 015 step 4 flipped it to PUBLIC, so the restricted exemplar this file
+// exercises is now AURORA (…0003, restricted, ungranted-by-seed). MUST equal
+// registry.ts TEMPLATE_UUIDS.aurora.
+const AURORA_UUID = '00000000-0000-4000-8000-000000000003';
 
 // The switch action the 07-04 slice ships — referenced via a runtime variable
 // specifier so this integration file documents which module greens the action path
@@ -186,13 +188,13 @@ describe('TMPL-02 — template switch mutates ONLY template_id, under RLS (GREEN
 // switch-action grant check in 12-03; together they green these two cases. (tsc
 // stays 0 — existing fixtures + untyped new-shape reads only.)
 describe('GATE-03 — restricted-template switch is grant-gated (GREENED BY 12-02/12-03)', () => {
-  it('a GRANTED user CAN switch to the restricted minimal template', async () => {
-    // Admin grants user A the restricted minimal template (service-role setup of the
+  it('a GRANTED user CAN switch to the restricted aurora template', async () => {
+    // Admin grants user A the restricted aurora template (service-role setup of the
     // precondition — RLS-bypassing seed, NOT the boundary write under test).
     // RED now: the `template_grants` relation does not exist.
     const grant = await admin
       .from('template_grants')
-      .insert({ template_id: MINIMAL_UUID, user_id: ctx.userA.id });
+      .insert({ template_id: AURORA_UUID, user_id: ctx.userA.id });
     expect(grant.error).toBeNull();
 
     // The AUTHENTICATED owner switches their template_id to the granted restricted
@@ -200,7 +202,7 @@ describe('GATE-03 — restricted-template switch is grant-gated (GREENED BY 12-0
     // gate — once 12-03 lands in the action — admits the granted target).
     const { error } = await ctx.clientA
       .from('portfolios')
-      .update({ template_id: MINIMAL_UUID })
+      .update({ template_id: AURORA_UUID })
       .eq('user_id', ctx.userA.id);
     expect(error).toBeNull();
 
@@ -209,22 +211,22 @@ describe('GATE-03 — restricted-template switch is grant-gated (GREENED BY 12-0
       .select('template_id')
       .eq('user_id', ctx.userA.id)
       .single();
-    expect(pf!.template_id).toBe(MINIMAL_UUID);
+    expect(pf!.template_id).toBe(AURORA_UUID);
 
     // Cleanup: remove the grant so the next case starts ungranted.
     await admin
       .from('template_grants')
       .delete()
-      .eq('template_id', MINIMAL_UUID)
+      .eq('template_id', AURORA_UUID)
       .eq('user_id', ctx.userA.id);
   });
 
-  it('an UNGRANTED user CANNOT switch to the restricted minimal template (template_id unchanged)', async () => {
-    // Ensure user B is NOT granted minimal, and start B on a known template.
+  it('an UNGRANTED user CANNOT switch to the restricted aurora template (template_id unchanged)', async () => {
+    // Ensure user B is NOT granted aurora, and start B on a known template.
     await admin
       .from('template_grants')
       .delete()
-      .eq('template_id', MINIMAL_UUID)
+      .eq('template_id', AURORA_UUID)
       .eq('user_id', ctx.userB.id);
     await admin
       .from('portfolios')
@@ -267,14 +269,14 @@ describe('GATE-03 — restricted-template switch is grant-gated (GREENED BY 12-0
 // template is ABSENT from the picker, and a granted one is PRESENT (marked exclusive).
 //
 // The two CMS-produced template visibilities on the live stack (verified): `editorial`
-// is the only `public` template; `minimal` (+ aurora, edgerunner-v2) are `restricted`.
+// + minimal + atelier are `public`; `aurora` (+ edgerunner-v2) are `restricted`.
 describe('ONB-03 — onboarding picker allowed-list is `public ∪ granted` (GATE-02 read half)', () => {
-  it('an UNGRANTED user sees only public templates; the restricted minimal is ABSENT', async () => {
-    // Ensure A holds NO grant for the restricted minimal template.
+  it('an UNGRANTED user sees only public templates; the restricted aurora is ABSENT', async () => {
+    // Ensure A holds NO grant for the restricted aurora template.
     await admin
       .from('template_grants')
       .delete()
-      .eq('template_id', MINIMAL_UUID)
+      .eq('template_id', AURORA_UUID)
       .eq('user_id', ctx.userA.id);
 
     // Reproduce getAvailableTemplates' two RLS-scoped reads as the AUTHENTICATED owner
@@ -292,17 +294,18 @@ describe('ONB-03 — onboarding picker allowed-list is `public ∪ granted` (GAT
 
     const allowed = buildAllowedList(pub, grants);
 
-    // editorial (public) is present; the restricted minimal is NOT (ungranted).
+    // editorial + minimal (both public) are present; the restricted aurora is NOT (ungranted).
     expect(allowed.has('editorial')).toBe(true);
-    expect(allowed.has('minimal')).toBe(false);
+    expect(allowed.has('minimal')).toBe(true); // minimal is PUBLIC now (015 step 4)
+    expect(allowed.has('aurora')).toBe(false);
   });
 
-  it('a GRANTED user sees the restricted minimal as an exclusive entry (public ∪ granted)', async () => {
-    // Admin grants A the restricted minimal (service-role precondition setup — NOT the
-    // boundary read under test). Now `public ∪ granted-to-me` must INCLUDE minimal.
+  it('a GRANTED user sees the restricted aurora as an exclusive entry (public ∪ granted)', async () => {
+    // Admin grants A the restricted aurora (service-role precondition setup — NOT the
+    // boundary read under test). Now `public ∪ granted-to-me` must INCLUDE aurora.
     const grant = await admin
       .from('template_grants')
-      .insert({ template_id: MINIMAL_UUID, user_id: ctx.userA.id });
+      .insert({ template_id: AURORA_UUID, user_id: ctx.userA.id });
     expect(grant.error).toBeNull();
 
     const { data: pub } = await ctx.clientA
@@ -316,16 +319,17 @@ describe('ONB-03 — onboarding picker allowed-list is `public ∪ granted` (GAT
 
     const allowed = buildAllowedList(pub, grants);
 
-    // The granted restricted minimal is now PRESENT and marked restricted=true; the
-    // public editorial remains present (restricted=false).
+    // The granted restricted aurora is now PRESENT and marked restricted=true; the
+    // public editorial + minimal remain present (restricted=false — public, not exclusive).
     expect(allowed.get('editorial')).toBe(false);
-    expect(allowed.get('minimal')).toBe(true);
+    expect(allowed.get('minimal')).toBe(false);
+    expect(allowed.get('aurora')).toBe(true);
 
     // Cleanup: drop the grant so the file leaves no residual cross-case state.
     await admin
       .from('template_grants')
       .delete()
-      .eq('template_id', MINIMAL_UUID)
+      .eq('template_id', AURORA_UUID)
       .eq('user_id', ctx.userA.id);
   });
 });

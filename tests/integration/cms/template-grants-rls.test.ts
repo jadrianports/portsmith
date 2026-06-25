@@ -45,9 +45,10 @@ const admin = adminClient();
 const RUN = crypto.randomUUID().slice(0, 8);
 
 // Pinned literal UUIDs — MUST equal registry.ts TEMPLATE_UUIDS (registry.ts:73-80).
-const MINIMAL_UUID = '00000000-0000-4000-8000-000000000001'; // restricted (seed D-P12-04)
+const MINIMAL_UUID = '00000000-0000-4000-8000-000000000001'; // PUBLIC now (migration 015 step 4)
 const EDITORIAL_UUID = '00000000-0000-4000-8000-000000000002'; // public (seed D-P12-03)
-const AURORA_UUID = '00000000-0000-4000-8000-000000000003'; // restricted, NO grant (D-P12-05)
+const AURORA_UUID = '00000000-0000-4000-8000-000000000003'; // restricted — the GRANTED exemplar
+const EDGERUNNER_UUID = '00000000-0000-4000-8000-000000000005'; // restricted, NEVER granted — the exclusion
 
 let ctx: TwoUsers;
 let adminUser: AdminUser;
@@ -56,18 +57,19 @@ beforeAll(async () => {
   ctx = await setupTwoUsers('tggrant', RUN);
   adminUser = await setupAdminUser('tggrant', RUN);
 
-  // The admin grants user A the (restricted) minimal template, via the admin-RLS
-  // `template_grants admin all` write path. RED now: relation/policy absent.
+  // The admin grants user A the (restricted) aurora template, via the admin-RLS
+  // `template_grants admin all` write path. (minimal is PUBLIC now — 015 step 4 — so
+  // aurora is the restricted exemplar a grant is meaningful on.)
   await adminUser.client
     .from('template_grants')
-    .insert({ template_id: MINIMAL_UUID, user_id: ctx.userA.id });
+    .insert({ template_id: AURORA_UUID, user_id: ctx.userA.id });
 }, 45_000);
 
 afterAll(async () => {
   await admin
     .from('template_grants')
     .delete()
-    .eq('template_id', MINIMAL_UUID)
+    .eq('template_id', AURORA_UUID)
     .eq('user_id', ctx.userA.id);
   await teardownAdminUser(adminUser);
   await teardownTwoUsers(ctx);
@@ -79,9 +81,9 @@ describe('GATE-02 — template_grants own select isolation + allowed-list (GREEN
       .from('template_grants')
       .select('template_id, user_id');
     const rows = (data ?? []) as { template_id: string; user_id: string }[];
-    // A sees their minimal grant — and ONLY rows scoped to A.
+    // A sees their aurora grant — and ONLY rows scoped to A.
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.some((r) => r.template_id === MINIMAL_UUID)).toBe(true);
+    expect(rows.some((r) => r.template_id === AURORA_UUID)).toBe(true);
     for (const r of rows) expect(r.user_id).toBe(ctx.userA.id);
   });
 
@@ -94,8 +96,8 @@ describe('GATE-02 — template_grants own select isolation + allowed-list (GREEN
     expect((data ?? []).length).toBe(0);
   });
 
-  it('allowed-list: A reaches public ∪ {minimal}, EXCLUDES the non-granted restricted (aurora)', async () => {
-    // Public templates A can read (visibility='public'): editorial.
+  it('allowed-list: A reaches public ∪ {aurora}, EXCLUDES the non-granted restricted (edgerunner-v2)', async () => {
+    // Public templates A can read (visibility='public'): editorial + minimal.
     const { data: pub } = await ctx.clientA
       .from('templates')
       .select('id, slug, visibility')
@@ -103,8 +105,9 @@ describe('GATE-02 — template_grants own select isolation + allowed-list (GREEN
       .eq('visibility', 'public');
     const publicIds = new Set(((pub ?? []) as { id: string }[]).map((t) => t.id));
     expect(publicIds.has(EDITORIAL_UUID)).toBe(true); // editorial is public
+    expect(publicIds.has(MINIMAL_UUID)).toBe(true); // minimal is public (015 step 4)
 
-    // A's granted restricted templates (own grant rows → minimal).
+    // A's granted restricted templates (own grant rows → aurora).
     const { data: grants } = await ctx.clientA
       .from('template_grants')
       .select('template_id');
@@ -113,11 +116,11 @@ describe('GATE-02 — template_grants own select isolation + allowed-list (GREEN
     );
 
     const reachable = new Set<string>([...publicIds, ...grantedIds]);
-    // A's reachable set INCLUDES minimal (granted) and editorial (public)...
-    expect(reachable.has(MINIMAL_UUID)).toBe(true);
+    // A's reachable set INCLUDES aurora (granted) and editorial (public)...
+    expect(reachable.has(AURORA_UUID)).toBe(true);
     expect(reachable.has(EDITORIAL_UUID)).toBe(true);
-    // ...and EXCLUDES aurora (restricted + NOT granted to A) — the GATE-02 exclusion.
-    expect(reachable.has(AURORA_UUID)).toBe(false);
+    // ...and EXCLUDES edgerunner-v2 (restricted + NOT granted to A) — the GATE-02 exclusion.
+    expect(reachable.has(EDGERUNNER_UUID)).toBe(false);
   });
 
   it('allowed-list: B reaches public only (no grants → no restricted)', async () => {
@@ -131,11 +134,12 @@ describe('GATE-02 — template_grants own select isolation + allowed-list (GREEN
     const { data: grants } = await ctx.clientB.from('template_grants').select('template_id');
     const grantedIds = ((grants ?? []) as { template_id: string }[]).map((g) => g.template_id);
 
-    // B has no grants → reachable set is exactly the public templates, excluding
-    // BOTH restricted templates (minimal + aurora).
+    // B has no grants → reachable set is exactly the public templates (editorial +
+    // minimal), excluding BOTH restricted templates (aurora + edgerunner-v2).
     expect(grantedIds.length).toBe(0);
-    expect(publicIds.has(MINIMAL_UUID)).toBe(false);
     expect(publicIds.has(AURORA_UUID)).toBe(false);
+    expect(publicIds.has(EDGERUNNER_UUID)).toBe(false);
+    expect(publicIds.has(MINIMAL_UUID)).toBe(true); // minimal is PUBLIC now
     expect(publicIds.has(EDITORIAL_UUID)).toBe(true);
   });
 });
