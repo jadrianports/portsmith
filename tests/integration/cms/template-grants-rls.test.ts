@@ -131,11 +131,14 @@ describe('GATE-02 — template_grants own select isolation + allowed-list (GREEN
     const { data: grants } = await ctx.clientB.from('template_grants').select('template_id');
     const grantedIds = ((grants ?? []) as { template_id: string }[]).map((g) => g.template_id);
 
-    // B has no grants → reachable set is exactly the public templates, excluding
-    // BOTH restricted templates (minimal + aurora).
+    // B has no grants → reachable set is exactly the PUBLIC templates: minimal + editorial
+    // are public; aurora (restricted + ungranted) is the GATE-02 exclusion.
+    // NOTE: `minimal` flipped restricted→PUBLIC after migration 013's original seed — it's the
+    // new-account DEFAULT (`initialize_portfolio()` bootstraps new signups onto it), so it MUST
+    // be public or onboarding breaks. The gating is still exercised via aurora (restricted).
     expect(grantedIds.length).toBe(0);
-    expect(publicIds.has(MINIMAL_UUID)).toBe(false);
-    expect(publicIds.has(AURORA_UUID)).toBe(false);
+    expect(publicIds.has(MINIMAL_UUID)).toBe(true); // minimal is the public new-user default now
+    expect(publicIds.has(AURORA_UUID)).toBe(false); // aurora stays restricted — the real gate
     expect(publicIds.has(EDITORIAL_UUID)).toBe(true);
   });
 });
