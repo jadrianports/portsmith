@@ -51,7 +51,7 @@ import { transformUrl } from './url-policy';
  * noreferrer". `img` needs no special component — `urlTransform` already drops
  * any non-own-storage `src` (react-markdown then omits the empty src).
  */
-const components: Components = {
+const defaultComponents: Components = {
   h2: ProseH2,
   h3: ProseH3,
   p: ProseP,
@@ -78,7 +78,17 @@ const components: Components = {
  * primitives. Async because fenced code is pre-highlighted server-side before
  * the synchronous react-markdown render.
  */
-export async function renderMarkdown(source: string): Promise<ReactElement> {
+export async function renderMarkdown(
+  source: string,
+  /**
+   * Per-template prose primitives (PIPE — template-scoped blog styling). Defaults to the
+   * edgerunner-v2 synthwave set ({@link defaultComponents}) so existing call sites are
+   * UNCHANGED; a page-capable template (e.g. `blueprint`) passes its OWN GFM→element map so
+   * its post body renders in ITS scoped voice. The shared security mechanisms (skipHtml /
+   * urlTransform / CodeBridge highlight) are identical regardless of the components map.
+   */
+  components: Components = defaultComponents,
+): Promise<ReactElement> {
   const tokens = await highlightFencedBlocks(extractFencedBlocks(source));
 
   return (
@@ -96,9 +106,16 @@ export async function renderMarkdown(source: string): Promise<ReactElement> {
 }
 
 /**
- * Convenience server component wrapper for direct JSX use in the ISR route
- * (`<MarkdownRenderer source={post.body_md} />`). Identical pipeline.
+ * Convenience server component wrapper for direct JSX use in an ISR route
+ * (`<MarkdownRenderer source={post.body_md} />`). Identical pipeline. `components` is
+ * optional and forwards to {@link renderMarkdown} (default = edgerunner-v2 prose).
  */
-export async function MarkdownRenderer({ source }: { source: string }): Promise<ReactElement> {
-  return renderMarkdown(source);
+export async function MarkdownRenderer({
+  source,
+  components,
+}: {
+  source: string;
+  components?: Components;
+}): Promise<ReactElement> {
+  return renderMarkdown(source, components ?? defaultComponents);
 }

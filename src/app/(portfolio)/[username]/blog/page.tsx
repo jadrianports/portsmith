@@ -23,6 +23,8 @@ import { redirectIfRenamedHandle } from '@/lib/portfolio/username-redirect';
 import { getPublishedPosts } from '@/lib/portfolio/get-posts';
 import { EdgerunnerV2PageShell } from '@/components/templates/edgerunner-v2/pages/page-shell';
 import { BlogIndexContent } from '@/components/templates/edgerunner-v2/pages/blog/blog-index-content';
+import { BlueprintPageShell } from '@/components/templates/blueprint/pages/page-shell';
+import { BlueprintBlogIndexContent } from '@/components/templates/blueprint/pages/blog/blog-index-content';
 import { subRouteRobots, resolveFaviconIcons } from '@/lib/seo/public-metadata';
 import { resolveDisplayName, shareImageUrl } from '@/lib/og/og-image-url';
 import { siteUrl } from '@/lib/url';
@@ -114,6 +116,18 @@ export default async function BlogIndexPage({
   // template decoration cycled BY INDEX in BlogIndexContent (D-06 — not stored).
   // `portfolioId` is non-null here (a missing portfolio was notFound()-ed above).
   const posts = data.portfolioId ? await getPublishedPosts(data.portfolioId) : [];
+
+  // Per-template blog UI dispatch (additive — edgerunner-v2 stays the default path).
+  if (data.templateSlug === 'blueprint') {
+    const brand = (data.profile.display_name ?? data.profile.username ?? username).trim();
+    const bp = data.sections.find((s) => s.type === 'blog_preview')?.content as { heading?: string } | null;
+    const heading = (typeof bp?.heading === 'string' && bp.heading.trim()) || 'Writing';
+    return (
+      <BlueprintPageShell data={data}>
+        <BlueprintBlogIndexContent username={username} brand={brand} heading={heading} posts={posts} />
+      </BlueprintPageShell>
+    );
+  }
 
   return (
     <EdgerunnerV2PageShell data={data} activeNav="blog">
