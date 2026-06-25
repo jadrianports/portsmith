@@ -37,8 +37,22 @@ jobs:
 
       # Export the local stack's URL + keys so the Vitest integration project and
       # tests/integration/_setup.ts can reach it (same env vars they read locally).
-      - name: Export local Supabase env
-        run: supabase status -o env >> "$GITHUB_ENV"
+      - name: Export local Supabase env (mapped to the names the app + tests read)
+        run: |
+          # `supabase status -o env` (CLI `latest`) emits API_URL / ANON_KEY /
+          # SERVICE_ROLE_KEY — NOT the SUPABASE_* names the app + tests/integration read.
+          # The old one-line `>> $GITHUB_ENV` wrote the WRONG names, so every downstream
+          # `${{ env.SUPABASE_URL }}` was blank → the whole integration suite failed with
+          # "Missing env var SUPABASE_URL" and `next build` got an empty NEXT_PUBLIC_*.
+          # Map explicitly so a future CLI output-name drift can't silently blank it again.
+          eval "$(supabase status -o env)"
+          {
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+          } >> "$GITHUB_ENV"
 
       # D-P10-01a build-ordering fix: the build-dependent gates
       # (`tests/build/route-table-ssg.test.ts`, `npm run check:bundle`) read the
@@ -108,10 +122,10 @@ jobs:
   # scripts so local and CI can never diverge (T-10-06-CIMIRROR). It composes every
   # template gate into ONE pipeline that blocks on any single failure (CICD-01).
   #
-  # REPO TOPOLOGY: the full working repo has NO git remote (by design); the public
-  # `jadrianports/portsmith` is a filtered code-only export. So this CI mirror only
-  # ever FIRES on that public export repo's Actions — it is the one surface where the
-  # gates run automatically. Locally the umbrella IS the gate (run `npm run gate:template`).
+  # REPO: local `main` tracks `origin/main` (jadrianports/portsmith) as a normal repo —
+  # `.planning`/`.claude` are gitignored (never in history), so a plain `git push` is safe.
+  # This CI mirror fires on every push/PR to that repo. Locally the umbrella IS the gate
+  # (run `npm run gate:template`).
   #
   # ORDERING (D-P10-01a): the umbrella runs `tsc -> static -> next build -> build-
   # artifact -> render` IN-PROCESS (scripts/gate-template.mjs owns the order), so the
@@ -151,8 +165,22 @@ jobs:
       - name: Reset database (apply migrations + seed)
         run: supabase db reset
 
-      - name: Export local Supabase env
-        run: supabase status -o env >> "$GITHUB_ENV"
+      - name: Export local Supabase env (mapped to the names the app + tests read)
+        run: |
+          # `supabase status -o env` (CLI `latest`) emits API_URL / ANON_KEY /
+          # SERVICE_ROLE_KEY — NOT the SUPABASE_* names the app + tests/integration read.
+          # The old one-line `>> $GITHUB_ENV` wrote the WRONG names, so every downstream
+          # `${{ env.SUPABASE_URL }}` was blank → the whole integration suite failed with
+          # "Missing env var SUPABASE_URL" and `next build` got an empty NEXT_PUBLIC_*.
+          # Map explicitly so a future CLI output-name drift can't silently blank it again.
+          eval "$(supabase status -o env)"
+          {
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+          } >> "$GITHUB_ENV"
 
       # Run the SAME umbrella the operator runs locally. It performs its OWN
       # `next build` (Tier 2) BEFORE the build-artifact + render gates (D-P10-01a),
