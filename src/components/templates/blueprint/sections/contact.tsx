@@ -44,7 +44,7 @@ export function Contact({ section, emailPublic: emailPublicProp }: SectionProps 
             className="bp-mailto bp-mono group inline-flex items-baseline gap-2 text-2xl md:text-4xl border-b pb-2"
             style={{ color: 'var(--fg)', borderColor: 'var(--accent)' }}
           >
-            <span aria-hidden className="text-base" style={{ color: 'var(--accent)' }}>
+            <span aria-hidden className="text-base" style={{ color: 'var(--accent-text)' }}>
               ➤
             </span>
             {emailPublic}

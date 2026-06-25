@@ -40,9 +40,15 @@
   --border-strong: #3a424f; /* stronger hairline (export --color-border-strong) */
 
   /* Accent — the ONE blueprint blue, used for eyebrows, links, rules, borders, CTA fills. */
-  --accent: #2563eb; /* blueprint blue (export --color-accent) */
+  --accent: #2563eb; /* blueprint blue (export --color-accent) — FILLS / borders / rules / the
+                        white-on-accent "core" pill (where #2563eb keeps ≥4.5:1 vs white ink) */
   --accent-fg: #ffffff; /* white ink ON the accent fill (the "core" pill, hero CTA hover) */
   --ring: #2563eb; /* focus ring = accent */
+  /* AA-safe accent for small accent TEXT on the dark canvas (a11y, WCAG 1.4.3): the export's
+     #2563eb on #0d1117 is only 3.66:1 at 12px (FAIL). A slightly brighter blueprint blue clears
+     4.5:1 (≈5.7:1 on --bg) while reading as the same accent — used for eyebrows, links, pills,
+     markers, and every small accent text. Fills/borders stay --accent (above). */
+  --accent-text: #4d8bf0;
 
   /* Functional semantic colors (NOT part of the single-accent budget). The export has no
      success/destructive tokens; these GitHub-dark-family hexes match the palette and clear AA
@@ -62,6 +68,9 @@
   --tmpl-modal-backdrop: color-mix(in srgb, var(--bg) 85%, transparent);
   --tmpl-modal-shadow: 0 0 0 1px var(--accent), 0 18px 44px -22px rgba(0, 0, 0, 0.6);
   --tmpl-modal-cta-shadow: 0 8px 28px -12px var(--accent-glow);
+  /* The live <ContactForm> submit-button glow — blueprint blue (the shared default is minimal's
+     magenta; this scoped override gives the button a blueprint-blue glow, no cross-template bleed). */
+  --tmpl-contact-cta-shadow: 0 8px 28px -12px var(--accent-glow);
 
   /* Radius — the export's `--radius-sm:4px / md:6px / lg:10px` scale (rounded corners are the
      instrument-panel signature, unlike atelier's sharp 0). */
@@ -143,7 +152,7 @@
   transition: color 160ms ease;
 }
 .tmpl-blueprint .bp-link:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 /* A muted link that brightens to --fg on hover (résumé link, "Source", footer). */
 .tmpl-blueprint .bp-link-muted {
@@ -193,7 +202,7 @@
 }
 /* Blog-card title brightens to accent on card hover. */
 .tmpl-blueprint .bp-card:hover .bp-card-title {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Service cards — subtle border-accent + surface lift on hover. */
@@ -215,7 +224,7 @@
   transition: color 200ms ease;
 }
 .tmpl-blueprint .bp-mailto:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ============================================================================

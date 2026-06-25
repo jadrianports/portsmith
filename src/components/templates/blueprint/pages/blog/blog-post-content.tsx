@@ -44,7 +44,7 @@ export function BlueprintBlogPostContent({
             className="bp-link bp-mono text-xs tracking-[0.2em] uppercase"
             style={{ color: 'var(--fg)' }}
           >
-            <span style={{ color: 'var(--accent)' }}>←</span> all notes
+            <span style={{ color: 'var(--accent-text)' }}>←</span> all notes
           </Link>
           <Link
             href={`/${username}`}
@@ -58,7 +58,7 @@ export function BlueprintBlogPostContent({
 
       <article className="mx-auto max-w-[760px] px-6 py-16 md:py-24">
         <div className="bp-mono text-[11px] tracking-[0.18em] uppercase flex items-center gap-3">
-          <span style={{ color: 'var(--accent)' }}>// {slug}</span>
+          <span style={{ color: 'var(--accent-text)' }}>// {slug}</span>
         </div>
         <h1 className="mt-4 text-4xl md:text-6xl font-semibold tracking-tight leading-[1.05]">{title}</h1>
         {present(displayDate) || present(readingTime) ? (
@@ -93,7 +93,7 @@ export function BlueprintBlogPostContent({
         <Link
           href={`/${username}/blog`}
           className="bp-link bp-mono inline-flex items-center gap-2 text-xs tracking-[0.18em] uppercase underline-offset-4 hover:underline"
-          style={{ color: 'var(--accent)' }}
+          style={{ color: 'var(--accent-text)' }}
         >
           ← Back to all notes
         </Link>

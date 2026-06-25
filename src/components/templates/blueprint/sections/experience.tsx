@@ -37,7 +37,7 @@ export function Experience({ section }: SectionProps) {
               />
               <div className="bp-mono text-[11px] tracking-wider uppercase" style={{ color: 'var(--muted-fg)' }}>
                 {formatMonth(item.start_date)} —{' '}
-                <span style={isPresent ? { color: 'var(--accent)' } : undefined}>
+                <span style={isPresent ? { color: 'var(--accent-text)' } : undefined}>
                   {present(item.end_date) ? formatMonth(item.end_date) : 'Present'}
                 </span>
               </div>
@@ -53,7 +53,7 @@ export function Experience({ section }: SectionProps) {
                 <ul className="mt-4 space-y-1.5 text-sm" style={{ color: 'color-mix(in srgb, var(--fg) 80%, transparent)' }}>
                   {highlights.map((h) => (
                     <li key={h} className="flex gap-3">
-                      <span className="bp-mono mt-1" style={{ color: 'var(--accent)' }}>
+                      <span className="bp-mono mt-1" style={{ color: 'var(--accent-text)' }}>
                         ›
                       </span>
                       <span>{h}</span>

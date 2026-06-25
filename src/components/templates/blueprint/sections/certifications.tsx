@@ -58,7 +58,7 @@ export function Certifications({ section }: SectionProps) {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="bp-mono shrink-0 text-[11px] tracking-wider uppercase underline-offset-4 hover:underline"
-                    style={{ color: 'var(--accent)' }}
+                    style={{ color: 'var(--accent-text)' }}
                   >
                     Verify ↗
                   </a>

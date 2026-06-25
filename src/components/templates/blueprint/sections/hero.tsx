@@ -114,7 +114,7 @@ export function Hero({ section, headline, location }: SectionProps & HeroExtraPr
           <a
             href={ctaHref}
             className="bp-cta bp-mono group relative inline-flex items-center gap-3 text-xs tracking-[0.18em] uppercase px-6 py-3.5 rounded-sm border"
-            style={{ borderColor: 'var(--accent)', color: 'var(--accent)' }}
+            style={{ borderColor: 'var(--accent)', color: 'var(--accent-text)' }}
           >
             <span>{ctaText}</span>
             <span aria-hidden className="bp-cta-arrow">→</span>

@@ -34,7 +34,7 @@ export function BlueprintBlogIndexContent({ username, brand, heading, posts }: B
             className="bp-link bp-mono text-xs tracking-[0.2em] uppercase"
             style={{ color: 'var(--fg)' }}
           >
-            <span style={{ color: 'var(--accent)' }}>←</span> {brand}
+            <span style={{ color: 'var(--accent-text)' }}>←</span> {brand}
           </Link>
           <span className="bp-mono text-[10px] tracking-wider uppercase" style={{ color: 'var(--muted-fg)' }}>
             /blog
@@ -93,7 +93,7 @@ export function BlueprintBlogIndexContent({ username, brand, heading, posts }: B
                           </div>
                         ) : null}
                       </div>
-                      <div className="bp-mono hidden md:flex justify-end items-center text-sm" style={{ color: 'var(--accent)' }}>
+                      <div className="bp-mono hidden md:flex justify-end items-center text-sm" style={{ color: 'var(--accent-text)' }}>
                         Read →
                       </div>
                     </div>

@@ -39,7 +39,7 @@ export function Eyebrow({ children, channel }: { children: ReactNode; channel?: 
   return (
     <div
       className="bp-mono text-xs tracking-[0.18em] uppercase flex items-center gap-3"
-      style={{ color: 'var(--accent)' }}
+      style={{ color: 'var(--accent-text)' }}
     >
       {channel ? <span style={{ color: 'var(--muted-fg)' }}>{channel}</span> : null}
       <span
@@ -65,7 +65,7 @@ const pillStyles: Record<PillVariant, CSSProperties> = {
   accent: {
     borderColor: 'color-mix(in srgb, var(--accent) 40%, transparent)',
     backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
-    color: 'var(--accent)',
+    color: 'var(--accent-text)',
   },
   core: {
     borderColor: 'var(--accent)',
@@ -75,7 +75,7 @@ const pillStyles: Record<PillVariant, CSSProperties> = {
   proficient: {
     borderColor: 'color-mix(in srgb, var(--accent) 60%, transparent)',
     backgroundColor: 'transparent',
-    color: 'var(--accent)',
+    color: 'var(--accent-text)',
   },
   learning: {
     borderColor: 'var(--border)',

@@ -48,7 +48,7 @@ export function Services({ section }: SectionProps) {
                 >
                   {deliverables.map((d) => (
                     <li key={d} className="flex gap-3">
-                      <span style={{ color: 'var(--accent)' }}>+</span>
+                      <span style={{ color: 'var(--accent-text)' }}>+</span>
                       <span>{d}</span>
                     </li>
                   ))}

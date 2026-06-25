@@ -120,7 +120,7 @@ export function Projects({ section }: SectionProps) {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline-offset-4 hover:underline"
-                        style={{ color: 'var(--accent)' }}
+                        style={{ color: 'var(--accent-text)' }}
                       >
                         Live ↗
                       </a>

@@ -66,7 +66,7 @@ export const blueprintProseComponents: Components = {
       target="_blank"
       rel="noopener noreferrer"
       className="underline underline-offset-4"
-      style={{ color: 'var(--accent)' }}
+      style={{ color: 'var(--accent-text)' }}
     >
       {children}
     </a>
@@ -100,7 +100,7 @@ export const blueprintProseComponents: Components = {
         style={{
           backgroundColor: 'var(--surface-muted)',
           borderColor: 'var(--border)',
-          color: 'var(--accent)',
+          color: 'var(--accent-text)',
         }}
       >
         {children}

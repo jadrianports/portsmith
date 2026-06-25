@@ -114,7 +114,7 @@ export function BlogPreview({
         <Link
           href={blogRoot}
           className="bp-link bp-mono inline-flex items-center gap-2 text-xs tracking-[0.18em] uppercase underline-offset-4 hover:underline"
-          style={{ color: 'var(--accent)' }}
+          style={{ color: 'var(--accent-text)' }}
         >
           All notes →
         </Link>

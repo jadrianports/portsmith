@@ -58,9 +58,10 @@ export function Skills({ section }: SectionProps) {
                     <MonoPill variant={item.tier ? tierVariant[item.tier] ?? 'default' : 'default'}>
                       {item.name}
                       {item.tier ? (
-                        <span className="ml-2 normal-case tracking-normal" style={{ opacity: 0.6 }}>
-                          · {item.tier}
-                        </span>
+                        // No opacity dim — at 0.6 the suffix composited below AA on the
+                        // white-on-accent "core" pill (a11y, WCAG 1.4.3). Full strength inherits
+                        // the pill's already-AA text color.
+                        <span className="ml-2 normal-case tracking-normal">· {item.tier}</span>
                       ) : null}
                     </MonoPill>
                   </li>

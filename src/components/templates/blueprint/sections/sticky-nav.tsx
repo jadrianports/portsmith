@@ -67,7 +67,7 @@ export function StickyNav({ sections, brand }: { sections: NavSection[]; brand: 
           className="bp-link bp-mono text-xs tracking-[0.2em] uppercase"
           style={{ color: 'var(--fg)' }}
         >
-          <span style={{ color: 'var(--accent)' }}>/</span>
+          <span style={{ color: 'var(--accent-text)' }}>/</span>
           {brand}
         </a>
         <ul className="bp-mono hidden md:flex items-center gap-1 text-[11px] tracking-wider uppercase">
@@ -76,7 +76,7 @@ export function StickyNav({ sections, brand }: { sections: NavSection[]; brand: 
               <a
                 href={`#${s.id}`}
                 className="px-2.5 py-1.5 rounded-sm transition-colors"
-                style={{ color: active === s.id ? 'var(--accent)' : 'var(--muted-fg)' }}
+                style={{ color: active === s.id ? 'var(--accent-text)' : 'var(--muted-fg)' }}
               >
                 {s.label}
               </a>

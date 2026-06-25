@@ -20,7 +20,7 @@ function Block({ label, body, accent }: { label: string; body: string; accent?: 
     <div className="p-6 md:p-8" style={{ backgroundColor: 'var(--surface)' }}>
       <div
         className="bp-mono text-[11px] tracking-[0.18em] uppercase mb-3"
-        style={{ color: accent ? 'var(--accent)' : 'var(--muted-fg)' }}
+        style={{ color: accent ? 'var(--accent-text)' : 'var(--muted-fg)' }}
       >
         // {label}
       </div>

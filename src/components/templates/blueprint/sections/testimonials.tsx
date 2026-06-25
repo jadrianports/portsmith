@@ -51,11 +51,11 @@ export function Testimonials({ section }: SectionProps) {
                 </div>
               ) : null}
               <blockquote className="text-lg leading-relaxed" style={{ color: 'color-mix(in srgb, var(--fg) 90%, transparent)' }}>
-                <span className="bp-mono mr-1" style={{ color: 'var(--accent)' }}>
+                <span className="bp-mono mr-1" style={{ color: 'var(--accent-text)' }}>
                   &quot;
                 </span>
                 {t.quote}
-                <span className="bp-mono ml-1" style={{ color: 'var(--accent)' }}>
+                <span className="bp-mono ml-1" style={{ color: 'var(--accent-text)' }}>
                   &quot;
                 </span>
               </blockquote>

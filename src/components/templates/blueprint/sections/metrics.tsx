@@ -26,7 +26,7 @@ export function Metrics({ section }: SectionProps) {
 
   return (
     <SectionShell id="metrics" channel="CH4" eyebrow="// READOUT" heading={heading} subheading={subheading}>
-      <dl
+      <div
         className="grid grid-cols-2 lg:grid-cols-4 gap-px border rounded-md overflow-hidden"
         style={{
           // The gap shows this tinted ground as thin blue-tinted rules between tiles.
@@ -40,18 +40,18 @@ export function Metrics({ section }: SectionProps) {
             className="relative p-6 md:p-8"
             style={{ backgroundColor: 'color-mix(in srgb, var(--surface) 45%, var(--bg))' }}
           >
-            <dt
+            <div
               className="bp-mono text-[10px] tracking-[0.18em] uppercase"
               style={{ color: 'var(--muted-fg)' }}
             >
               {String(i + 1).padStart(2, '0')}
-            </dt>
-            <dd
+            </div>
+            <div
               className="bp-mono mt-3 text-4xl md:text-5xl tracking-tight"
-              style={{ color: 'var(--accent)' }}
+              style={{ color: 'var(--accent-text)' }}
             >
               {m.value}
-            </dd>
+            </div>
             <p
               className="mt-2 text-sm leading-snug"
               style={{ color: 'color-mix(in srgb, var(--fg) 80%, transparent)' }}
@@ -60,7 +60,7 @@ export function Metrics({ section }: SectionProps) {
             </p>
           </div>
         ))}
-      </dl>
+      </div>
     </SectionShell>
   );
 }

@@ -73,11 +73,18 @@ Self-hosted via `next/font/google`:
 
 | Phase | Result |
 |-------|--------|
-| A — static faithful clone | _in progress_ |
-| B — platform coat + registration | _pending_ |
+| A — static faithful clone | committed `f07f1a4`; all 13 sections verified 1:1 via `/__fixture/blueprint` + temp full-content preview |
+| B — dedicated /blog pages + registration | committed `9b27d37`; per-template blog dispatch (additive, edgerunner-v2 untouched) + blueprint blog UI + prose; index/post verified |
 
 ## Gate Results (gate:template -- blueprint)
 
 | Gate | Result |
 |------|--------|
-| tsc / security / isolation / registry / bundle / SSG / conformance / a11y / parity | _pending_ |
+| tsc / security / isolation / registry / next build / bundle (≤200kB) / route-SSG / conformance / a11y / parity / blog-prod | ✅ ALL GREEN (corpus-wide) |
+
+**A11y fixes applied at gate time:** (1) small accent *text* `#2563eb`→`--accent-text` `#4d8bf0`
+(WCAG 1.4.3 — 3.66:1 → ~5.7:1, fills/borders keep `#2563eb`); (2) Metrics `<dl>`/`<dt>`/`<dd>`
+→ plain `<div>`s (axe `definition-list`); (3) skills tier-suffix `opacity:0.6` removed (composited
+below AA on the white-on-accent core pill). **Polish:** the shared `<ContactForm>` submit-button
+glow made an overridable token (`--tmpl-contact-cta-shadow`, magenta default → blueprint-blue
+override) — removes a latent cross-template magenta bleed with zero baseline churn for other templates.

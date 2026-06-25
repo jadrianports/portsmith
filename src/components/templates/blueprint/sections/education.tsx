@@ -43,7 +43,7 @@ export function Education({ section }: SectionProps) {
                 <ul className="mt-3 space-y-1.5 text-sm" style={{ color: 'color-mix(in srgb, var(--fg) 80%, transparent)' }}>
                   {achievements.map((a) => (
                     <li key={a} className="flex gap-3">
-                      <span className="bp-mono mt-1" style={{ color: 'var(--accent)' }}>
+                      <span className="bp-mono mt-1" style={{ color: 'var(--accent-text)' }}>
                         ›
                       </span>
                       <span>{a}</span>
