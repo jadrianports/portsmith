@@ -231,6 +231,12 @@ export function PreviewBanner({
             ) : null}
             <a
               href={DISABLE_HREF}
+              // EXIT-FIX: the banner renders INSIDE the editor's preview iframe, so a
+              // plain navigation would load /api/preview/disable → /dashboard INSIDE the
+              // iframe — cloning the whole CMS where the preview was. `target="_parent"`
+              // breaks out so the disable+redirect happens in the editor window (when the
+              // draft page is opened in a full tab, parent === self, so this is a no-op).
+              target="_parent"
               className={
                 'inline-flex shrink-0 items-center justify-center rounded-md border border-border ' +
                 'bg-transparent px-3 py-1.5 text-sm font-semibold text-foreground outline-none ' +
@@ -357,9 +363,12 @@ function SwitchConfirm({
         // Hold the calm success beat (~2.2s, mirrors the Phase-4 saved beat), then
         // EXIT Draft Mode via a full navigation to the disable route so the owner
         // lands on the now-live public page (the candidate cookie is cleared there).
-        // window.location (not next/link) — prefetch can race the draft cookie.
+        // window.parent (not next/link) — prefetch can race the draft cookie; and the
+        // banner runs INSIDE the editor's preview iframe, so navigating `window.location`
+        // would land /dashboard inside the iframe (the cloned-CMS bug). `window.parent`
+        // exits in the editor window (parent === self in a full tab, so it still works).
         window.setTimeout(() => {
-          window.location.href = DISABLE_HREF;
+          window.parent.location.href = DISABLE_HREF;
         }, SUCCESS_BEAT_MS);
       } else {
         setOutcome('error');
@@ -386,6 +395,8 @@ function SwitchConfirm({
         </span>
         <a
           href={`/${username}`}
+          // EXIT-FIX: break out of the preview iframe (see "Exit preview" below).
+          target="_parent"
           className={
             'inline-flex items-center gap-1 text-[13px] font-semibold text-success underline ' +
             'underline-offset-2 outline-none focus-visible:outline-2 ' +
@@ -406,6 +417,8 @@ function SwitchConfirm({
             candidate cookie, returns to the dashboard gallery). Plain <a>, no prefetch. */}
         <a
           href={DISABLE_HREF}
+          // EXIT-FIX: break out of the preview iframe (see "Exit preview").
+          target="_parent"
           className={
             'inline-flex items-center justify-center rounded-md border border-border ' +
             'bg-transparent px-3 py-1.5 text-sm font-semibold text-foreground outline-none ' +
@@ -423,6 +436,8 @@ function SwitchConfirm({
           <a
             href={DISABLE_HREF}
             aria-label={`Keep the ${currentName ?? templateName} template`}
+            // EXIT-FIX: break out of the preview iframe (see "Exit preview").
+            target="_parent"
             className={
               'inline-flex items-center justify-center rounded-md border border-border ' +
               'bg-transparent px-3 py-1.5 text-sm font-semibold text-foreground outline-none ' +

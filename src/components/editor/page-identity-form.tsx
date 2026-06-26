@@ -376,7 +376,17 @@ export function PageIdentityForm({ initial, username }: PageIdentityFormProps) {
 
   return (
     <div className="flex flex-col gap-8">
-      <FormPanelHeader title="Page Identity &amp; SEO" dirty={dirty} saveState={saveState} />
+      {/* SAVE-FIX: the header (and its Save button) sits ABOVE the two independent
+          sub-forms (username, showcase), so the Save button is NOT a DOM child of the
+          SEO <form> below. Without `form="page-identity-seo-form"` a `type="submit"`
+          button outside its form is inert — clicking Save did nothing (it only saved
+          on the section-switch flush). The native `form` attribute re-associates them. */}
+      <FormPanelHeader
+        title="Page Identity &amp; SEO"
+        dirty={dirty}
+        saveState={saveState}
+        form="page-identity-seo-form"
+      />
 
       {/* HANDLE-01 / D-07: the username / vanity-URL control — a SEPARATE sub-form calling
           changeUsernameAction, cleanly off the SEO save below. */}
@@ -386,7 +396,7 @@ export function PageIdentityForm({ initial, username }: PageIdentityFormProps) {
           cleanly off the SEO save below (both are "how your page is publicly discovered"). */}
       <ShowcaseOptInField initialOptedIn={initial.showcase_opt_in} />
 
-      <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
+      <form id="page-identity-seo-form" onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
         {banner ? <Alert variant="error">{banner}</Alert> : null}
 
       {/* ── Text block: page title · meta description ─────────────────────────── */}

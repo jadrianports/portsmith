@@ -3,20 +3,25 @@
 /**
  * ChipInput (04-UI-SPEC §10, CMS-04 / D-P4-06) — the tech-stack tag input.
  *
- * For a `tech_stack` array (max 10). A wrapping field of chips + a trailing text
- * input. Type a tech name + Enter or comma → a chip appears. The chip resolves the
- * typed name to a normalized `simple-icons` slug and renders the MONOCHROME brand
- * glyph if the slug resolves in the curated map; otherwise it is text-only (both
- * valid — `icon` is OPTIONAL in the schema; the STORED value is always the slug
- * string, never an interpolated SVG). Backspace removes the last chip when the
- * input is empty. Typing an existing tag FLASHES the existing chip instead of
- * adding a duplicate. At 10 the input disables with "Up to 10 technologies".
+ * A reusable wrapping field of chips + a trailing text input. Type a label + Enter
+ * or comma → a chip appears. Used for the project `tech_stack` array (max 10, icons
+ * ON) AND the project `tags`/categories array (max 6, icons OFF — see the `max` /
+ * `resolveIcons` props). Backspace removes the last chip when the input is empty.
+ * Typing an existing label (case-insensitively) FLASHES the existing chip instead
+ * of adding a duplicate. At the cap the input disables with the `maxHint` copy.
  *
- * SLUG RESOLUTION mirrors the P3 curated idiom (`templates/minimal/sections/icons.ts`,
- * 03-06): a typed display name is normalized to a simple-icons slug and looked up
- * in a small curated NAMED-import map. The editor stores the resolved SLUG (e.g.
- * 'nextdotjs') so the public template's curated map renders the same glyph (the
- * STATE.md 03-06 contract: the editor produces VALID simple-icons slugs).
+ * CAPITALIZATION (SAVE/CAPS-FIX): the chip STORES the typed DISPLAY string verbatim
+ * ("Next.js", "Web App", "TypeScript") — what you type is what the public template
+ * renders. The simple-icons slug is derived ONLY for the optional glyph lookup +
+ * the case-insensitive dedupe; it is never the stored value. (Previously the chip
+ * stored the lowercased slug, which forced "nextdotjs" onto the public page and
+ * stripped all capitalization the user typed.)
+ *
+ * GLYPH RESOLUTION mirrors the P3 curated idiom (`templates/minimal/sections/icons.ts`,
+ * 03-06): the typed name is normalized to a simple-icons slug and looked up in a
+ * small curated NAMED-import map; the MONOCHROME brand glyph renders if it resolves,
+ * else the chip is text-only (both valid — `icon` is OPTIONAL in the schema; no user
+ * string is ever interpolated into the SVG `d`).
  *
  * TAMPERING/XSS (T-04-08a): the tech name is never rendered as a URL or an href —
  * it is a plain text label + an OPTIONAL `<svg>` whose `path` is a CONSTANT from
@@ -130,16 +135,44 @@ function glyphFor(slug: string): BrandGlyph | null {
 
 export interface ChipInputProps {
   label: string;
-  /** Controlled array of stored tech-stack slugs/labels. */
+  /** Controlled array of stored chip labels (the DISPLAY strings, capitalization kept). */
   values: string[];
   /** Change handler — receives the next array. */
   onChange: (next: string[]) => void;
   /** Optional explicit id; auto-generated otherwise. */
   id?: string;
   error?: string;
+  /** Max chips (default 10 — `tech_stack`). Projects `tags`/categories pass 6. */
+  max?: number;
+  /**
+   * Resolve a brand glyph for each chip (default true — tech stack). Category/tag
+   * chips pass false: they render text-only (no icon match), so an arbitrary label
+   * like "Web App" is never coerced toward an icon slug.
+   */
+  resolveIcons?: boolean;
+  /** Per-entry maxLength on the draft input (mirrors the schema's per-item `.max(N)`). */
+  entryMaxLength?: number;
+  /** The empty-state placeholder (default tech-stack copy). */
+  placeholder?: string;
+  /** The hint shown below when under the cap (default tech-stack copy). */
+  addHint?: string;
+  /** The hint shown below when AT the cap (default tech-stack copy). */
+  maxHint?: string;
 }
 
-export function ChipInput({ label, values, onChange, id: idProp, error }: ChipInputProps) {
+export function ChipInput({
+  label,
+  values,
+  onChange,
+  id: idProp,
+  error,
+  max = TECH_MAX,
+  resolveIcons = true,
+  entryMaxLength,
+  placeholder,
+  addHint = 'Press Enter or comma to add a technology.',
+  maxHint = 'Up to 10 technologies',
+}: ChipInputProps) {
   const reactId = useId();
   const id = idProp ?? reactId;
   const errorId = error ? `${id}-error` : undefined;
@@ -148,21 +181,29 @@ export function ChipInput({ label, values, onChange, id: idProp, error }: ChipIn
   const [flashId, setFlashId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const atMax = values.length >= TECH_MAX;
+  const atMax = values.length >= max;
 
-  /** Commit the draft as a chip (resolving to a slug). No-op when empty or at max. */
+  /**
+   * Commit the draft as a chip. We STORE the typed DISPLAY string (capitalization
+   * preserved — "Next.js", "Web App"), and only NORMALIZE for icon lookup + dedupe
+   * (so "React" and "react" don't both get added, and a glyph still resolves). The
+   * public templates render this string verbatim, so what you type is what shows.
+   * No-op when empty or at max.
+   */
   function commit() {
-    const slug = normalizeSlug(draft);
+    const name = draft.trim();
     setDraft('');
-    if (!slug) return;
-    if (values.includes(slug)) {
-      // Duplicate — flash the existing chip instead of adding a dupe.
-      setFlashId(slug);
+    if (!name) return;
+    const slug = normalizeSlug(name);
+    // Case-insensitive dedupe by normalized slug — flash the existing chip.
+    const existing = values.find((v) => normalizeSlug(v) === slug);
+    if (existing) {
+      setFlashId(existing);
       window.setTimeout(() => setFlashId(null), 600);
       return;
     }
-    if (values.length >= TECH_MAX) return;
-    onChange([...values, slug]);
+    if (values.length >= max) return;
+    onChange([...values, name]);
   }
 
   function removeAt(index: number) {
@@ -197,12 +238,14 @@ export function ChipInput({ label, values, onChange, id: idProp, error }: ChipIn
         }
         onClick={() => inputRef.current?.focus()}
       >
-        {values.map((slug, index) => {
-          const glyph = glyphFor(slug);
-          const flashing = flashId === slug;
+        {values.map((value, index) => {
+          // Resolve the glyph from the NORMALIZED form of the stored display label
+          // (so "React"/"Next.js" still match), only when this chip wants icons.
+          const glyph = resolveIcons ? glyphFor(normalizeSlug(value)) : null;
+          const flashing = flashId === value;
           return (
             <span
-              key={`${slug}-${index}`}
+              key={`${value}-${index}`}
               className={
                 'inline-flex items-center gap-1 rounded-sm bg-surface-muted px-2 py-1 ' +
                 'text-sm font-semibold text-foreground transition-shadow motion-reduce:transition-none ' +
@@ -222,14 +265,14 @@ export function ChipInput({ label, values, onChange, id: idProp, error }: ChipIn
                   <path d={glyph.path} />
                 </svg>
               ) : null}
-              <span>{slug}</span>
+              <span>{value}</span>
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   removeAt(index);
                 }}
-                aria-label={`Remove ${slug}`}
+                aria-label={`Remove ${value}`}
                 className={
                   'flex size-5 items-center justify-center rounded-full text-muted-foreground ' +
                   'outline-none hover:text-foreground focus-visible:outline-2 ' +
@@ -248,9 +291,12 @@ export function ChipInput({ label, values, onChange, id: idProp, error }: ChipIn
           type="text"
           value={draft}
           disabled={atMax}
+          maxLength={entryMaxLength}
           aria-invalid={error ? true : undefined}
           aria-describedby={errorId}
-          placeholder={atMax ? '' : values.length === 0 ? 'Type a tech, press Enter' : ''}
+          placeholder={
+            atMax ? '' : values.length === 0 ? (placeholder ?? 'Type a tech, press Enter') : ''
+          }
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={commit}
@@ -265,7 +311,7 @@ export function ChipInput({ label, values, onChange, id: idProp, error }: ChipIn
         <FieldError id={errorId}>{error}</FieldError>
       ) : (
         <p className="mt-1 text-[13px] leading-tight text-muted-foreground">
-          {atMax ? 'Up to 10 technologies' : 'Press Enter or comma to add a technology.'}
+          {atMax ? maxHint : addHint}
         </p>
       )}
     </div>

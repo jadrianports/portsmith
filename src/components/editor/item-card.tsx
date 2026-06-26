@@ -182,6 +182,7 @@ const ITEM_CONFIG: Record<
       start_date: '',
       end_date: '',
       description: '',
+      highlights: [],
     }),
   },
   testimonials: {
@@ -456,6 +457,13 @@ interface StringListFieldProps {
   onChange: (next: string[]) => void;
   /** Disable while a section save is in flight. */
   disabled?: boolean;
+  /**
+   * Max entries (default 10 — achievements/deliverables). Experience `highlights`
+   * caps at 8 (`experienceItemSchema`), so it passes `maxItems={8}` — otherwise the
+   * client would let the owner add a 9th–10th entry that the server re-parse rejects,
+   * silently failing the whole-section save.
+   */
+  maxItems?: number;
 }
 
 /**
@@ -472,8 +480,9 @@ function StringListField({
   values,
   onChange,
   disabled,
+  maxItems = STRING_LIST_MAX_ITEMS,
 }: StringListFieldProps) {
-  const atMax = values.length >= STRING_LIST_MAX_ITEMS;
+  const atMax = values.length >= maxItems;
 
   return (
     <div className="flex flex-col gap-2">
@@ -521,7 +530,7 @@ function StringListField({
 
       {atMax ? (
         <p className="text-[13px] leading-tight text-muted-foreground">
-          You’ve added the maximum of {STRING_LIST_MAX_ITEMS}.
+          You’ve added the maximum of {maxItems}.
         </p>
       ) : (
         <button
@@ -867,6 +876,22 @@ export function ItemCard({
                   onAltChange={(a) => onPatch(item.id, { image_alt: a })}
                   persistedValue={persistedImageValue}
                 />
+                {/* CATEGORY-FIX: the project category pills (`tags[]`, ≤6 — the schema
+                    already carried it + templates already render them as the category
+                    pills above each card, e.g. "Web App · Creative", but the editor had
+                    no input). A non-icon chip input (resolveIcons=false) so an arbitrary
+                    label is never coerced toward a tech slug; capitalization is kept. */}
+                <ChipInput
+                  label="Categories"
+                  values={Array.isArray(item.tags) ? (item.tags as string[]) : []}
+                  onChange={(next) => onPatch(item.id, { tags: next })}
+                  max={6}
+                  resolveIcons={false}
+                  entryMaxLength={40}
+                  placeholder="Type a category, press Enter"
+                  addHint="Short labels shown as pills (e.g. Web App, Creative)."
+                  maxHint="Up to 6 categories"
+                />
                 {/* Dev field — OPTIONAL (the schema allows an empty tech_stack). */}
                 <ChipInput
                   label="Tech stack"
@@ -929,6 +954,20 @@ export function ItemCard({
                   trailing={
                     <CharCounter value={str(item.description)} max={DESCRIPTION_MAX} />
                   }
+                />
+                {/* HIGHLIGHTS-FIX: the per-role bullet list (`highlights[]`, ≤8 — the
+                    schema already carried it + edgerunner-v2/blueprint already render
+                    it, but the editor had no input). Reuses the StringListField idiom
+                    (achievements/deliverables). Templates that don't render highlights
+                    ignore the field, so this is additive + cross-template safe. */}
+                <StringListField
+                  label="Highlights"
+                  addLabel="Add highlight"
+                  itemNoun="highlight"
+                  maxItems={8}
+                  values={Array.isArray(item.highlights) ? (item.highlights as string[]) : []}
+                  disabled={saving}
+                  onChange={(next) => onPatch(item.id, { highlights: next })}
                 />
               </>
             ) : null}

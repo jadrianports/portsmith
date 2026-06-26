@@ -26,9 +26,15 @@ export interface FormPanelHeaderProps {
   /** The current save lifecycle state for the SaveButton. */
   saveState: SaveState;
   onSave?: () => void;
+  /**
+   * The id of the `<form>` the Save button submits, for panels whose header sits
+   * OUTSIDE its form (page-identity). Forwarded to the SaveButton's native `form`
+   * attribute. Omitted → the button is a normal in-form submit (every other panel).
+   */
+  form?: string;
 }
 
-export function FormPanelHeader({ title, dirty, saveState, onSave }: FormPanelHeaderProps) {
+export function FormPanelHeader({ title, dirty, saveState, onSave, form }: FormPanelHeaderProps) {
   return (
     // 33-06 (UX-05 / D-16 form-panel polish): a touch more vertical weight (`pb-4`)
     // and a backdrop blur on the sticky header so a long scrolled form reads cleanly
@@ -56,7 +62,7 @@ export function FormPanelHeader({ title, dirty, saveState, onSave }: FormPanelHe
       ) : null}
 
       <div className="ml-auto">
-        <SaveButton state={saveState} onSave={onSave} />
+        <SaveButton state={saveState} onSave={onSave} form={form} />
       </div>
     </div>
   );

@@ -40,9 +40,18 @@ export interface SaveButtonProps {
   state: SaveState;
   /** Submit handler — wired to the form's onSubmit, so `type="submit"`. */
   onSave?: () => void;
+  /**
+   * The id of the `<form>` this button submits, for the case where the button is
+   * rendered OUTSIDE its form (the page-identity panel: its FormPanelHeader sits
+   * above two independent sub-forms, so the Save button cannot be a DOM child of
+   * the SEO form). The native `form` attribute re-associates them so `type="submit"`
+   * triggers the right form's onSubmit. Omitted → the button is a normal in-form
+   * submit (every other panel), unchanged.
+   */
+  form?: string;
 }
 
-export function SaveButton({ state, onSave }: SaveButtonProps) {
+export function SaveButton({ state, onSave, form }: SaveButtonProps) {
   // The saved-&-live success beat. The accent glyph + success caption carry the
   // load-bearing "your page is live" message; the wash is decorative + reduced-
   // motion-suppressed.
@@ -68,7 +77,7 @@ export function SaveButton({ state, onSave }: SaveButtonProps) {
     // render the spinner + the SPECIFIC "Saving…" copy (Button's built-in
     // loading label is the generic "Submitting…").
     return (
-      <Button type="submit" disabled aria-busy className="w-auto">
+      <Button type="submit" form={form} disabled aria-busy className="w-auto">
         <LoaderCircle
           aria-hidden="true"
           className="size-4 animate-spin motion-reduce:animate-none"
@@ -81,7 +90,7 @@ export function SaveButton({ state, onSave }: SaveButtonProps) {
   if (state === 'idle') {
     // Clean: nothing to save. Disabled, muted — "you're up to date".
     return (
-      <Button type="submit" variant="ghost" disabled className="w-auto text-muted-foreground">
+      <Button type="submit" form={form} variant="ghost" disabled className="w-auto text-muted-foreground">
         Saved
       </Button>
     );
@@ -89,7 +98,7 @@ export function SaveButton({ state, onSave }: SaveButtonProps) {
 
   // Dirty (ready): the active CTA.
   return (
-    <Button type="submit" onClick={onSave} className="w-auto">
+    <Button type="submit" form={form} onClick={onSave} className="w-auto">
       Save changes
     </Button>
   );
