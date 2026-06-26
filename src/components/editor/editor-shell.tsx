@@ -54,6 +54,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Lockup } from '@/components/brand/lockup';
+import { LogoutButton } from '@/components/auth/logout-button';
 import { AnalyticsModalButton } from '@/components/dashboard/analytics-modal-button';
 import type { OwnerAnalytics } from '@/lib/analytics/owner-analytics';
 import { cmsKeys } from '@/lib/query/cms-keys';
@@ -844,6 +845,11 @@ export function EditorShell({
             <Settings aria-hidden="true" className="size-3.5" />
             <span>Settings</span>
           </Link>
+
+          {/* Log out — the sign-out control (was missing entirely). Same chrome pill
+              idiom as its Settings/Messages siblings; posts to the logoutAction server
+              action (signOut + redirect to /login), no client JS. */}
+          <LogoutButton variant="header" />
 
           {/* 33-03 / D-05 — the unified Share control (DIST-01 + DIST-02 UI half).
               A chrome disclosure popover holding the public URL + copy, the

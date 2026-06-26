@@ -33,6 +33,8 @@ import { redirect } from 'next/navigation';
 
 import { createClient, getVerifiedClaims } from '@/lib/supabase/server';
 
+import { LogoutButton } from '@/components/auth/logout-button';
+
 import { ChangeEmailForm } from './change-email-form';
 import { ChangePasswordForm } from './change-password-form';
 import { DangerZone } from './danger-zone';
@@ -128,6 +130,24 @@ export default async function SettingsPage() {
             Export your content
           </h2>
           <ExportButton />
+        </section>
+
+        {/* Sign out — end the current session (signOut + redirect to /login). Sits
+            before the Danger Zone so the destructive delete stays visually last. */}
+        <section
+          aria-labelledby="settings-signout"
+          className="rounded-lg border border-border bg-surface p-5 sm:p-6"
+        >
+          <h2
+            id="settings-signout"
+            className="mb-1 text-lg font-semibold text-foreground"
+          >
+            Sign out
+          </h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Sign out of Portsmith on this device. You can sign back in anytime.
+          </p>
+          <LogoutButton variant="settings" />
         </section>
 
         {/* 4) Danger Zone (ACCT-03) — isolated, LAST. The island owns its own
