@@ -29,14 +29,16 @@
  *        profile.email → email prop (data.settings.email_public)
  *        socials → socials prop (from settings social URLs, pre-validated by safeHref)
  *        profile.cvUrl → content.resume_url (safeHref validated)
- *   6. Contact pills: email pill kept; phone/location pills OMITTED (no data for them —
- *      they only render when email is present, keeping the row structure).
+ *   6. Contact pills: all THREE from the export — email (pink) · phone (cyan) ·
+ *      location (purple). Wired from settings.email_public/.phone/.location; each pill
+ *      renders only when its value is present. (Phone/location were wrongly omitted at
+ *      the original import — the data exists in settings; restored 2026-06-26.)
  *   7. CTAs: "Download CV" + "View Projects" — EXACT labels from export (not "Work with me")
  *   8. TerminalCard: EXACT titlebar text `~/portfolio — zsh`, built from real data.
  *   9. 'use client' required for motion/react animations.
  */
 import { m } from 'motion/react';
-import { Mail, Download, ArrowDown } from 'lucide-react';
+import { Mail, Phone, MapPin, Download, ArrowDown } from 'lucide-react';
 import { CityScene } from './city-scene';
 import { TerminalCard } from './terminal-card';
 import { Magnetic } from './ui/magnetic';
@@ -59,12 +61,16 @@ export interface HeroSocialLink {
 
 export interface HeroExtraProps {
   email?: string | null;
+  /** Contact-number pill (settings.phone) — restored from the export (was wrongly omitted). */
+  phone?: string | null;
+  /** Location pill (settings.location) — restored from the export (was wrongly omitted). */
+  location?: string | null;
   socials?: HeroSocialLink[];
   /** Terminal lines, built in index.tsx (which has the skills data for the stack list). */
   terminalLines?: Array<{ p: string; c: string; out: string }>;
 }
 
-export function Hero({ section, email, socials, terminalLines }: SectionProps & HeroExtraProps) {
+export function Hero({ section, email, phone, location, socials, terminalLines }: SectionProps & HeroExtraProps) {
   const content = (section?.content ?? null) as HeroSectionContent | null;
   if (!content) return null;
 
@@ -158,9 +164,11 @@ export function Hero({ section, email, socials, terminalLines }: SectionProps & 
             </m.p>
           ) : null}
 
-          {/* Contact pills row — VERBATIM structure from export
-              Phone/location pills OMITTED (no data); email pill kept when present. */}
-          {emailHref ? (
+          {/* Contact pills row — VERBATIM structure from export: email (pink) · phone
+              (cyan) · location (purple). Each pill renders only when its value is
+              present; the row shows if ANY is present. (The phone/location pills were
+              wrongly omitted at import — settings.phone/.location DO carry the data.) */}
+          {emailHref || present(phone) || present(location) ? (
             <m.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -168,18 +176,44 @@ export function Hero({ section, email, socials, terminalLines }: SectionProps & 
               className="mt-6 flex flex-wrap gap-3 text-sm"
               style={{ color: 'color-mix(in oklab, var(--fg) 85%, transparent)' }}
             >
-              <a
-                href={emailHref}
-                className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 backdrop-blur"
-                style={{
-                  border: '1px solid color-mix(in oklab, var(--neon-pink) 30%, transparent)',
-                  background: 'color-mix(in srgb, var(--bg) 40%, transparent)',
-                  color: 'color-mix(in oklab, var(--fg) 85%, transparent)',
-                  textDecoration: 'none',
-                }}
-              >
-                <Mail className="h-4 w-4" style={{ color: 'var(--neon-pink)' }} /> {email}
-              </a>
+              {emailHref ? (
+                <a
+                  href={emailHref}
+                  className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 backdrop-blur"
+                  style={{
+                    border: '1px solid color-mix(in oklab, var(--neon-pink) 30%, transparent)',
+                    background: 'color-mix(in srgb, var(--bg) 40%, transparent)',
+                    color: 'color-mix(in oklab, var(--fg) 85%, transparent)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <Mail className="h-4 w-4" style={{ color: 'var(--neon-pink)' }} /> {email}
+                </a>
+              ) : null}
+
+              {present(phone) ? (
+                <span
+                  className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 backdrop-blur"
+                  style={{
+                    border: '1px solid color-mix(in oklab, var(--neon-cyan) 30%, transparent)',
+                    background: 'color-mix(in srgb, var(--bg) 40%, transparent)',
+                  }}
+                >
+                  <Phone className="h-4 w-4" style={{ color: 'var(--neon-cyan)' }} /> {phone}
+                </span>
+              ) : null}
+
+              {present(location) ? (
+                <span
+                  className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 backdrop-blur"
+                  style={{
+                    border: '1px solid color-mix(in oklab, var(--neon-purple) 30%, transparent)',
+                    background: 'color-mix(in srgb, var(--bg) 40%, transparent)',
+                  }}
+                >
+                  <MapPin className="h-4 w-4" style={{ color: 'var(--neon-purple)' }} /> {location}
+                </span>
+              ) : null}
             </m.div>
           ) : null}
 

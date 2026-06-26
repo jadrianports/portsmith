@@ -35,8 +35,16 @@ function formatDatePart(value: string | null | undefined): string | null {
   if (!present(value)) return null;
   const v = value.trim();
   if (v.toLowerCase() === 'present') return 'Present';
-  const match = /^(\d{4})-\d{2}$/.exec(v);
-  return match ? match[1] : v;
+  // MONTH-FIX: render month + year ("Jan 2024") from the stored YYYY-MM, not the
+  // year alone. The data has always carried the month; edgerunner-v2 previously
+  // discarded it (`match[1]`). Other templates (minimal/editorial/aurora) stay
+  // year-only by THEIR own design — this change is scoped to edgerunner-v2.
+  const match = /^(\d{4})-(\d{2})$/.exec(v);
+  if (!match) return v;
+  const [, year, month] = match;
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  if (Number.isNaN(date.valueOf())) return year;
+  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
 function formatRange(start: string | null | undefined, end: string | null | undefined): string | null {

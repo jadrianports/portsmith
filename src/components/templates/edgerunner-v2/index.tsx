@@ -196,6 +196,8 @@ export default function EdgerunnerV2Template({ data }: { data: PortfolioData }) 
             <Hero
               section={heroSection}
               email={heroEmail}
+              phone={data.settings.phone}
+              location={data.settings.location}
               socials={heroSocials}
               terminalLines={terminalLines}
             />
