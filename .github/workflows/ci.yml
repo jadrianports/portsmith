@@ -212,9 +212,17 @@ jobs:
   # either skips this job entirely, so a red CI can NEVER reach production — even on a
   # direct push to main. Vercel's own push-triggered auto-deploy is turned OFF in
   # vercel.json (`git.deploymentEnabled.main=false`) so THIS job is the sole deploy path
-  # (no ungated double-ship). Pull→build→deploy via the Vercel CLI (the KB-documented
-  # prebuilt flow); `vercel pull` brings the project's PRODUCTION env vars down, so the
-  # NEXT_PUBLIC_* / service-role values are sourced from Vercel, not re-declared here.
+  # (no ungated double-ship).
+  #
+  # DEPLOY METHOD — Vercel-SIDE build (not `--prebuilt`): `vercel deploy --prod` uploads
+  # the working tree and Vercel runs `next build` in its own env, which is THIS project's
+  # proven path (the `.vercelignore` membership gate exists precisely because Vercel
+  # uploads the working tree). It also injects the project's Production env vars into the
+  # build, so the `prebuild` `check-env.mjs` guard sees them. The earlier `vercel build
+  # --prod` (prebuilt) flow FAILED here: `vercel pull` wrote `.vercel/.env.production.local`
+  # but `vercel build` does NOT inject those into the prebuild script's process.env, so
+  # check-env saw 0 of the 9 required vars. The CLI links to the project via the
+  # VERCEL_ORG_ID / VERCEL_PROJECT_ID env vars below (no `vercel pull` needed).
   #
   # Runs only on a real push to main (not PRs, not other branches): a PR validates the
   # two gates without shipping; merging to main is what deploys.
@@ -234,16 +242,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
-      - name: Install Vercel CLI
-        run: npm install --global vercel@latest
-
-      - name: Pull Vercel production environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Build production artifacts
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy prebuilt artifacts to production
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy to Vercel production (Vercel-side build, project env injected)
+        run: npx vercel@latest deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
