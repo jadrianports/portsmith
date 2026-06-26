@@ -54,6 +54,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Lockup } from '@/components/brand/lockup';
+import { AnalyticsModalButton } from '@/components/dashboard/analytics-modal-button';
+import type { OwnerAnalytics } from '@/lib/analytics/owner-analytics';
 import { cmsKeys } from '@/lib/query/cms-keys';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { usePreviewSaveSignal } from '@/lib/stores/preview-save-signal';
@@ -259,6 +261,13 @@ export interface EditorShellProps {
    * static markup + offers a Blob download.
    */
   qrSvg: string;
+  /**
+   * ANLY-UX-FIX — the glanceable owner analytics shape (RSC-loaded by the dashboard
+   * via `getOwnerAnalytics()`, threaded here as a PLAIN serializable prop). Drives the
+   * header "Analytics" control + its on-demand modal, replacing the persistent
+   * above-the-editor banner that ate vertical space on every visit.
+   */
+  analytics: OwnerAnalytics;
 }
 
 export function EditorShell({
@@ -271,6 +280,7 @@ export function EditorShell({
   allowedTemplates,
   showFallbackNotice = false,
   qrSvg,
+  analytics,
 }: EditorShellProps) {
   const queryClient = useQueryClient();
 
@@ -783,6 +793,11 @@ export function EditorShell({
               the scarce-accent unread badge (the one sanctioned "new" nav signal,
               UI-SPEC Surface 3). The count + an accessible suffix keep the badge
               color-independent. */}
+          {/* ANLY-UX-FIX: the glanceable analytics, on-demand in a modal — replacing
+              the persistent above-the-editor banner. Same chrome control idiom as its
+              Messages/Settings siblings (border, copper accent on hover/focus only). */}
+          <AnalyticsModalButton analytics={analytics} />
+
           <Link
             href="/dashboard/inbox"
             className={
@@ -856,20 +871,13 @@ export function EditorShell({
             <ExternalLink aria-hidden="true" className="size-3.5" />
           </Link>
 
-          {/* D-08 — the persistent "View my page" control (Surface 6). Distinct from
-              the same-tab "Preview" link above: this ALWAYS opens the public page in a
-              NEW tab — anchoring the everyday "edit → see what visitors see" loop.
-                • PUBLISHED → the live public page directly at siteUrl('/' + username)
-                  (target=_blank rel=noopener noreferrer), the SAME host-independent URL
-                  the PublishToggle "View live ↗" uses.
-                • UNPUBLISHED → the draft-enable path (/api/preview/enable, full nav,
-                  prefetch={false} — the draft-cookie caveat) so the owner sees their
-                  work-in-progress as the banner-wrapped private draft, opened in a new tab.
-              The URL ORIGIN ALWAYS comes from siteUrl() (NEXT_PUBLIC_SITE_URL), NEVER the
-              request Host (D-08). CRITICAL: this adds NO cookies()/headers()/host-read to
-              the public read branch — /[username] stays ● SSG (D-22). The glyph is
-              aria-hidden; the aria-label names the destination + the new-tab behavior. */}
-          <ViewMyPageLink username={username} published={published} />
+          {/* DEDUP (header view-controls): the former "View my page" control was removed
+              as redundant — it was the UNION of the two surviving controls (PUBLISHED →
+              the live page, identical to the PublishToggle "View live ↗"; UNPUBLISHED →
+              the same draft as "Preview"). The two intents now map 1:1: "Preview" = your
+              private draft (draft-mode banner), "View live ↗" (below, published-only) =
+              the live public page as visitors see it. The always-open live-preview pane
+              covers inline draft viewing. */}
 
           {/* Publish/Unpublish + ● Live/Draft status + View live ↗ (04-06). */}
           <PublishToggle username={username} initialPublished={published} />
@@ -1247,87 +1255,6 @@ function PreviewPane({
         ) : null}
       </div>
     </aside>
-  );
-}
-
-/**
- * The persistent "View my page" header control (D-08 / Surface 6). A NEW affordance,
- * distinct from the same-tab "Preview" link — it ALWAYS opens the public page in a
- * NEW tab so the everyday "edit → see what visitors see" loop is one click.
- *
- *   - PUBLISHED → a plain `<a>` to `siteUrl('/' + username)` (the host-independent
- *     live URL — reuses the PublishToggle "View live ↗" idiom), `target="_blank"
- *     rel="noopener noreferrer"`.
- *   - UNPUBLISHED → a plain `<a>` (WR-03 — NOT `<Link>`) to the draft-enable route
- *     (`/api/preview/enable`), which sets the draft cookie then redirects to the
- *     owner's own slug (the banner-wrapped private draft). A native anchor is used
- *     (matching the published branch) because this control ALWAYS opens a new tab
- *     and never client-navigates — so it gains nothing from next/link and avoids the
- *     prefetch hazard entirely (a next/link prefetch can race/delete the draft cookie
- *     — RESEARCH Pattern 2 / the Preview link's carry-forward caveat). Opens in a new
- *     tab (`target="_blank"`), per UI-SPEC Surface 6.
- *
- * THE URL ORIGIN ALWAYS COMES FROM `siteUrl()` (NEXT_PUBLIC_SITE_URL), NEVER the
- * request Host (D-08). This control adds NO `cookies()`/`headers()`/host-read to the
- * public read branch — `/[username]` stays `● SSG` (D-22). The glyph is `aria-hidden`;
- * the `aria-label` names the destination + the new-tab behavior (UI-SPEC § "View my
- * page" Copywriting); a visually-hidden " (opens in a new tab)" mirrors the shipped
- * "View live ↗" pattern.
- */
-function ViewMyPageLink({
-  username,
-  published,
-}: {
-  username: string;
-  published: boolean;
-}) {
-  // The shared chrome idiom (the Preview-link styling at editor-shell :495-508).
-  const className =
-    'inline-flex min-h-11 items-center gap-1.5 rounded-md border border-border px-4 ' +
-    'text-sm font-semibold text-foreground outline-none transition-colors ' +
-    'hover:border-border-strong hover:text-accent ' +
-    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
-    'motion-reduce:transition-none';
-
-  const glyphAndLabel = (
-    <>
-      <Eye aria-hidden="true" className="size-3.5" />
-      <span>View my page</span>
-    </>
-  );
-
-  if (published) {
-    // PUBLISHED → the live public page directly, host-independent URL via siteUrl().
-    return (
-      <a
-        href={siteUrl('/' + username)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={className}
-        aria-label="View my published page (opens in a new tab)"
-      >
-        {glyphAndLabel}
-      </a>
-    );
-  }
-
-  // UNPUBLISHED → the draft-enable path, always a NEW tab. WR-03: a plain `<a>`
-  // (matching the published branch), NOT `<Link>`. This control always opens a new
-  // tab and never benefits from client navigation, so next/link adds only risk: a
-  // prefetch of `/api/preview/enable` can race/delete the draft cookie (RESEARCH
-  // Pattern 2). A native anchor removes that hazard entirely and makes both branches
-  // consistent, closing the "simplify to all-Link" refactor trap the old comments
-  // warned about.
-  return (
-    <a
-      href="/api/preview/enable"
-      target="_blank"
-      rel="noopener noreferrer"
-      className={className}
-      aria-label="View a private preview of my page (opens in a new tab)"
-    >
-      {glyphAndLabel}
-    </a>
   );
 }
 

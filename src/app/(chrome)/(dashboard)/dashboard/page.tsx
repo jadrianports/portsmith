@@ -36,7 +36,6 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { AnalyticsCard } from '@/components/dashboard/analytics-card';
 import { RegisterOwnUsername } from '@/components/dashboard/register-own-username';
 import { EditorShell } from '@/components/editor/editor-shell';
 import { getOwnerAnalytics } from '@/lib/analytics/owner-analytics';
@@ -198,16 +197,11 @@ export default async function DashboardPage() {
           mounted as a SIBLING of EditorShell (not threaded through it). */}
       <RegisterOwnUsername username={username} />
 
-      {/* The glanceable owner analytics card (15-UI-SPEC Surface B) — a one-card
-          block on the main dashboard surface, above the editor. Chrome tokens
-          (Evergreen/Copper, Inter); a SIBLING of EditorShell so the editor stays
-          template-decoupled and its signature is unchanged. */}
-      <div className="border-b border-border bg-background px-4 py-4 sm:px-6">
-        <div className="mx-auto w-full max-w-2xl">
-          <AnalyticsCard {...ownerAnalytics} />
-        </div>
-      </div>
-
+      {/* ANLY-UX-FIX: the glanceable owner analytics (15-UI-SPEC Surface B) moved OUT
+          of the persistent above-the-editor banner (it ate vertical space on every
+          visit) and INTO an on-demand modal opened from the editor header. The shape
+          is threaded into EditorShell as a plain serializable prop; the card itself is
+          unchanged. */}
       <EditorShell
         data={data}
         portfolioId={bootstrap.portfolioId}
@@ -225,6 +219,8 @@ export default async function DashboardPage() {
         // 33-03 / DIST-01 (D-06): the server-generated public-page QR SVG (qrcode is
         // server-only) — a plain string prop, so the QR lib stays off the client bundle.
         qrSvg={qrSvg}
+        // ANLY-UX-FIX: the glanceable analytics shape → the header "Analytics" modal.
+        analytics={ownerAnalytics}
       />
     </>
   );

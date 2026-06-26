@@ -8,7 +8,7 @@
  *      D-03) — i.e. the iframe points at the owner's own slug under the draft signal (EDIT-01);
  *   2. Draft Mode is auto-enabled on editor mount and NOT aggressively disabled on leave —
  *      the `__prerender_bypass` draft cookie persists after navigating away from the editor
- *      (D-15: avoid cross-tab teardown races with a separately-open "View my page" tab).
+ *      (D-15: avoid cross-tab teardown races with a separately-open draft/preview tab).
  *
  * ── WAVE-0 SCAFFOLD ───────────────────────────────────────────────────────────────
  * The preview pane + the mount-time draft acquisition land in Plans 02/03. The owner
