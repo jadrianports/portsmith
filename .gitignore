@@ -86,3 +86,7 @@ yarn-error.log*
 .claude/
 idea/
 .playwright-mcp/
+
+# Production DB dumps / backups — NEVER commit (contains prod schema/data)
+prod-backup-*.sql
+*.dump
