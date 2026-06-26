@@ -168,7 +168,12 @@ export function Experience({ section }: SectionProps) {
                     }}
                   />
 
-                  <div className={left ? 'md:pr-12 md:text-right' : 'md:col-start-2 md:pl-12'}>
+                  {/* Cards alternate SIDES across the spine, but text stays LEFT-aligned
+                      on both sides (D-fix): the export right-aligned the left column while
+                      its highlight bullets stayed left, so a card's description and bullets
+                      disagreed. Left-aligning everything keeps each card internally
+                      consistent and readable (no right-aligned body text). */}
+                  <div className={left ? 'md:pr-12' : 'md:col-start-2 md:pl-12'}>
                     <ExperienceCard item={item} left={left} />
                   </div>
                 </li>
