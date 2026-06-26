@@ -10,9 +10,9 @@
  * active slide. NO `motion`, NO carousel lib — hand-rolled (D-03) to protect the landing
  * First-Load-JS budget (the single biggest threat to the SSG/perf invariants).
  *
- * Each slide is a `ShowcaseCard` whose `imageSrc` is the LIVE per-username `opengraph-image`
- * route (`siteUrl('/' + username + '/opengraph-image')`, SHOW-01 / D-01) — the self-updating
- * preview, browser-fetched as an `<img>`, never server-fetched (keeps `/` force-static).
+ * Each slide is a `ShowcaseCard` whose `imageSrc` is the committed static
+ * `/landing/showcase-*.webp` page screenshot carried on each `SHOWCASE_USERNAMES` entry
+ * (LAND-03 / D-12) — browser-loaded as an `<img>`, never server-fetched (keeps `/` force-static).
  * Fed by the curated static `SHOWCASE_USERNAMES` array (D-04).
  *
  * REDUCED-MOTION: programmatic `scrollBy`/`scrollTo` uses `behavior: 'auto'` when
@@ -25,8 +25,6 @@
  */
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-import { siteUrl } from '@/lib/url';
 
 import { ShowcaseCard } from './showcase-card';
 import { SHOWCASE_USERNAMES } from './showcase-usernames';
@@ -130,7 +128,7 @@ export function ShowcaseCarousel() {
           >
             <ShowcaseCard
               username={entry.username}
-              imageSrc={siteUrl(`/${entry.username}/opengraph-image`)}
+              imageSrc={entry.image}
               alt={entry.alt}
               caption={entry.caption}
               name={entry.name}

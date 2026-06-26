@@ -14,11 +14,11 @@
  *      (D-05 — decorative; the accessible destination is the link aria-label). The printed
  *      host is the production vercel host (the page the visitor actually lands on), so it is
  *      a static literal, NOT `siteUrl()` (which is localhost in dev).
- *   2. the LIVE og-image `<img>` (SHOW-01 / D-01 — callers pass
- *      `imageSrc={siteUrl('/' + username + '/opengraph-image')}`, the self-updating per-username
- *      Satori card, NOT a committed screenshot) with a MANDATORY descriptive `alt` and
+ *   2. the committed static page-screenshot `<img>` (LAND-03 / D-12 — callers pass
+ *      `imageSrc={entry.image}`, a committed `/landing/showcase-*.webp` captured manually and
+ *      deployed as code, NOT a live DB-backed route) with a MANDATORY descriptive `alt` and
  *      `loading="lazy"` (below the fold — never blocks LCP). The `aspect-[1200/630]` box matches
- *      the og-image's 1.91:1 ratio so the browser-frame never letterboxes the live preview.
+ *      the screenshots' 1.91:1 capture ratio so the browser-frame never letterboxes the preview.
  *   3. a Body caption naming the profession contrast + a decorative `external-link` glyph.
  *
  * Highest two-layer-leak-risk surface — EVERY color is a chrome `@theme` token; no inline
@@ -36,7 +36,7 @@ const DISPLAY_HOST = 'portsmith.vercel.app';
 export interface ShowcaseCardProps {
   /** The published portfolio username — drives both the printed URL and the siteUrl() href. */
   username: string;
-  /** The LIVE og-image route URL (SHOW-01) — `siteUrl('/' + username + '/opengraph-image')`. */
+  /** The committed static page-screenshot src (LAND-03 / D-12) — `/landing/showcase-*.webp`. */
   imageSrc: string;
   /** Mandatory descriptive alt naming the profession + template. */
   alt: string;
@@ -66,7 +66,7 @@ export function ShowcaseCard({ username, imageSrc, alt, caption, name }: Showcas
           {`${DISPLAY_HOST}/${username}`}
         </span>
       </div>
-      {/* The LIVE og-image preview (SHOW-01 / D-01) — self-updating, ISR-cached, browser-fetched. */}
+      {/* The committed static page screenshot (LAND-03 / D-12) — deploy-as-code, no DB dependency. */}
       <img src={imageSrc} alt={alt} loading="lazy" className="block aspect-[1200/630] w-full object-cover" />
       {/* Caption naming the profession contrast + a decorative external-link glyph. */}
       <div className="flex items-center justify-between gap-3 px-4 py-3">
